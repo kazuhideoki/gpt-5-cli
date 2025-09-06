@@ -18,7 +18,7 @@ OPENAI_MODEL_MINI=gpt-5-mini
 OPENAI_MODEL_NANO=gpt-5-nano
 OPENAI_DEFAULT_EFFORT=low      # low|medium|high
 OPENAI_DEFAULT_VERBOSITY=low   # low|medium|high
-OPENAI_HISTORY_INDEX_FILE=~/openai/history_index.json
+OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
 ```
 
 4) 任意: `system_prompt.txt` を作成すると、新規会話の先頭に固定の指示を自動付与できます（削除または空ファイルで無効化）。

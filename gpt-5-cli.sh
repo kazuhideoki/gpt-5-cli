@@ -83,7 +83,7 @@ show_help() {
     echo "  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）"
     echo ""
     echo "環境変数(.env):"
-    echo "  OPENAI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/openai/history_index.json）"
+    echo "  OPENAI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）"
     echo ""
     echo "既定: model=${MODEL_NANO}, effort=${EFFORT_DEFAULT}, verbosity=${VERBOSITY_DEFAULT}（フラグ未指定時）"
     echo ""
