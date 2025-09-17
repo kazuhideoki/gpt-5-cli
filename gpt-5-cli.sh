@@ -77,6 +77,7 @@ show_help() {
     echo "  -e0/-e1/-e2 : effort => low/medium/high (既定: ${EFFORT_DEFAULT})"
     echo "  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${VERBOSITY_DEFAULT})"
     echo "  -c          : continue（直前の会話から継続）"
+    echo "  -i <画像>   : 入力に画像を添付（\$HOME 配下のフルパスまたは 'スクリーンショット *.png'）"
     echo "  -r          : 履歴一覧を表示して終了（表示のみ）"
     echo "  -r{num}     : 対応する履歴で対話を再開（例: -r2）"
     echo "  -d{num}     : 対応する履歴を削除（例: -d2）"
@@ -270,6 +271,83 @@ IS_NEW_CONVO=true
 prev_response_id=""
 prev_title=""
 title_to_use=""
+IMAGE_FILE=""
+IMAGE_DATA_URL=""
+IMAGE_MIME=""
+
+resolve_image_path() {
+    local raw="$1"
+    local resolved
+
+    if [[ "$raw" == /* ]]; then
+        if [[ "$raw" != "$HOME/"* ]]; then
+            echo "Error: -i で指定できるフルパスは $HOME 配下のみです: $raw" >&2
+            exit 1
+        fi
+        resolved="$raw"
+    elif [[ "$raw" == スクリーンショット* ]]; then
+        if [[ "$raw" != *.png ]]; then
+            echo "Error: 'スクリーンショット *.png' 形式の PNG のみ対応します: $raw" >&2
+            exit 1
+        fi
+        resolved="$HOME/Desktop/$raw"
+    else
+        echo "Error: -i には $HOME 配下のフルパスか 'スクリーンショット *.png' のみ指定できます: $raw" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$resolved" ]; then
+        echo "Error: 画像ファイルが見つかりません: $resolved" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "$resolved"
+}
+
+detect_image_mime() {
+    local file_path="$1"
+    local ext ext_lower
+    ext="${file_path##*.}"
+    ext_lower=$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')
+
+    case "$ext_lower" in
+    png)
+        printf 'image/png\n'
+        ;;
+    jpg | jpeg)
+        printf 'image/jpeg\n'
+        ;;
+    webp)
+        printf 'image/webp\n'
+        ;;
+    gif)
+        printf 'image/gif\n'
+        ;;
+    heic | heif)
+        printf 'image/heic\n'
+        ;;
+    *)
+        echo "Error: 未対応の画像拡張子です: $file_path" >&2
+        exit 1
+        ;;
+    esac
+}
+
+prepare_image_payload() {
+    if [ -z "${IMAGE_FILE:-}" ]; then
+        return
+    fi
+
+    IMAGE_MIME="$(detect_image_mime "$IMAGE_FILE")"
+    local b64
+    b64=$(base64 <"$IMAGE_FILE" | tr -d '\n')
+    if [ -z "$b64" ]; then
+        echo "Error: 画像ファイルの base64 エンコードに失敗しました: $IMAGE_FILE" >&2
+        exit 1
+    fi
+    IMAGE_DATA_URL="data:${IMAGE_MIME};base64,${b64}"
+    echo "[openai_api] image_attached: $IMAGE_FILE ($IMAGE_MIME)" >&2
+}
 
 parse_args() {
     # 事前スキャン（互換のための名残; 実処理では未使用）
@@ -325,6 +403,21 @@ parse_args() {
         --help | -\?)
             show_help
             exit 0
+            ;;
+        -i)
+            if [ $# -lt 2 ]; then
+                echo "-i フラグには画像ファイルを指定してください" >&2
+                exit 1
+            fi
+            if [ -n "${IMAGE_FILE:-}" ]; then
+                echo "-i は複数回指定できません" >&2
+                exit 1
+            fi
+            local raw_image_arg
+            raw_image_arg="$2"
+            IMAGE_FILE="$(resolve_image_path "$raw_image_arg")"
+            shift 2
+            continue
             ;;
         --)
             shift
@@ -534,7 +627,11 @@ build_request_json() {
     } >&2
 
     # 入力メッセージ
-    new_user_msg=$(jq -n --arg t "$INPUT_TEXT" '{role:"user", content:[{type:"input_text", text:$t}]}')
+    if [ -n "${IMAGE_DATA_URL:-}" ]; then
+        new_user_msg=$(jq -n --arg t "$INPUT_TEXT" --arg url "$IMAGE_DATA_URL" '{role:"user", content:[{type:"input_text", text:$t}, {type:"input_image", image_url:$url}]}')
+    else
+        new_user_msg=$(jq -n --arg t "$INPUT_TEXT" '{role:"user", content:[{type:"input_text", text:$t}]}')
+    fi
     if [ "$IS_NEW_CONVO" = true ] && [ -n "${SYSTEM_PROMPT:-}" ]; then
         system_msg=$(jq -n --arg t "$SYSTEM_PROMPT" '{role:"system", content:[{type:"input_text", text:$t}]}')
         input_json=$(jq -n -c --argjson s "$system_msg" --argjson u "$new_user_msg" '[$s,$u]')
@@ -627,12 +724,13 @@ history_upsert() {
 # =============================
 
 main() {
-    require_cmds jq curl awk diff
+    require_cmds jq curl awk diff base64
     load_env
     load_system_prompt
     parse_args "$@"
     determine_input
     compute_context
+    prepare_image_payload
 
     local req
     req=$(build_request_json)

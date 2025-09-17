@@ -25,18 +25,19 @@ OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
 
 ## 使い方
 ```bash
-./gpt-5-cli.sh [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] <入力テキスト>
+./gpt-5-cli.sh [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] [-i <画像>] <入力テキスト>
 ./gpt-5-cli.sh --help  # または -?
 ```
 - `-m0/-m1/-m2`: モデル選択（nano/mini/main）。未指定は `nano`。
 - `-e0/-e1/-e2`: reasoning effort（low/medium/high）。未指定は `.env` の既定。
 - `-v0/-v1/-v2`: 出力の冗長度（low/medium/high）。未指定は `.env` の既定。
 - `-c`: 直近の会話から継続（最新の履歴を自動選択）。
+- `-i <画像>`: 入力に画像を添付。`$HOME` 配下のフルパス、または「スクリーンショット *.png」というファイル名のみ対応（`~/Desktop` に解決）。
 - `-r`: 履歴一覧を表示して終了。
 - `-r{N}`: N 番目（新しい順）の履歴で再開。テキスト省略時は対話的に入力。
 - `-d{N}`: N 番目の履歴を削除。
 - `-s{N}`: N 番目の会話ログを表示（`NO_COLOR=1` で色無し）。
- - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。
+ - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
  - 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
 
 実行例
@@ -48,7 +49,7 @@ OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
 ```
 
 ## 依存関係
-- 必須: `curl`, `jq`, `awk`, `diff`
+- 必須: `curl`, `jq`, `awk`, `diff`, `base64`
 - 推奨: `shellcheck`, `shfmt`（`bash -n gpt-5-cli.sh` で構文確認）
 
 ## 履歴と設定の要点
