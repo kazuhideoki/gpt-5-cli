@@ -350,14 +350,6 @@ prepare_image_payload() {
 }
 
 parse_args() {
-    # 事前スキャン（互換のための名残; 実処理では未使用）
-    PRESCAN_RESUME=false
-    for __a in "$@"; do
-        case "$__a" in
-        -*) [[ "$__a" == *r* ]] && PRESCAN_RESUME=true ;;
-        esac
-    done
-
     MODEL="$MODEL_NANO"
     EFFORT="$EFFORT_DEFAULT"
     VERBOSITY="$VERBOSITY_DEFAULT"
@@ -425,7 +417,7 @@ parse_args() {
             ;;
         -*)
             cluster="${1#-}"
-            # 新方式/旧方式の混在クラスタを左から順に読み取る
+            # クラスターフラグを左から順に読み取る
             i=0
             len=${#cluster}
             while [ $i -lt $len ]; do
@@ -533,7 +525,7 @@ parse_args() {
                     fi
                     ;;
                 *)
-                    echo "Invalid option: -$ch は無効です。旧方式（-5/-m/-n/h/e/l）は廃止しました。-m0/1/2, -e0/1/2, -c, -r を使用してください。" >&2
+                    echo "Invalid option: -$ch は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d{num}, -s{num} を使用してください。" >&2
                     exit 1
                     ;;
                 esac
@@ -620,7 +612,7 @@ compute_context() {
 # =============================
 
 build_request_json() {
-    # パラメータログ（minimal 廃止に伴い api 表記を削除）
+    # パラメータログ
     {
         printf '[openai_api] model=%s, effort=%s, verbosity=%s, continue=%s, resume_index=%s, resume_list_only=%s, delete_index=%s\n' \
             "$MODEL" "$EFFORT" "$VERBOSITY" "$CONTINUE" "${RESUME_INDEX:-}" "${RESUME_LIST_ONLY:-false}" "${DELETE_INDEX:-}"
