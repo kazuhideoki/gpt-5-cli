@@ -24,6 +24,22 @@ require_cmds() {
             exit 1
         }
     done
+
+    if [ "$OPERATION" = "compact" ]; then
+        if ! [[ "$COMPACT_INDEX" =~ ^[0-9]+$ ]]; then
+            echo "Error: --compact の履歴番号は正の整数で指定してください" >&2
+            exit 1
+        fi
+        if [ ${#ARGS[@]} -ne 0 ]; then
+            echo "Error: --compact とメッセージは同時に指定できません" >&2
+            exit 1
+        fi
+        if [ "$CONTINUE" = true ] || [ "$RESUME_LIST_ONLY" = true ] || [ -n "${RESUME_INDEX:-}" ] || [ -n "${DELETE_INDEX:-}" ] || [ -n "${SHOW_INDEX:-}" ]; then
+            echo "Error: --compact と他のフラグは併用できません" >&2
+            exit 1
+        fi
+    fi
+
 }
 
 # .env 読込と環境変数反映
@@ -124,6 +140,9 @@ get_latest_history_entry() {
     latest=$(jq -c 'max_by(.updated_at // "")' "$HISTORY_INDEX_FILE")
     export LATEST_LAST_ID=$(jq -r '.last_response_id // empty' <<<"$latest")
     export LATEST_TITLE=$(jq -r '.title // empty' <<<"$latest")
+    export LATEST_ENTRY_JSON="$latest"
+    ACTIVE_ENTRY_JSON="$latest"
+    ACTIVE_LAST_RESPONSE_ID=$(jq -r '.last_response_id // empty' <<<"$latest")
     [ -n "${LATEST_LAST_ID:-}" ]
 }
 
@@ -164,6 +183,9 @@ select_history_by_number() {
     selected_json=$(jq -c --argjson i "$idx" '.[$i]' <<<"$map_json")
     export SELECTED_LAST_ID=$(jq -r '.last_response_id // empty' <<<"$selected_json")
     export SELECTED_TITLE=$(jq -r '.title // empty' <<<"$selected_json")
+    export SELECTED_ENTRY_JSON="$selected_json"
+    ACTIVE_ENTRY_JSON="$selected_json"
+    ACTIVE_LAST_RESPONSE_ID=$(jq -r '.last_response_id // empty' <<<"$selected_json")
     if [ -z "${SELECTED_LAST_ID:-}" ]; then
         echo "[openai_api] 選択した履歴の last_response_id が無効です。" >&2
         exit 1
@@ -227,26 +249,31 @@ show_history_by_number() {
     fi
 
     # 着色設定（TTY かつ NO_COLOR 未設定時のみ色付け）
-    local C_USER="" C_ASSIST="" C_RESET=""
+    local C_USER="" C_ASSIST="" C_SUMMARY="" C_RESET=""
     if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
         if tput colors >/dev/null 2>&1; then
-            C_USER="$(tput setaf 6)"   # cyan
-            C_ASSIST="$(tput setaf 4)" # blue
+            C_USER="$(tput setaf 6)"    # cyan
+            C_ASSIST="$(tput setaf 4)"  # blue
+            C_SUMMARY="$(tput setaf 3)" # yellow
             C_RESET="$(tput sgr0)"
         else
             C_USER=$'\033[36m'
             C_ASSIST=$'\033[34m'
+            C_SUMMARY=$'\033[33m'
             C_RESET=$'\033[0m'
         fi
     fi
 
     # user/assistant のみを順に表示。本文はそのまま（複数行対応）
-    jq -r --arg cu "$C_USER" --arg ca "$C_ASSIST" --arg cr "$C_RESET" '
+    jq -r --arg cu "$C_USER" --arg ca "$C_ASSIST" --arg cs "$C_SUMMARY" --arg cr "$C_RESET" '
       (.turns // [])
-      | map(select(.role == "user" or .role == "assistant"))
+      | map(select((.role == "user") or (.role == "assistant") or (.role == "system" and (.kind // "") == "summary")))
       | .[]
       | (
-          (if .role == "user" then ($cu + "user:" + $cr) else ($ca + "assistant:" + $cr) end)
+          (if .role == "user" then ($cu + "user:" + $cr)
+           elif .role == "assistant" then ($ca + "assistant:" + $cr)
+           elif .role == "system" and (.kind // "") == "summary" then ($cs + "summary:" + $cr)
+           else (.role + ":") end)
           + "\n" + ((.text // "")) + "\n"
         )
     ' <<<"$selected_json"
@@ -259,6 +286,8 @@ show_history_by_number() {
 MODEL=""
 EFFORT=""
 VERBOSITY=""
+OPERATION="ask"
+COMPACT_INDEX=""
 CONTINUE=false
 RESUME_LIST_ONLY=false
 RESUME_INDEX=""
@@ -274,6 +303,11 @@ title_to_use=""
 IMAGE_FILE=""
 IMAGE_DATA_URL=""
 IMAGE_MIME=""
+RESUME_BASE_CONTEXT_JSON='[]'
+RESUME_SUMMARY_TEXT=""
+RESUME_SUMMARY_CREATED_AT=""
+ACTIVE_ENTRY_JSON=""
+ACTIVE_LAST_RESPONSE_ID=""
 
 resolve_image_path() {
     local raw="$1"
@@ -395,6 +429,20 @@ parse_args() {
         --help | -\?)
             show_help
             exit 0
+            ;;
+        --compact)
+            if [ "$OPERATION" != "ask" ]; then
+                echo "Error: --compact は複数回指定できません" >&2
+                exit 1
+            fi
+            if [ $# -lt 2 ]; then
+                echo "Error: --compact には履歴番号を指定してください" >&2
+                exit 1
+            fi
+            OPERATION="compact"
+            COMPACT_INDEX="$2"
+            shift 2
+            continue
             ;;
         -i)
             if [ $# -lt 2 ]; then
@@ -574,6 +622,100 @@ determine_input() {
         INPUT_TEXT="${ARGS[*]}"
     fi
 }
+build_compact_request() {
+    local conversation_text="$1"
+
+    local instruction="あなたは会話ログを要約するアシスタントです。論点を漏らさず日本語で簡潔にまとめてください。"
+    local header="以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。"
+
+    local user_prompt
+    printf -v user_prompt '%s
+---
+%s
+---
+
+出力条件:
+- 内容をシンプルに要約する
+- 箇条書きでも短い段落でもよい' "$header" "$conversation_text"
+
+    jq -n --arg m "$MODEL_MINI" --arg inst "$instruction" --arg prompt "$user_prompt" '{model:$m, reasoning:{effort:"medium"}, text:{verbosity:"medium"}, input:[{role:"system", content:[{type:"input_text", text:$inst}]},{role:"user", content:[{type:"input_text", text:$prompt}]}]}'
+}
+
+perform_compact() {
+    select_history_by_number "$COMPACT_INDEX"
+
+    local selected_json="${SELECTED_ENTRY_JSON:-}"
+    if [ -z "$selected_json" ]; then
+        echo "Error: 履歴を取得できませんでした" >&2
+        exit 1
+    fi
+
+    local turn_count
+    turn_count=$(jq '(.turns // []) | length' <<<"$selected_json")
+    if [ "${turn_count:-0}" -eq 0 ]; then
+        echo "Error: この履歴には要約対象のメッセージがありません" >&2
+        exit 1
+    fi
+
+    local all_turns_json
+    all_turns_json=$(jq -c '(.turns // [])' <<<"$selected_json")
+    local summary_count
+    summary_count=$(jq 'length' <<<"$all_turns_json")
+    if [ "${summary_count:-0}" -eq 0 ]; then
+        echo "Error: 要約対象のメッセージがありません" >&2
+        exit 1
+    fi
+
+    local summary_source
+    summary_source=$(jq -r '
+        map((if .role == "user" then "ユーザー"
+             elif .role == "assistant" then "アシスタント"
+             elif .role == "system" and (.kind // "") == "summary" then "システム要約"
+             else (.role // "不明") end)
+             + ":
+" + (.text // ""))
+        | join("
+
+---
+
+")
+    ' <<<"$all_turns_json")
+
+    local request
+    request=$(build_compact_request "$summary_source")
+
+    local response summary_text
+    response=$(call_api "$request")
+    summary_text=$(echo "$response" | parse_response_text)
+
+    if [ -z "${summary_text:-}" ] || [ "$summary_text" = "null" ]; then
+        echo "Error: 要約の生成に失敗しました" >&2
+        echo "Response: $response" >&2
+        exit 1
+    fi
+
+    local ts_now
+    ts_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    local summary_turn_json resume_json tmp_file
+    summary_turn_json=$(jq -n --arg txt "$summary_text" --arg ts "$ts_now" '{role:"system", kind:"summary", text:$txt, at:$ts}')
+    resume_json=$(jq -n --arg txt "$summary_text" --arg ts "$ts_now" '{mode:"new_request", previous_response_id:"", summary:{text:$txt, created_at:$ts}}')
+
+    tmp_file="${HISTORY_INDEX_FILE}.tmp"
+    jq -c --arg sel "$SELECTED_LAST_ID" --arg ts "$ts_now" --argjson resume "$resume_json" --argjson summary_turn "$summary_turn_json" '
+        def apply_summary(x): x
+          | .updated_at = $ts
+          | .resume = $resume
+          | .turns = [$summary_turn];
+        map(if (.last_response_id // "") == $sel then apply_summary(.) else . end)
+      ' "$HISTORY_INDEX_FILE" >"$tmp_file"
+    mv "$tmp_file" "$HISTORY_INDEX_FILE"
+
+    echo "[openai_api] compact: history=$COMPACT_INDEX, summarized=$summary_count" >&2
+
+    printf '%s
+' "$summary_text"
+}
 
 # =============================
 # 会話コンテキストの確定（新規/継続、タイトル）
@@ -590,18 +732,61 @@ compute_context() {
         fi
     fi
 
-    # 新規/継続の判定
-    IS_NEW_CONVO=true
-    if [ "$CONTINUE" = true ] && [ -n "${prev_response_id:-}" ]; then
-        IS_NEW_CONVO=false
+    RESUME_BASE_CONTEXT_JSON='[]'
+    RESUME_SUMMARY_TEXT=""
+    RESUME_SUMMARY_CREATED_AT=""
+
+    local resume_mode=""
+    local resume_prev=""
+
+    if [ -n "${ACTIVE_ENTRY_JSON:-}" ]; then
+        resume_mode=$(jq -r '.resume.mode // empty' <<<"$ACTIVE_ENTRY_JSON")
+        resume_prev=$(jq -r '.resume.previous_response_id // empty' <<<"$ACTIVE_ENTRY_JSON")
+        RESUME_SUMMARY_TEXT=$(jq -r '.resume.summary.text // empty' <<<"$ACTIVE_ENTRY_JSON")
+        RESUME_SUMMARY_CREATED_AT=$(jq -r '.resume.summary.created_at // empty' <<<"$ACTIVE_ENTRY_JSON")
+
+        if [ "$RESUME_SUMMARY_TEXT" = "null" ]; then
+            RESUME_SUMMARY_TEXT=""
+        fi
+        if [ "$RESUME_SUMMARY_CREATED_AT" = "null" ]; then
+            RESUME_SUMMARY_CREATED_AT=""
+        fi
+
+        if [ -n "$RESUME_SUMMARY_TEXT" ]; then
+            RESUME_BASE_CONTEXT_JSON=$(jq -n --arg t "$RESUME_SUMMARY_TEXT" '[{role:"system", content:[{type:"input_text", text:$t}]}]')
+        fi
+
+        if [ -n "$resume_prev" ]; then
+            prev_response_id="$resume_prev"
+        fi
+
+        if [ -z "${prev_title:-}" ]; then
+            prev_title=$(jq -r '.title // empty' <<<"$ACTIVE_ENTRY_JSON")
+        fi
+
+        if [ "$resume_mode" = "new_request" ]; then
+            prev_response_id=""
+        fi
     fi
 
-    # タイトル決定
+    IS_NEW_CONVO=true
+    if [ "$CONTINUE" = true ]; then
+        if [ -n "${prev_response_id:-}" ]; then
+            IS_NEW_CONVO=false
+        elif [ -n "${ACTIVE_ENTRY_JSON:-}" ] && [ "$resume_mode" = "new_request" ]; then
+            IS_NEW_CONVO=false
+        fi
+    fi
+
     prev_title="${prev_title:-}"
     local title_candidate
-    title_candidate=$(jq -rn --arg t "$INPUT_TEXT" '$t | gsub("\\s+";" ") | .[0:50]')
+    title_candidate=$(jq -rn --arg t "$INPUT_TEXT" '$t | gsub("[[:space:]]+";" ") | .[0:50]')
     if [ "$IS_NEW_CONVO" = true ]; then
-        title_to_use="$title_candidate"
+        if [ "$CONTINUE" = true ] && [ -n "$prev_title" ]; then
+            title_to_use="$prev_title"
+        else
+            title_to_use="$title_candidate"
+        fi
     else
         title_to_use="$prev_title"
     fi
@@ -612,36 +797,38 @@ compute_context() {
 # =============================
 
 build_request_json() {
-    # パラメータログ
     {
-        printf '[openai_api] model=%s, effort=%s, verbosity=%s, continue=%s, resume_index=%s, resume_list_only=%s, delete_index=%s\n' \
-            "$MODEL" "$EFFORT" "$VERBOSITY" "$CONTINUE" "${RESUME_INDEX:-}" "${RESUME_LIST_ONLY:-false}" "${DELETE_INDEX:-}"
+        printf '[openai_api] model=%s, effort=%s, verbosity=%s, continue=%s, resume_index=%s, resume_list_only=%s, delete_index=%s
+' "$MODEL" "$EFFORT" "$VERBOSITY" "$CONTINUE" "${RESUME_INDEX:-}" "${RESUME_LIST_ONLY:-false}" "${DELETE_INDEX:-}"
     } >&2
 
-    # 入力メッセージ
     if [ -n "${IMAGE_DATA_URL:-}" ]; then
         new_user_msg=$(jq -n --arg t "$INPUT_TEXT" --arg url "$IMAGE_DATA_URL" '{role:"user", content:[{type:"input_text", text:$t}, {type:"input_image", image_url:$url}]}')
     else
         new_user_msg=$(jq -n --arg t "$INPUT_TEXT" '{role:"user", content:[{type:"input_text", text:$t}]}')
     fi
+
+    local input_json
+    input_json='[]'
+
     if [ "$IS_NEW_CONVO" = true ] && [ -n "${SYSTEM_PROMPT:-}" ]; then
+        local system_msg
         system_msg=$(jq -n --arg t "$SYSTEM_PROMPT" '{role:"system", content:[{type:"input_text", text:$t}]}')
-        input_json=$(jq -n -c --argjson s "$system_msg" --argjson u "$new_user_msg" '[$s,$u]')
-    else
-        input_json=$(jq -n -c --argjson u "$new_user_msg" '[$u]')
+        input_json=$(jq -n --argjson s "$system_msg" '[ $s ]')
     fi
 
-    # リクエスト JSON
-    request_json=$(jq -n \
-        --arg m "$MODEL" \
-        --arg e "$EFFORT" \
-        --arg v "$VERBOSITY" \
-        '{model:$m, reasoning:{effort:$e}, text:{verbosity:$v}, tools:[{type:"web_search_preview"}]}')
+    if [ -n "${RESUME_BASE_CONTEXT_JSON:-}" ] && [ "$RESUME_BASE_CONTEXT_JSON" != "[]" ]; then
+        input_json=$(jq -n --argjson cur "$input_json" --argjson base "$RESUME_BASE_CONTEXT_JSON" '$cur + $base')
+    fi
+
+    input_json=$(jq -n --argjson cur "$input_json" --argjson u "$new_user_msg" '$cur + [$u]')
+
+    request_json=$(jq -n --arg m "$MODEL" --arg e "$EFFORT" --arg v "$VERBOSITY" '{model:$m, reasoning:{effort:$e}, text:{verbosity:$v}, tools:[{type:"web_search_preview"}]}')
     request_json=$(echo "$request_json" | jq -c --argjson i "$input_json" '. + {input:$i}')
 
     if [ "$CONTINUE" = true ] && [ -n "$prev_response_id" ]; then
         request_json=$(echo "$request_json" | jq -c --arg pid "$prev_response_id" '. + {previous_response_id:$pid}')
-    elif [ "$CONTINUE" = true ] && [ -z "$prev_response_id" ]; then
+    elif [ "$CONTINUE" = true ] && [ -z "$prev_response_id" ] && [ -z "${RESUME_SUMMARY_TEXT:-}" ]; then
         echo "[openai_api] warn: 直前の response.id が見つからないため、新規会話として開始します" >&2
     fi
 
@@ -670,22 +857,34 @@ history_upsert() {
     local assistant_text="$3"
     init_history_index
     ts_now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    if [ "$IS_NEW_CONVO" = true ]; then
-        jq -n --arg title "$title_to_use" --arg model "$MODEL" --arg effort "$EFFORT" --arg verbosity "$VERBOSITY" \
-            --arg id "$response_id" --arg ts "$ts_now" --arg u "$user_text" --arg a "$assistant_text" '{title:$title, model:$model, effort:$effort, verbosity:$verbosity, created_at:$ts, updated_at:$ts, first_response_id:$id, last_response_id:$id, request_count:1, turns:[ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$id} ] }' |
+
+    local target_last_id="$prev_response_id"
+    if [ -z "$target_last_id" ] && [ -n "${ACTIVE_LAST_RESPONSE_ID:-}" ]; then
+        target_last_id="$ACTIVE_LAST_RESPONSE_ID"
+    fi
+
+    local resume_summary="${RESUME_SUMMARY_TEXT:-}"
+    local resume_created="${RESUME_SUMMARY_CREATED_AT:-}"
+    if [ -n "$resume_summary" ] && [ -z "$resume_created" ]; then
+        resume_created="$ts_now"
+    fi
+
+    local resume_json
+    if [ -n "$resume_summary" ]; then
+        resume_json=$(jq -n --arg prev "$response_id" --arg text "$resume_summary" --arg created "$resume_created" '{mode:"response_id", previous_response_id:$prev, summary:{text:$text, created_at:$created}}')
+    else
+        resume_json=$(jq -n --arg prev "$response_id" '{mode:"response_id", previous_response_id:$prev}')
+    fi
+
+    if [ "$IS_NEW_CONVO" = true ] && [ -z "$target_last_id" ]; then
+        jq -n --arg title "$title_to_use" --arg model "$MODEL" --arg effort "$EFFORT" --arg verbosity "$VERBOSITY" --arg id "$response_id" --arg ts "$ts_now" --arg u "$user_text" --arg a "$assistant_text" --argjson resume "$resume_json" '{title:$title, model:$model, effort:$effort, verbosity:$verbosity, created_at:$ts, updated_at:$ts, first_response_id:$id, last_response_id:$id, request_count:1, resume:$resume, turns:[ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$id} ] }' |
             jq -c --slurpfile cur "$HISTORY_INDEX_FILE" '$cur[0] + [.]' >"${HISTORY_INDEX_FILE}.tmp"
         mv "${HISTORY_INDEX_FILE}.tmp" "$HISTORY_INDEX_FILE"
-    else
-        jq -c \
-            --arg prev "${prev_response_id:-}" \
-            --arg new "$response_id" \
-            --arg ts "$ts_now" \
-            --arg model "$MODEL" \
-            --arg effort "$EFFORT" \
-            --arg verbosity "$VERBOSITY" \
-            --arg u "$user_text" \
-            --arg a "$assistant_text" \
-            '
+        ACTIVE_LAST_RESPONSE_ID="$response_id"
+        return
+    fi
+
+    jq -c --arg target "$target_last_id" --arg new "$response_id" --arg ts "$ts_now" --arg model "$MODEL" --arg effort "$EFFORT" --arg verbosity "$VERBOSITY" --arg u "$user_text" --arg a "$assistant_text" --arg resume_summary "$resume_summary" --arg resume_created "$resume_created" '
         def upd(x): x
           | .updated_at = $ts
           | .last_response_id = $new
@@ -693,21 +892,35 @@ history_upsert() {
           | .effort = $effort
           | .verbosity = $verbosity
           | .request_count = ((.request_count // 1) + 1)
-          | .turns = ((.turns // []) + [ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$new} ]);
-        (map(if (.last_response_id // "") == $prev then upd(.) else . end))
+          | .turns = ((.turns // []) + [ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$new} ])
+          | .resume = (
+              if ($resume_summary != "") then
+                  ((.resume // {})
+                    | .mode = "response_id"
+                    | .previous_response_id = $new
+                    | .summary = ((.summary // {})
+                        | .text = $resume_summary
+                        | .created_at = (if ($resume_created != "") then $resume_created else (.created_at // $ts) end)))
+              else
+                  ((.resume // {})
+                    | .mode = "response_id"
+                    | .previous_response_id = $new
+                    | del(.summary))
+              end
+            );
+        (map(if (.last_response_id // "") == $target then upd(.) else . end))
       ' "$HISTORY_INDEX_FILE" >"${HISTORY_INDEX_FILE}.tmp"
 
-        if ! diff -q "$HISTORY_INDEX_FILE" "${HISTORY_INDEX_FILE}.tmp" >/dev/null 2>&1; then
-            mv "${HISTORY_INDEX_FILE}.tmp" "$HISTORY_INDEX_FILE"
-        else
-            rm -f "${HISTORY_INDEX_FILE}.tmp"
-            jq -n --arg title "$title_to_use" --arg model "$MODEL" --arg effort "$EFFORT" --arg verbosity "$VERBOSITY" \
-                --arg id "$response_id" --arg ts "$ts_now" --arg u "$user_text" --arg a "$assistant_text" \
-                '{title:$title, model:$model, effort:$effort, verbosity:$verbosity, created_at:$ts, updated_at:$ts, first_response_id:$id, last_response_id:$id, request_count:1,
-                  turns:[ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$id} ] }' |
-                jq -c --slurpfile cur "$HISTORY_INDEX_FILE" '$cur[0] + [.]' >"${HISTORY_INDEX_FILE}.tmp"
-            mv "${HISTORY_INDEX_FILE}.tmp" "$HISTORY_INDEX_FILE"
-        fi
+    if ! diff -q "$HISTORY_INDEX_FILE" "${HISTORY_INDEX_FILE}.tmp" >/dev/null 2>&1; then
+        mv "${HISTORY_INDEX_FILE}.tmp" "$HISTORY_INDEX_FILE"
+        ACTIVE_LAST_RESPONSE_ID="$response_id"
+    else
+        rm -f "${HISTORY_INDEX_FILE}.tmp"
+        jq -n --arg title "$title_to_use" --arg model "$MODEL" --arg effort "$EFFORT" --arg verbosity "$VERBOSITY" --arg id "$response_id" --arg ts "$ts_now" --arg u "$user_text" --arg a "$assistant_text" --argjson resume "$resume_json" '{title:$title, model:$model, effort:$effort, verbosity:$verbosity, created_at:$ts, updated_at:$ts, first_response_id:$id, last_response_id:$id, request_count:1, resume:$resume,
+              turns:[ {role:"user", text:$u, at:$ts}, {role:"assistant", text:$a, at:$ts, response_id:$id} ] }' |
+            jq -c --slurpfile cur "$HISTORY_INDEX_FILE" '$cur[0] + [.]' >"${HISTORY_INDEX_FILE}.tmp"
+        mv "${HISTORY_INDEX_FILE}.tmp" "$HISTORY_INDEX_FILE"
+        ACTIVE_LAST_RESPONSE_ID="$response_id"
     fi
 }
 
@@ -720,6 +933,12 @@ main() {
     load_env
     load_system_prompt
     parse_args "$@"
+
+    if [ "$OPERATION" = "compact" ]; then
+        perform_compact
+        exit 0
+    fi
+
     determine_input
     compute_context
     prepare_image_payload
