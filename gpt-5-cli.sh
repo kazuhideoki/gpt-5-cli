@@ -86,7 +86,7 @@ load_system_prompt() {
 }
 
 show_help() {
-    echo "Usage: $0 [-<クラスタ>] <入力テキスト>"
+    echo "Usage: $0 [フラグ...] <入力テキスト>"
     echo ""
     echo "フラグ（種類+数字／連結可／ハイフン必須）:"
     echo "  -m0/-m1/-m2 : model => nano/mini/main(${MODEL_NANO}/${MODEL_MINI}/${MODEL_MAIN})"
@@ -460,6 +460,7 @@ parse_args() {
             ;;
         --)
             shift
+            ARGS=("$@")
             break
             ;;
         -*)
@@ -580,9 +581,7 @@ parse_args() {
             shift
             ;;
         *)
-            ARGS+=("$1")
-            shift
-            ARGS+=("$@")
+            ARGS=("$@")
             break
             ;;
         esac
