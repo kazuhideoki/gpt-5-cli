@@ -94,7 +94,6 @@ show_help() {
     echo "  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${VERBOSITY_DEFAULT})"
     echo "  -c          : continue（直前の会話から継続）"
     echo "  -i <画像>   : 入力に画像を添付（\$HOME 配下のフルパスまたは 'スクリーンショット *.png'）"
-    echo "  -r          : 履歴一覧を表示して終了（表示のみ）"
     echo "  -r{num}     : 対応する履歴で対話を再開（例: -r2）"
     echo "  -d{num}     : 対応する履歴を削除（例: -d2）"
     echo "  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）"
@@ -537,8 +536,8 @@ parse_args() {
                         DELETE_INDEX="$digits"
                         i=$j
                     else
-                        echo "Invalid option: -d は -d{num} の形式で指定してください（例: -d2）。" >&2
-                        exit 1
+                        RESUME_LIST_ONLY=true
+                        i=$((i + 1))
                     fi
                     ;;
                 s)
@@ -558,8 +557,8 @@ parse_args() {
                         SHOW_INDEX="$digits"
                         i=$j
                     else
-                        echo "Invalid option: -s は -s{num} の形式で指定してください（例: -s2）。" >&2
-                        exit 1
+                        RESUME_LIST_ONLY=true
+                        i=$((i + 1))
                     fi
                     ;;
                 v)
@@ -573,7 +572,7 @@ parse_args() {
                     fi
                     ;;
                 *)
-                    echo "Invalid option: -$ch は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d{num}, -s{num} を使用してください。" >&2
+                    echo "Invalid option: -$ch は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num} を使用してください。" >&2
                     exit 1
                     ;;
                 esac

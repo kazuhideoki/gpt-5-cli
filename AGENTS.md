@@ -9,8 +9,8 @@
 
 ## ビルド・実行・開発コマンド
 - `bash -n gpt-5-cli.sh`: 構文チェック。
-- `shellcheck gpt-5-cli.sh`: Lint（推奨）。
-- `shfmt -w -i 4 gpt-5-cli.sh`: フォーマット（推奨）。
+- `shellcheck gpt-5-cli.sh`: Lint（必須）。
+- `shfmt -w -i 4 gpt-5-cli.sh`: フォーマット（必須）。
 - `./gpt-5-cli.sh --help` または `-?`: ヘルプ表示。
 - 実行例: `./gpt-5-cli.sh -m1e2v2 "要約して"`（`.env` に API キー設定後）。
 
@@ -42,4 +42,3 @@
 ## アーキテクチャ要旨（参考）
 - `curl` で `/v1/responses` を呼び出し、`jq` で I/O を整形。
 - 会話継続は `previous_response_id`、履歴は `history_index.json` に追記保存。
-
