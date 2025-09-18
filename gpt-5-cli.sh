@@ -86,17 +86,20 @@ load_system_prompt() {
 }
 
 show_help() {
-    echo "Usage: $0 [フラグ...] <入力テキスト>"
+    echo "Usage:"
+    echo "  $0 [-i <image>] [flag] <input>"
+    echo "  $0 --compact <num>"
     echo ""
-    echo "フラグ（種類+数字／連結可／ハイフン必須）:"
+    echo "flag（種類+数字／連結可／ハイフン必須）:"
     echo "  -m0/-m1/-m2 : model => nano/mini/main(${MODEL_NANO}/${MODEL_MINI}/${MODEL_MAIN})"
     echo "  -e0/-e1/-e2 : effort => low/medium/high (既定: ${EFFORT_DEFAULT})"
     echo "  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${VERBOSITY_DEFAULT})"
     echo "  -c          : continue（直前の会話から継続）"
-    echo "  -i <画像>   : 入力に画像を添付（\$HOME 配下のフルパスまたは 'スクリーンショット *.png'）"
     echo "  -r{num}     : 対応する履歴で対話を再開（例: -r2）"
     echo "  -d{num}     : 対応する履歴を削除（例: -d2）"
     echo "  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）"
+    echo ""
+    echo "  -i <image>   : 入力に画像を添付（\$HOME 配下のフルパスまたは 'スクリーンショット *.png'）"
     echo ""
     echo "環境変数(.env):"
     echo "  OPENAI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）"
