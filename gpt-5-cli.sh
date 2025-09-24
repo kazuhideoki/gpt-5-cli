@@ -12,6 +12,122 @@ DEFAULT_VERBOSITY="low"
 
 log() { printf "%s\n" "$*" >&2; }
 
+LOG_STYLE_READY=false
+LOG_COLOR_RESET=""
+LOG_COLOR_MEDIUM=""
+LOG_COLOR_HIGH=""
+
+init_log_level_style() {
+    if [ "${LOG_STYLE_READY:-false}" = true ]; then
+        return
+    fi
+
+    LOG_STYLE_READY=true
+    LOG_COLOR_RESET=""
+    LOG_COLOR_MEDIUM=""
+    LOG_COLOR_HIGH=""
+
+    if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
+        if command -v tput >/dev/null 2>&1 && tput colors >/dev/null 2>&1; then
+            LOG_COLOR_RESET="$(tput sgr0)"
+            LOG_COLOR_MEDIUM="$(tput setaf 3)"
+            LOG_COLOR_HIGH="$(tput bold)$(tput setaf 1)"
+        else
+            LOG_COLOR_RESET=$'\033[0m'
+            LOG_COLOR_MEDIUM=$'\033[33m'
+            LOG_COLOR_HIGH=$'\033[1;31m'
+        fi
+    fi
+}
+
+decorate_level_value() {
+    local value="$1"
+    local level="$2"
+    init_log_level_style
+
+    local prefix="" suffix="${LOG_COLOR_RESET}" decorated="$value"
+
+    case "$level" in
+        medium)
+            decorated="+${value}+"
+            prefix="$LOG_COLOR_MEDIUM"
+            ;;
+        high)
+            decorated="!${value}!"
+            prefix="$LOG_COLOR_HIGH"
+            ;;
+        *)
+            suffix=""
+            ;;
+    esac
+
+    if [ -n "$prefix" ]; then
+        decorated="${prefix}${decorated}${suffix}"
+    fi
+
+    printf '%s' "$decorated"
+}
+
+level_for_scale_value() {
+    case "$1" in
+        low|LOW)
+            echo "low"
+            ;;
+        medium|MEDIUM)
+            echo "medium"
+            ;;
+        high|HIGH)
+            echo "high"
+            ;;
+        *)
+            echo "high"
+            ;;
+    esac
+}
+
+level_for_model_value() {
+    local value="$1"
+
+    if [ -n "${MODEL_MAIN:-}" ] && [ "$value" = "$MODEL_MAIN" ]; then
+        echo "high"
+        return
+    fi
+    if [ -n "${MODEL_MINI:-}" ] && [ "$value" = "$MODEL_MINI" ]; then
+        echo "medium"
+        return
+    fi
+    if [ -n "${MODEL_NANO:-}" ] && [ "$value" = "$MODEL_NANO" ]; then
+        echo "low"
+        return
+    fi
+
+    case "$value" in
+        *nano*|*lite*|*small*)
+            echo "low"
+            ;;
+        *mini*|*base*)
+            echo "medium"
+            ;;
+        *)
+            echo "high"
+            ;;
+    esac
+}
+
+format_model_value() {
+    local value="$1"
+    local level
+    level="$(level_for_model_value "$value")"
+    decorate_level_value "$value" "$level"
+}
+
+format_scale_value() {
+    local value="$1"
+    local level
+    level="$(level_for_scale_value "$value")"
+    decorate_level_value "$value" "$level"
+}
+
 # システムプロンプト（任意）。存在すれば新規会話時に最初の system メッセージとして付与
 SYSTEM_PROMPT_FILE="$SCRIPT_DIR/system_prompt.txt"
 SYSTEM_PROMPT=""
@@ -828,11 +944,15 @@ compute_context() {
 # =============================
 
 build_request_json() {
-    {
-        printf '[openai_api] model=%s, effort=%s, verbosity=%s, continue=%s, resume_index=%s, resume_list_only=%s, delete_index=%s
-' "$MODEL" "$EFFORT" "$VERBOSITY" "$CONTINUE" "${RESUME_INDEX:-}" "${RESUME_LIST_ONLY:-false}" "${DELETE_INDEX:-}"
-    } >&2
+    local log_model log_effort log_verbosity
+    log_model="$(format_model_value "$MODEL")"
+    log_effort="$(format_scale_value "$EFFORT")"
+    log_verbosity="$(format_scale_value "$VERBOSITY")"
 
+    {
+        printf $'[openai_api] model=%s, effort=%s, verbosity=%s, continue=%s\n' "$log_model" "$log_effort" "$log_verbosity" "$CONTINUE"
+        printf $'             resume_index=%s, resume_list_only=%s, delete_index=%s\n' "${RESUME_INDEX:-}" "${RESUME_LIST_ONLY:-false}" "${DELETE_INDEX:-}"
+    } >&2
     if [ -n "${IMAGE_DATA_URL:-}" ]; then
         new_user_msg=$(jq -n --arg t "$INPUT_TEXT" --arg url "$IMAGE_DATA_URL" '{role:"user", content:[{type:"input_text", text:$t}, {type:"input_image", image_url:$url}]}')
     else
