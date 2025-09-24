@@ -308,6 +308,9 @@ IMAGE_MIME=""
 RESUME_BASE_CONTEXT_JSON='[]'
 RESUME_SUMMARY_TEXT=""
 RESUME_SUMMARY_CREATED_AT=""
+MODEL_EXPLICIT=false
+EFFORT_EXPLICIT=false
+VERBOSITY_EXPLICIT=false
 ACTIVE_ENTRY_JSON=""
 ACTIVE_LAST_RESPONSE_ID=""
 
@@ -389,6 +392,9 @@ parse_args() {
     MODEL="$MODEL_NANO"
     EFFORT="$EFFORT_DEFAULT"
     VERBOSITY="$VERBOSITY_DEFAULT"
+    MODEL_EXPLICIT=false
+    EFFORT_EXPLICIT=false
+    VERBOSITY_EXPLICIT=false
 
     set_model_index() {
         case "$1" in
@@ -400,6 +406,7 @@ parse_args() {
             exit 1
             ;;
         esac
+        MODEL_EXPLICIT=true
     }
 
     set_effort_index() {
@@ -412,6 +419,7 @@ parse_args() {
             exit 1
             ;;
         esac
+        EFFORT_EXPLICIT=true
     }
 
     set_verbosity_index() {
@@ -424,6 +432,7 @@ parse_args() {
             exit 1
             ;;
         esac
+        VERBOSITY_EXPLICIT=true
     }
 
     while [ $# -gt 0 ]; do
@@ -741,6 +750,27 @@ compute_context() {
     local resume_prev=""
 
     if [ -n "${ACTIVE_ENTRY_JSON:-}" ]; then
+        if [ "$CONTINUE" = true ]; then
+            local stored_model stored_effort stored_verbosity
+            if [ "$MODEL_EXPLICIT" != true ]; then
+                stored_model=$(jq -r '.model // empty' <<<"$ACTIVE_ENTRY_JSON")
+                if [ -n "$stored_model" ] && [ "$stored_model" != "null" ]; then
+                    MODEL="$stored_model"
+                fi
+            fi
+            if [ "$EFFORT_EXPLICIT" != true ]; then
+                stored_effort=$(jq -r '.effort // empty' <<<"$ACTIVE_ENTRY_JSON")
+                if [ -n "$stored_effort" ] && [ "$stored_effort" != "null" ]; then
+                    EFFORT="$stored_effort"
+                fi
+            fi
+            if [ "$VERBOSITY_EXPLICIT" != true ]; then
+                stored_verbosity=$(jq -r '.verbosity // empty' <<<"$ACTIVE_ENTRY_JSON")
+                if [ -n "$stored_verbosity" ] && [ "$stored_verbosity" != "null" ]; then
+                    VERBOSITY="$stored_verbosity"
+                fi
+            fi
+        fi
         resume_mode=$(jq -r '.resume.mode // empty' <<<"$ACTIVE_ENTRY_JSON")
         resume_prev=$(jq -r '.resume.previous_response_id // empty' <<<"$ACTIVE_ENTRY_JSON")
         RESUME_SUMMARY_TEXT=$(jq -r '.resume.summary.text // empty' <<<"$ACTIVE_ENTRY_JSON")
