@@ -1,32 +1,40 @@
 # gpt-5-cli — OpenAI Responses API CLI
 
-OpenAI Responses API を叩くシンプルな Bash スクリプトです。会話の継続、履歴管理、モデル/推論強度/冗長度の切替をサポートします。
+OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継続、履歴管理、モデル/推論強度/冗長度の切替、画像入力、会話ログの要約 (`--compact`) をサポートします。
 
 ## セットアップ
-1) `.env.example` を `.env` にコピー
-```bash
-cp .env.example .env
-```
-2) `.env` に API キーを設定
-```env
-OPENAI_API_KEY=your-actual-api-key-here
-```
-3) 任意の既定値（例）
-```env
-OPENAI_MODEL_MAIN=gpt-5
-OPENAI_MODEL_MINI=gpt-5-mini
-OPENAI_MODEL_NANO=gpt-5-nano
-OPENAI_DEFAULT_EFFORT=low      # low|medium|high
-OPENAI_DEFAULT_VERBOSITY=low   # low|medium|high
-OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
-```
-
-4) 任意: `system_prompt.txt` を作成すると、新規会話の先頭に固定の指示を自動付与できます（削除または空ファイルで無効化）。
+1. `.env.example` を `.env` にコピー
+   ```bash
+   cp .env.example .env
+   ```
+2. `.env` に API キーを設定
+   ```env
+   OPENAI_API_KEY=your-actual-api-key-here
+   ```
+3. 依存関係をインストール
+   ```bash
+   npm install
+   ```
+4. TypeScript をコンパイル
+   ```bash
+   npm run build
+   ```
+   （開発中は `npm run dev` で `tsx` 実行も可能です）
+5. 任意の既定値（例）
+   ```env
+   OPENAI_MODEL_MAIN=gpt-5
+   OPENAI_MODEL_MINI=gpt-5-mini
+   OPENAI_MODEL_NANO=gpt-5-nano
+   OPENAI_DEFAULT_EFFORT=low      # low|medium|high
+   OPENAI_DEFAULT_VERBOSITY=low   # low|medium|high
+   OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
+   ```
+6. 任意: `system_prompt.txt` を作成すると、新規会話の先頭に固定の指示を自動付与できます（削除または空ファイルで無効化）。
 
 ## 使い方
 ```bash
-./gpt-5-cli.sh [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] [-i <画像>] <入力テキスト>
-./gpt-5-cli.sh --help  # または -?
+npm run start -- [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] [-i <画像>] <入力テキスト>
+npm run start -- --help  # または -?
 ```
 - `-m0/-m1/-m2`: モデル選択（nano/mini/main）。未指定は `nano`。
 - `-e0/-e1/-e2`: reasoning effort（low/medium/high）。未指定は `.env` の既定。
@@ -40,17 +48,19 @@ OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
  - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
  - 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
 
-実行例
+### 実行例
 ```bash
-./gpt-5-cli.sh 明日の予定を整理して
-./gpt-5-cli.sh -m1e2v2 詳しく
-./gpt-5-cli.sh -r              # 一覧のみ
-./gpt-5-cli.sh -r2 続きをやろう  # 2 番目を使って継続
+npm run start -- 明日の予定を整理して
+npm run start -- -m1e2v2 詳しく
+npm run start -- -r              # 一覧のみ
+npm run start -- -r2 続きをやろう  # 2 番目を使って継続
+npm run start -- --compact 1     # 1 番目の履歴を要約
 ```
 
 ## 依存関係
-- 必須: `curl`, `jq`, `awk`, `diff`, `base64`
-- 推奨: `shellcheck`, `shfmt`（`bash -n gpt-5-cli.sh` で構文確認）
+- Node.js 18 以降
+- npm
+- TypeScript コンパイラ (`npm install` 時に導入)
 
 ## 履歴と設定の要点
 - 既定の履歴ファイルはリポジトリ直下の `history_index.json`（`OPENAI_HISTORY_INDEX_FILE` で変更可。`~` 展開対応）。
@@ -58,5 +68,10 @@ OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
 - `system_prompt.txt` が存在する場合、新規会話の先頭に system メッセージとして付与されます。
 
 ## 内部動作のメモ
-- OpenAI `/v1/responses` を `curl` で呼び出し、`jq` で JSON を生成/解析。
-- 会話継続は `previous_response_id` を使用。Web 検索ツール `web_search_preview` を有効化しています。
+- OpenAI Node SDK の `responses.create` を使用して `/v1/responses` を呼び出します。
+- 会話継続は `previous_response_id` を使用。Web 検索ツール `web_search_preview` を自動付与しています。
+- 履歴管理は `history_index.json` を JSON 配列として読み書きします。
+
+## 開発コマンド
+- `npm run build`: TypeScript をコンパイルして `dist/` を生成
+- `npm run dev`: `tsx` で `src/cli.ts` を直接実行

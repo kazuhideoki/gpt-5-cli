@@ -1,3 +1,5 @@
 .env
 system_prompt.txt
 history_index.json
+node_modules/
+dist/

@@ -1,0 +1,24 @@
+{
+  "name": "gpt-5-cli",
+  "version": "1.0.0",
+  "description": "Command line client for the OpenAI Responses API implemented in TypeScript",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "gpt-5-cli": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "openai": "^4.57.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}
