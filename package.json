@@ -7,10 +7,11 @@
   "bin": {
     "gpt-5-cli": "dist/cli.js"
   },
+  "packageManager": "bun@1.2.20",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/cli.js",
-    "dev": "tsx src/cli.ts"
+    "build": "bunx tsc",
+    "start": "bun dist/cli.js",
+    "dev": "bun run src/cli.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -18,7 +19,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
-    "tsx": "^4.16.2",
     "typescript": "^5.5.4"
   }
 }

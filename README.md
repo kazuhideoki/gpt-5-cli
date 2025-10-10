@@ -3,6 +3,7 @@
 OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継続、履歴管理、モデル/推論強度/冗長度の切替、画像入力、会話ログの要約 (`--compact`) をサポートします。
 
 ## セットアップ
+
 1. `.env.example` を `.env` にコピー
    ```bash
    cp .env.example .env
@@ -13,13 +14,13 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    ```
 3. 依存関係をインストール
    ```bash
-   npm install
+   bun install
    ```
 4. TypeScript をコンパイル
    ```bash
-   npm run build
+   bun run build
    ```
-   （開発中は `npm run dev` で `tsx` 実行も可能です）
+   （開発中は `bun run dev` で TypeScript ソースをそのまま実行できます）
 5. 任意の既定値（例）
    ```env
    OPENAI_MODEL_MAIN=gpt-5
@@ -32,46 +33,52 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
 6. 任意: `system_prompt.txt` を作成すると、新規会話の先頭に固定の指示を自動付与できます（削除または空ファイルで無効化）。
 
 ## 使い方
+
 ```bash
-npm run start -- [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] [-i <画像>] <入力テキスト>
-npm run start -- --help  # または -?
+bun start -- [-m0|1|2][-e0|1|2][-v0|1|2][-c|-r|-r{N}|-d{N}|-s{N}] [-i <画像>] <入力テキスト>
+bun start -- --help  # または -?
 ```
+
 - `-m0/-m1/-m2`: モデル選択（nano/mini/main）。未指定は `nano`。
 - `-e0/-e1/-e2`: reasoning effort（low/medium/high）。未指定は `.env` の既定。
 - `-v0/-v1/-v2`: 出力の冗長度（low/medium/high）。未指定は `.env` の既定。
 - `-c`: 直近の会話から継続（最新の履歴を自動選択）。
-- `-i <画像>`: 入力に画像を添付。`$HOME` 配下のフルパス、または「スクリーンショット *.png」というファイル名のみ対応（`~/Desktop` に解決）。
+- `-i <画像>`: 入力に画像を添付。`$HOME` 配下のフルパス、または「スクリーンショット \*.png」というファイル名のみ対応（`~/Desktop` に解決）。
 - `-r`: 履歴一覧を表示して終了。
 - `-r{N}`: N 番目（新しい順）の履歴で再開。テキスト省略時は対話的に入力。
 - `-d{N}`: N 番目の履歴を削除。
 - `-s{N}`: N 番目の会話ログを表示（`NO_COLOR=1` で色無し）。
- - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
- - 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
+- フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
+- 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
 
 ### 実行例
+
 ```bash
-npm run start -- 明日の予定を整理して
-npm run start -- -m1e2v2 詳しく
-npm run start -- -r              # 一覧のみ
-npm run start -- -r2 続きをやろう  # 2 番目を使って継続
-npm run start -- --compact 1     # 1 番目の履歴を要約
+bun start -- 明日の予定を整理して
+bun start -- -m1e2v2 詳しく
+bun start -- -r              # 一覧のみ
+bun start -- -r2 続きをやろう  # 2 番目を使って継続
+bun start -- --compact 1     # 1 番目の履歴を要約
 ```
 
 ## 依存関係
-- Node.js 18 以降
-- npm
-- TypeScript コンパイラ (`npm install` 時に導入)
+
+- Bun 1.2 以降
+- TypeScript コンパイラ（`bun install` で導入）
 
 ## 履歴と設定の要点
+
 - 既定の履歴ファイルはリポジトリ直下の `history_index.json`（`OPENAI_HISTORY_INDEX_FILE` で変更可。`~` 展開対応）。
 - 履歴にはタイトル・最終 response.id・メタ情報・`turns`（user/assistant 各発話）を保存。共有前に機微情報の有無を確認してください。
 - `system_prompt.txt` が存在する場合、新規会話の先頭に system メッセージとして付与されます。
 
 ## 内部動作のメモ
+
 - OpenAI Node SDK の `responses.create` を使用して `/v1/responses` を呼び出します。
 - 会話継続は `previous_response_id` を使用。Web 検索ツール `web_search_preview` を自動付与しています。
 - 履歴管理は `history_index.json` を JSON 配列として読み書きします。
 
 ## 開発コマンド
-- `npm run build`: TypeScript をコンパイルして `dist/` を生成
-- `npm run dev`: `tsx` で `src/cli.ts` を直接実行
+
+- `bun run build`: TypeScript をコンパイルして `dist/` を生成
+- `bun run dev`: Bun の TypeScript 実行機能で `src/cli.ts` を直接実行
