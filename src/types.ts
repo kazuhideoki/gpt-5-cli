@@ -1,3 +1,5 @@
+import type { EasyInputMessage } from "openai/resources/responses/responses";
+
 export type EffortLevel = "low" | "medium" | "high";
 export type VerbosityLevel = "low" | "medium" | "high";
 
@@ -86,7 +88,4 @@ export interface RequestResources {
   imageDataUrl?: string;
 }
 
-export interface OpenAIInputMessage {
-  role: string;
-  content: Array<{ type: "input_text"; text: string } | { type: "input_image"; image_url: string }>;
-}
+export type OpenAIInputMessage = EasyInputMessage;

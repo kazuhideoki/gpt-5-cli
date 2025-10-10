@@ -4,7 +4,10 @@ import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import OpenAI from "openai";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses";
+import type {
+  ResponseCreateParamsNonStreaming,
+  ResponseTextConfig,
+} from "openai/resources/responses/responses";
 import type {
   CliDefaults,
   CliOptions,
@@ -15,6 +18,8 @@ import type {
 import { formatModelValue, formatScaleValue } from "./utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment, readSystemPrompt } from "./config.js";
 import { formatTurnsForSummary, HistoryStore } from "./history.js";
+
+type ResponseTextConfigWithVerbosity = ResponseTextConfig & { verbosity?: CliOptions["verbosity"] };
 
 interface DetermineInputExit {
   kind: "exit";
@@ -174,6 +179,10 @@ function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       imagePath = argv[index + 1];
       index += 2;
       continue;
+    }
+    if (arg === "--") {
+      args.push(...argv.slice(index + 1));
+      break;
     }
     if (arg.startsWith("--")) {
       throw new Error(`Invalid option: ${arg}`);
@@ -549,17 +558,20 @@ function buildRequest(
 
   const userContent: OpenAIInputMessage["content"] = [{ type: "input_text", text: inputText }];
   if (imageDataUrl) {
-    userContent.push({ type: "input_image", image_url: imageDataUrl });
+    userContent.push({ type: "input_image", image_url: imageDataUrl, detail: "auto" });
   }
 
   inputMessages.push({ role: "user", content: userContent });
 
+  const textConfig: ResponseTextConfigWithVerbosity = { verbosity: options.verbosity };
+  const inputForRequest = inputMessages as ResponseCreateParamsNonStreaming["input"];
+
   const request: ResponseCreateParamsNonStreaming = {
     model: options.model,
     reasoning: { effort: options.effort },
-    text: { verbosity: options.verbosity },
+    text: textConfig,
     tools: [{ type: "web_search_preview" }],
-    input: inputMessages,
+    input: inputForRequest,
   };
 
   if (options.continueConversation && context.previousResponseId) {
@@ -750,10 +762,11 @@ async function performCompact(
   const header = "以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。";
   const userPrompt = `${header}\n---\n${conversationText}\n---\n\n出力条件:\n- 内容をシンプルに要約する\n- 箇条書きでも短い段落でもよい`;
 
+  const compactTextConfig: ResponseTextConfigWithVerbosity = { verbosity: "medium" };
   const request: ResponseCreateParamsNonStreaming = {
     model: defaults.modelMini,
     reasoning: { effort: "medium" },
-    text: { verbosity: "medium" },
+    text: compactTextConfig,
     input: [
       { role: "system", content: [{ type: "input_text", text: instruction }] },
       { role: "user", content: [{ type: "input_text", text: userPrompt }] },
