@@ -1,6 +1,56 @@
 import fs from "node:fs";
 import path from "node:path";
+import { z } from "zod";
 import type { HistoryEntry, HistoryTurn } from "./types.js";
+
+const historyTurnSchema: z.ZodType<HistoryTurn> = z.object({
+  role: z.string(),
+  text: z.string().optional(),
+  at: z.string().optional(),
+  response_id: z.string().optional(),
+  kind: z.string().optional(),
+});
+
+const historySummarySchema = z.object({
+  text: z.string().optional(),
+  created_at: z.string().optional(),
+});
+
+const historyResumeSchema = z.object({
+  mode: z.string().optional(),
+  previous_response_id: z.string().optional(),
+  summary: historySummarySchema.optional(),
+});
+
+const historyEntrySchema: z.ZodType<HistoryEntry> = z.object({
+  title: z.string().optional(),
+  model: z.string().optional(),
+  effort: z.string().optional(),
+  verbosity: z.string().optional(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  first_response_id: z.string().optional(),
+  last_response_id: z.string().optional(),
+  request_count: z
+    .preprocess((value) => {
+      if (value === undefined) {
+        return undefined;
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!/^\d+$/u.test(trimmed)) {
+          return Number.NaN;
+        }
+        return Number.parseInt(trimmed, 10);
+      }
+      return value;
+    }, z.number().int().nonnegative())
+    .optional(),
+  resume: historyResumeSchema.optional(),
+  turns: z.array(historyTurnSchema).optional(),
+});
+
+const historyEntriesSchema = z.array(historyEntrySchema);
 
 export class HistoryStore {
   constructor(private readonly filePath: string) {}
@@ -18,10 +68,7 @@ export class HistoryStore {
     try {
       const raw = fs.readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed as HistoryEntry[];
-      }
-      throw new Error("[openai_api] history index is not an array.");
+      return historyEntriesSchema.parse(parsed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`[openai_api] failed to parse history index: ${message}`);
@@ -30,7 +77,8 @@ export class HistoryStore {
 
   saveEntries(entries: HistoryEntry[]): void {
     this.ensureInitialized();
-    const json = JSON.stringify(entries, null, 2);
+    const normalized = historyEntriesSchema.parse(entries);
+    const json = JSON.stringify(normalized, null, 2);
     fs.writeFileSync(this.filePath, `${json}\n`, "utf8");
   }
 
@@ -96,7 +144,9 @@ export class HistoryStore {
     const title = entry.title ?? "(タイトル未設定)";
     const updated = entry.updated_at ?? "(更新日時 未設定)";
     const requestCount = entry.request_count ?? 0;
-    console.log(`=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`);
+    console.log(
+      `=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`,
+    );
 
     const turns = entry.turns ?? [];
     if (turns.length === 0) {
@@ -128,7 +178,7 @@ export class HistoryStore {
         label = `${colors.summary}summary:${colors.reset}`;
       }
       console.log(label);
-      console.log((turn.text ?? ""));
+      console.log(turn.text ?? "");
       console.log("");
     });
   }
@@ -141,7 +191,9 @@ export class HistoryStore {
 
   upsertEntry(entry: HistoryEntry): void {
     const entries = this.loadEntries();
-    const existingIndex = entries.findIndex((item) => item.last_response_id === entry.last_response_id);
+    const existingIndex = entries.findIndex(
+      (item) => item.last_response_id === entry.last_response_id,
+    );
     if (existingIndex >= 0) {
       entries[existingIndex] = entry;
     } else {

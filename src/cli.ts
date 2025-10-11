@@ -5,6 +5,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import OpenAI from "openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { z } from "zod";
 import type {
   ResponseCreateParamsNonStreaming,
   ResponseTextConfig,
@@ -17,12 +18,7 @@ import type {
   OpenAIInputMessage,
 } from "./types.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
-import {
-  ensureApiKey,
-  loadDefaults,
-  loadEnvironment,
-  readSystemPrompt,
-} from "./config.js";
+import { ensureApiKey, loadDefaults, loadEnvironment, readSystemPrompt } from "./config.js";
 import { formatTurnsForSummary, HistoryStore } from "./history.js";
 
 type ResponseTextConfigWithVerbosity = ResponseTextConfig & {
@@ -57,12 +53,8 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log(
     `  -m0/-m1/-m2 : model => nano/mini/main(${defaults.modelNano}/${defaults.modelMini}/${defaults.modelMain})`,
   );
-  console.log(
-    `  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`,
-  );
-  console.log(
-    `  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`,
-  );
+  console.log(`  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`);
+  console.log(`  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`);
   console.log("  -c          : continue（直前の会話から継続）");
   console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
@@ -92,11 +84,77 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("  gpt-5-cli -r2 続きをやろう   -> 2番目の履歴を使って継続");
 }
 
-function coerceNumber(value: string): number {
-  if (!/^\d+$/.test(value)) {
-    throw new Error("Error: 履歴番号は正の整数で指定してください");
+const historyIndexSchema = z
+  .string()
+  .regex(/^\d+$/u, "Error: 履歴番号は正の整数で指定してください")
+  .transform((value) => Number.parseInt(value, 10));
+
+const historyFlagSchema = z.union([z.literal(true), historyIndexSchema]);
+
+const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
+  model: z.string(),
+  effort: z.enum(["low", "medium", "high"]),
+  verbosity: z.enum(["low", "medium", "high"]),
+  continueConversation: z.boolean(),
+  resumeIndex: z.number().optional(),
+  resumeListOnly: z.boolean(),
+  deleteIndex: z.number().optional(),
+  showIndex: z.number().optional(),
+  imagePath: z.string().optional(),
+  operation: z.union([z.literal("ask"), z.literal("compact")]),
+  compactIndex: z.number().optional(),
+  args: z.array(z.string()),
+  modelExplicit: z.boolean(),
+  effortExplicit: z.boolean(),
+  verbosityExplicit: z.boolean(),
+  hasExplicitHistory: z.boolean(),
+  helpRequested: z.boolean(),
+});
+
+const openAiMessageContentSchema = z
+  .object({
+    type: z.string(),
+  })
+  .passthrough();
+
+const openAiMessageSchema = z.object({
+  role: z.string(),
+  content: z.array(openAiMessageContentSchema).min(1),
+});
+
+const responseRequestSchema: z.ZodType<ResponseCreateParamsNonStreaming> = z
+  .object({
+    model: z.string().min(1),
+    reasoning: z.object({
+      effort: z.enum(["low", "medium", "high"]),
+    }),
+    text: z
+      .object({
+        verbosity: z.enum(["low", "medium", "high"]).optional(),
+      })
+      .passthrough(),
+    tools: z.array(z.object({ type: z.string().min(1) }).passthrough()).min(1),
+    input: z.array(openAiMessageSchema).min(1),
+    previous_response_id: z.string().optional(),
+  })
+  .passthrough();
+
+function parseHistoryFlag(raw: string | boolean | undefined): {
+  index?: number;
+  listOnly: boolean;
+} {
+  if (typeof raw === "undefined") {
+    return { listOnly: false };
   }
-  return Number.parseInt(value, 10);
+  const parsed = historyFlagSchema.safeParse(raw);
+  if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+    throw new Error(firstIssue?.message ?? "Error: 履歴番号は正の整数で指定してください");
+  }
+  if (parsed.data === true) {
+    return { listOnly: true };
+  }
+  return { index: parsed.data, listOnly: false };
 }
 
 function expandLegacyShortFlags(argv: string[]): string[] {
@@ -127,7 +185,13 @@ function expandLegacyShortFlags(argv: string[]): string[] {
     if (arg === "-v") {
       throw new Error("Invalid option: -v には 0/1/2 を続けてください（例: -v0）");
     }
-    if (!arg.startsWith("-") || arg === "-" || arg.startsWith("--") || arg === "-?" || arg === "-i") {
+    if (
+      !arg.startsWith("-") ||
+      arg === "-" ||
+      arg.startsWith("--") ||
+      arg === "-?" ||
+      arg === "-i"
+    ) {
       result.push(arg);
       continue;
     }
@@ -203,9 +267,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       case "2":
         return defaults.modelMain;
       default:
-        throw new InvalidArgumentError(
-          "Invalid option: -m には 0/1/2 を続けてください（例: -m1）",
-        );
+        throw new InvalidArgumentError("Invalid option: -m には 0/1/2 を続けてください（例: -m1）");
     }
   };
 
@@ -218,9 +280,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       case "2":
         return "high";
       default:
-        throw new InvalidArgumentError(
-          "Invalid option: -e には 0/1/2 を続けてください（例: -e2）",
-        );
+        throw new InvalidArgumentError("Invalid option: -e には 0/1/2 を続けてください（例: -e2）");
     }
   };
 
@@ -233,17 +293,13 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       case "2":
         return "high";
       default:
-        throw new InvalidArgumentError(
-          "Invalid option: -v には 0/1/2 を続けてください（例: -v0）",
-        );
+        throw new InvalidArgumentError("Invalid option: -v には 0/1/2 を続けてください（例: -v0）");
     }
   };
 
   const parseCompactIndex = (value: string): number => {
     if (!/^\d+$/.test(value)) {
-      throw new InvalidArgumentError(
-        "Error: --compact の履歴番号は正の整数で指定してください",
-      );
+      throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
     }
     return Number.parseInt(value, 10);
   };
@@ -264,18 +320,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   program.helpOption(false);
   program
     .option("-?, --help", "ヘルプを表示します")
-    .option(
-      "-m, --model <index>",
-      "モデルを選択 (0/1/2)",
-      parseModelIndex,
-      defaults.modelNano,
-    )
-    .option(
-      "-e, --effort <index>",
-      "effort を選択 (0/1/2)",
-      parseEffortIndex,
-      defaults.effort,
-    )
+    .option("-m, --model <index>", "モデルを選択 (0/1/2)", parseModelIndex, defaults.modelNano)
+    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortIndex, defaults.effort)
     .option(
       "-v, --verbosity <index>",
       "verbosity を選択 (0/1/2)",
@@ -330,30 +376,30 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
 
-  if (typeof opts.resume !== "undefined") {
-    if (opts.resume === true) {
-      resumeListOnly = true;
-    } else if (typeof opts.resume === "string") {
-      resumeIndex = coerceNumber(opts.resume);
-      continueConversation = true;
-      hasExplicitHistory = true;
-    }
+  const parsedResume = parseHistoryFlag(opts.resume);
+  if (parsedResume.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedResume.index === "number") {
+    resumeIndex = parsedResume.index;
+    continueConversation = true;
+    hasExplicitHistory = true;
   }
 
-  if (typeof opts.delete !== "undefined") {
-    if (opts.delete === true) {
-      resumeListOnly = true;
-    } else if (typeof opts.delete === "string") {
-      deleteIndex = coerceNumber(opts.delete);
-    }
+  const parsedDelete = parseHistoryFlag(opts.delete);
+  if (parsedDelete.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedDelete.index === "number") {
+    deleteIndex = parsedDelete.index;
   }
 
-  if (typeof opts.show !== "undefined") {
-    if (opts.show === true) {
-      resumeListOnly = true;
-    } else if (typeof opts.show === "string") {
-      showIndex = coerceNumber(opts.show);
-    }
+  const parsedShow = parseHistoryFlag(opts.show);
+  if (parsedShow.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedShow.index === "number") {
+    showIndex = parsedShow.index;
   }
 
   if (typeof opts.compact === "number") {
@@ -366,7 +412,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const helpRequested = Boolean(opts.help);
 
-  return {
+  return cliOptionsSchema.parse({
     model,
     effort,
     verbosity,
@@ -384,21 +430,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     verbosityExplicit,
     hasExplicitHistory,
     helpRequested,
-  };
+  });
 }
 
 function resolveImagePath(raw: string): string {
   const home = process.env.HOME;
   if (!home || home.trim().length === 0) {
-    throw new Error(
-      "HOME environment variable must be set to use image attachments.",
-    );
+    throw new Error("HOME environment variable must be set to use image attachments.");
   }
   if (path.isAbsolute(raw)) {
     if (!raw.startsWith(home)) {
-      throw new Error(
-        `Error: -i で指定できるフルパスは ${home || "$HOME"} 配下のみです: ${raw}`,
-      );
+      throw new Error(`Error: -i で指定できるフルパスは ${home || "$HOME"} 配下のみです: ${raw}`);
     }
     if (!fs.existsSync(raw) || !fs.statSync(raw).isFile()) {
       throw new Error(`Error: 画像ファイルが見つかりません: ${raw}`);
@@ -458,8 +500,7 @@ export async function determineInput(
 
   if (typeof options.resumeIndex === "number") {
     const entry = historyStore.selectByNumber(options.resumeIndex);
-    const inputText =
-      options.args.length > 0 ? options.args.join(" ") : await promptForInput();
+    const inputText = options.args.length > 0 ? options.args.join(" ") : await promptForInput();
     if (!inputText.trim()) {
       throw new Error("プロンプトが空です。");
     }
@@ -509,9 +550,7 @@ function computeContext(
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      logError(
-        "[openai_api] warn: 継続できる履歴が見つかりません（新規開始）。",
-      );
+      logError("[openai_api] warn: 継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
@@ -523,18 +562,10 @@ function computeContext(
 
   if (activeEntry) {
     if (options.continueConversation) {
-      if (
-        !options.modelExplicit &&
-        typeof activeEntry.model === "string" &&
-        activeEntry.model
-      ) {
+      if (!options.modelExplicit && typeof activeEntry.model === "string" && activeEntry.model) {
         options.model = activeEntry.model;
       }
-      if (
-        !options.effortExplicit &&
-        typeof activeEntry.effort === "string" &&
-        activeEntry.effort
-      ) {
+      if (!options.effortExplicit && typeof activeEntry.effort === "string" && activeEntry.effort) {
         const lower = String(activeEntry.effort).toLowerCase();
         if (lower === "low" || lower === "medium" || lower === "high") {
           options.effort = lower as CliOptions["effort"];
@@ -555,8 +586,7 @@ function computeContext(
     resumeMode = activeEntry.resume?.mode ?? "";
     resumePrev = activeEntry.resume?.previous_response_id ?? "";
     resumeSummaryText = activeEntry.resume?.summary?.text ?? undefined;
-    resumeSummaryCreatedAt =
-      activeEntry.resume?.summary?.created_at ?? undefined;
+    resumeSummaryCreatedAt = activeEntry.resume?.summary?.created_at ?? undefined;
 
     if (resumeSummaryText) {
       resumeBaseMessages.push({
@@ -623,9 +653,7 @@ function prepareImageData(imagePath?: string): {
   const data = fs.readFileSync(resolved);
   const base64 = data.toString("base64");
   if (!base64) {
-    throw new Error(
-      `Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`,
-    );
+    throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
   }
   const dataUrl = `data:${mime};base64,${base64}`;
   logError(`[openai_api] image_attached: ${resolved} (${mime})`);
@@ -671,9 +699,7 @@ function buildRequest(
     inputMessages.push(...context.resumeBaseMessages);
   }
 
-  const userContent: OpenAIInputMessage["content"] = [
-    { type: "input_text", text: inputText },
-  ];
+  const userContent: OpenAIInputMessage["content"] = [{ type: "input_text", text: inputText }];
   if (imageDataUrl) {
     userContent.push({
       type: "input_image",
@@ -687,8 +713,7 @@ function buildRequest(
   const textConfig: ResponseTextConfigWithVerbosity = {
     verbosity: options.verbosity,
   };
-  const inputForRequest =
-    inputMessages as ResponseCreateParamsNonStreaming["input"];
+  const inputForRequest = inputMessages as ResponseCreateParamsNonStreaming["input"];
 
   const request: ResponseCreateParamsNonStreaming = {
     model: options.model,
@@ -705,12 +730,10 @@ function buildRequest(
     !context.previousResponseId &&
     !context.resumeSummaryText
   ) {
-    logError(
-      "[openai_api] warn: 直前の response.id が見つからないため、新規会話として開始します",
-    );
+    logError("[openai_api] warn: 直前の response.id が見つからないため、新規会話として開始します");
   }
 
-  return request;
+  return responseRequestSchema.parse(request);
 }
 
 function extractResponseText(response: any): string | null {
@@ -898,8 +921,7 @@ async function performCompact(
 
   const instruction =
     "あなたは会話ログを要約するアシスタントです。論点を漏らさず日本語で簡潔にまとめてください。";
-  const header =
-    "以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。";
+  const header = "以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。";
   const userPrompt = `${header}\n---\n${conversationText}\n---\n\n出力条件:\n- 内容をシンプルに要約する\n- 箇条書きでも短い段落でもよい`;
 
   const compactTextConfig: ResponseTextConfigWithVerbosity = {
@@ -952,9 +974,7 @@ async function performCompact(
     return item;
   });
   historyStore.saveEntries(nextEntries);
-  logError(
-    `[openai_api] compact: history=${options.compactIndex}, summarized=${turns.length}`,
-  );
+  logError(`[openai_api] compact: history=${options.compactIndex}, summarized=${turns.length}`);
   process.stdout.write(`${summaryText}\n`);
 }
 
@@ -1027,14 +1047,7 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      historyUpsert(
-        options,
-        context,
-        historyStore,
-        response.id,
-        determine.inputText,
-        content,
-      );
+      historyUpsert(options, context, historyStore, response.id, determine.inputText, content);
     }
 
     process.stdout.write(`${content}\n`);

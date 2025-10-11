@@ -111,11 +111,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStore,
-      defaults,
-    );
+    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
     expect(store.deletedIndex).toBe(2);
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
@@ -127,11 +123,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ showIndex: 5 });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStore,
-      defaults,
-    );
+    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
     expect(store.shownIndex).toBe(5);
     expect(result.kind).toBe("exit");
   });
@@ -140,11 +132,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ resumeListOnly: true });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStore,
-      defaults,
-    );
+    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
     expect(store.listCalled).toBe(true);
     expect(result.kind).toBe("exit");
   });
@@ -162,11 +150,7 @@ describe("determineInput", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStore,
-      defaults,
-    );
+    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
     expect(store.selectedIndex).toBe(1);
     expect(result.kind).toBe("input");
     if (result.kind === "input") {
@@ -180,11 +164,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions();
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStore,
-      defaults,
-    );
+    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
       expect(result.code).toBe(1);
