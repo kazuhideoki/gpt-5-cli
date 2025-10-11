@@ -21,12 +21,16 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     effort: "low",
     verbosity: "low",
     continueConversation: false,
+    taskMode: "default",
     resumeListOnly: false,
     operation: "ask",
+    d2FilePath: undefined,
     args: [],
     modelExplicit: false,
     effortExplicit: false,
     verbosityExplicit: false,
+    taskModeExplicit: false,
+    d2FileExplicit: false,
     hasExplicitHistory: false,
     helpRequested: false,
     ...overrides,
@@ -96,6 +100,20 @@ describe("parseArgs", () => {
     const options = parseArgs(["--compact", "3"], defaults);
     expect(options.operation).toBe("compact");
     expect(options.compactIndex).toBe(3);
+  });
+
+  it("-D フラグで d2 モードになる", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["-D", "ダイアグラム"], defaults);
+    expect(options.taskMode).toBe("d2");
+    expect(options.taskModeExplicit).toBe(true);
+  });
+
+  it("--d2-file 単体ではエラーになる", () => {
+    const defaults = createDefaults();
+    expect(() => parseArgs(["--d2-file", "out.d2", "テスト"], defaults)).toThrow(
+      "Error: --d2-file は d2モードと併用してください",
+    );
   });
 
   it("-m の値が欠けていればエラーになる", () => {

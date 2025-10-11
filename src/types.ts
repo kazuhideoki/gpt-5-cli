@@ -51,6 +51,7 @@ export interface CliOptions {
   effort: EffortLevel;
   verbosity: VerbosityLevel;
   continueConversation: boolean;
+  taskMode: "default" | "d2";
   resumeIndex?: number;
   resumeListOnly: boolean;
   deleteIndex?: number;
@@ -58,10 +59,13 @@ export interface CliOptions {
   imagePath?: string;
   operation: "ask" | "compact";
   compactIndex?: number;
+  d2FilePath?: string;
   args: string[];
   modelExplicit: boolean;
   effortExplicit: boolean;
   verbosityExplicit: boolean;
+  taskModeExplicit: boolean;
+  d2FileExplicit: boolean;
   hasExplicitHistory: boolean;
   helpRequested: boolean;
 }

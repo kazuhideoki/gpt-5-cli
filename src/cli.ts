@@ -63,6 +63,8 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
+  console.log("  -D          : d2モードを有効化 (--d2-mode)");
+  console.log("  -F <path>   : d2出力ファイルパスを指定 (--d2-file)");
   console.log("");
   console.log("環境変数(.env):");
   console.log(
@@ -96,6 +98,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
   effort: z.enum(["low", "medium", "high"]),
   verbosity: z.enum(["low", "medium", "high"]),
   continueConversation: z.boolean(),
+  taskMode: z.enum(["default", "d2"]),
   resumeIndex: z.number().optional(),
   resumeListOnly: z.boolean(),
   deleteIndex: z.number().optional(),
@@ -103,10 +106,13 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
   imagePath: z.string().optional(),
   operation: z.union([z.literal("ask"), z.literal("compact")]),
   compactIndex: z.number().optional(),
+  d2FilePath: z.string().min(1).optional(),
   args: z.array(z.string()),
   modelExplicit: z.boolean(),
   effortExplicit: z.boolean(),
   verbosityExplicit: z.boolean(),
+  taskModeExplicit: z.boolean(),
+  d2FileExplicit: z.boolean(),
   hasExplicitHistory: z.boolean(),
   helpRequested: z.boolean(),
 });
@@ -163,7 +169,7 @@ function expandLegacyShortFlags(argv: string[]): string[] {
 
   const errorForUnknown = (flag: string): Error =>
     new Error(
-      `Invalid option: -${flag} は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num} を使用してください。`,
+      `Invalid option: -${flag} は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num}, -D, -F を使用してください。`,
     );
 
   for (const arg of argv) {
@@ -174,6 +180,10 @@ function expandLegacyShortFlags(argv: string[]): string[] {
     if (arg === "--") {
       result.push(arg);
       passThrough = true;
+      continue;
+    }
+    if (arg === "-D" || arg === "-F") {
+      result.push(arg);
       continue;
     }
     if (arg === "-m") {
@@ -333,6 +343,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-D, --d2-mode", "d2形式の生成モードを有効にします")
+    .option("-F, --d2-file <path>", "d2出力を保存するファイルパスを指定します")
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 
   program.argument("[input...]", "ユーザー入力");
@@ -358,6 +370,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     delete?: string | boolean;
     show?: string | boolean;
     image?: string;
+    d2Mode?: boolean;
+    d2File?: string;
     compact?: number;
   }>();
 
@@ -375,6 +389,13 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const imagePath = opts.image;
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
+  const taskMode: CliOptions["taskMode"] = opts.d2Mode ? "d2" : "default";
+  const d2FilePath =
+    typeof opts.d2File === "string" && opts.d2File.length > 0 ? opts.d2File : undefined;
+
+  if (taskMode === "default" && d2FilePath) {
+    throw new Error("Error: --d2-file は d2モードと併用してください");
+  }
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -410,6 +431,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
+  const taskModeExplicit = program.getOptionValueSource("d2Mode") === "cli";
+  const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
   const helpRequested = Boolean(opts.help);
 
   return cliOptionsSchema.parse({
@@ -424,10 +447,14 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     imagePath,
     operation,
     compactIndex,
+    taskMode,
+    d2FilePath,
     args,
     modelExplicit,
     effortExplicit,
     verbosityExplicit,
+    taskModeExplicit,
+    d2FileExplicit,
     hasExplicitHistory,
     helpRequested,
   });
@@ -1005,6 +1032,10 @@ async function main(): Promise<void> {
         options.args.length > 0)
     ) {
       throw new Error("Error: --compact と他のフラグは併用できません");
+    }
+
+    if (options.taskMode === "d2" && options.operation === "compact") {
+      throw new Error("Error: d2モードと --compact は併用できません");
     }
 
     const apiKey = ensureApiKey();
