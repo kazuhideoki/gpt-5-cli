@@ -108,13 +108,16 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
   },
 ];
 
-function resolveWorkspacePath(rawPath: string, cwd: string): string {
+export function resolveWorkspacePath(rawPath: string, cwd: string): string {
   if (!rawPath || rawPath.trim().length === 0) {
     throw new Error("path must be a non-empty string");
   }
-  const candidate = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
-  if (!candidate.startsWith(`${normalizedRoot}${path.sep}`) && candidate !== normalizedRoot) {
+  const candidate = path.resolve(normalizedRoot, rawPath);
+  const relative = path.relative(normalizedRoot, candidate);
+  const isInsideWorkspace =
+    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  if (!isInsideWorkspace) {
     throw new Error(`Access to path outside workspace is not allowed: ${rawPath}`);
   }
   return candidate;

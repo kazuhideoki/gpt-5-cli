@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { executeFunctionToolCall, FUNCTION_TOOLS } from "./tools.js";
+import { executeFunctionToolCall, FUNCTION_TOOLS, resolveWorkspacePath } from "./tools.js";
 import type { ResponseFunctionToolCall } from "openai/resources/responses/responses";
 
 function createCall(name: string, args: Record<string, unknown>): ResponseFunctionToolCall {
@@ -19,6 +19,27 @@ describe("FUNCTION_TOOLS", () => {
   it("含まれるツール名が期待通り", () => {
     const toolNames = FUNCTION_TOOLS.map((tool) => tool.name);
     expect(toolNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
+  });
+});
+
+describe("resolveWorkspacePath", () => {
+  it("ワークスペース内のファイルを許可する", () => {
+    const workspace = path.join(process.cwd(), "tmp-workspace");
+    const resolved = resolveWorkspacePath("diagram.d2", workspace);
+    expect(resolved).toBe(path.join(workspace, "diagram.d2"));
+  });
+
+  it("ルートディレクトリのワークスペースでもファイルを許可する", () => {
+    const root = path.parse(process.cwd()).root;
+    const resolved = resolveWorkspacePath("diagram.d2", root);
+    expect(resolved).toBe(path.resolve(root, "diagram.d2"));
+  });
+
+  it("ワークスペース外の参照は拒否する", () => {
+    const workspace = path.join(process.cwd(), "tmp-workspace");
+    expect(() => resolveWorkspacePath("../outside.txt", workspace)).toThrow(
+      "Access to path outside workspace is not allowed: ../outside.txt",
+    );
   });
 });
 
