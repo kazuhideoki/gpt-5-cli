@@ -1,45 +1,44 @@
 # Repository Guidelines
 
-## プロジェクト構成
-- `src/cli.ts`: 中核の TypeScript CLI。OpenAI Responses API を呼び出します。
-- `dist/cli.js`: ビルド済みのエントリーポイント（`npm run build` で生成）。
-- `.env` / `.env.example`: 認証や既定値の設定。最低限 `OPENAI_API_KEY` が必要。
-- `system_prompt.txt`: 新規会話時に付与する初期 system メッセージ（任意）。
-- `history_index.json`: 実行時に生成・更新される会話インデックス（既定: リポジトリ直下）。`OPENAI_HISTORY_INDEX_FILE` で上書き可能。
-- `README.md`: 使い方・フラグ一覧。
+## プロジェクト構成とモジュール
+- 主要ロジックは `src/cli.ts` に集約され、OpenAI Responses API をラップしています。
+- ビルド済みエントリーポイントは `dist/cli.js` で、`bun run build` により `src` から生成されます。
+- `.env` は `OPENAI_API_KEY` などの認証情報を保持し、共有用の既定値は `.env.example` を更新してください。
+- `history_index.json` は実行時に生成される会話履歴の索引用ファイルで、`OPENAI_HISTORY_INDEX_FILE` で出力先を変更できます。
+- `system_prompt.txt` は新規会話開始時の system メッセージテンプレートとして利用できます。
 
-## ビルド・実行・開発コマンド
-- `npm install`: 依存関係の導入。
-- `npm run build`: TypeScript をコンパイルして `dist/` を生成。
-- `npm run dev`: `tsx` を使って `src/cli.ts` を直接実行。
-- `npm run start -- --help`: ビルド済み CLI のヘルプ表示。
-- 実行例: `npm run start -- -m1e2v2 "要約して"`（`.env` に API キー設定後）。
+## ビルド・テスト・開発コマンド
+- `bun install`: 依存パッケージをインストール。
+- `bun run build`: TypeScript をコンパイルして `dist/` 以下を更新。
+- `bun run dev`: `tsx` 実行で `src/cli.ts` をホットリロード付きで起動。
+- `bun run start -- --help`: ビルド済み CLI のヘルプを確認。
+- `OPENAI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
 
-## コーディング規約・命名
-- TypeScript は `strict` 設定。ES Modules (`type: module`) を利用。
-- インデントは 2 スペース。
-- 型は明示的に記載し、`any` は最小限に。
-- ログは `console.error`（標準エラー）、ユーザー向け出力は `console.log` / `process.stdout.write`。
+## コーディングスタイルと命名規約
+- TypeScript は `strict` 設定、ES Modules (`type: module`) を採用。
+- インデントは 2 スペース、暗黙の `any` は禁止。
+- ログは `console.error` に送出し、ユーザー向けメッセージは `console.log` または `process.stdout.write` を利用。
+- 関数・主要モジュールには JSDoc コメントを付与して意図を明示します。型はコメントでは無く Typescript 型定義すること
+- ファイル・識別子名は役割が伝わる英語名を使用し、CLI フラグは短縮形とロングオプションをペアで定義する方針です。
 
-## テスト指針
-- 公式テストは未整備。最低限の確認:
-  - `npm run build` が成功すること。
-  - `npm run start -- --help` がゼロ終了すること。
-  - 履歴系の動作: `OPENAI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 npm run start -- -r` で安定出力を確認。
-  - 実対話はキー設定後、最小入力で疎通確認。`jq . history_index.json` で生成物を検証。
+## テストガイドライン
+- 公式テストスイートは未整備のため、最低限 `bun run build` と `bun run start -- --help` の成功を確認してください。
+- 履歴関連変更時は前述の `-r` 例コマンドで出力差分を確認し、`jq . history_index.json` で JSON 整合性をチェックします。
+- 新規機能では、回帰を防ぐために `src/` 配下へ軽量な統合テストやスナップショット検証の追加を検討してください。
 
-## コミット／PR ガイドライン
-- 現状の履歴に統一規約は未確立。以降は Conventional Commits を推奨。
-  - 例: `feat(cli): add resume selector`、`fix(history): correct request count`、`docs: update usage examples`。
-- PR には以下を含める:
-  - 目的・背景、実装概要、影響範囲、手動確認手順、関連 Issue。
-  - フラグや既定値変更時は `README.md` と CLI のヘルプ出力を必ず同期。
-  - チェックリスト: `npm run build`、（任意）動作例のスクリーンショット。
+## コミットとPRガイドライン
+- コミットメッセージは Conventional Commits (`feat(cli): ...` / `fix(history): ...`) に従います。
+- PR には背景、実装概要、影響範囲、手動確認手順、関連 Issue を記載し、フラグ変更時は `README.md` と CLI ヘルプを同期させます。
+- Pull Request 説明には `bun run build` 結果や対話ログの抜粋など検証証跡を添付してください。
 
-## セキュリティ／設定の注意
-- `.env` と API キーはコミット禁止。`.env.example` を更新して共有。
-- 履歴には機微情報が含まれ得るため、共有前にパス変更や削除を検討。
+## セキュリティと設定の注意
+- `.env` をコミットせず、共有情報は `.env.example` に反映します。
+- 履歴ファイルには機微情報が含まれる可能性があるため、共有前に `OPENAI_HISTORY_INDEX_FILE` で書き出し先を変更するか、不要データを削除してください。
 
-## アーキテクチャ要旨（参考）
-- OpenAI Node SDK の `responses.create` を使用。
-- 会話継続は `previous_response_id`、履歴は `history_index.json` に追記保存。
+## 個人用スクリプトとしての運用
+- 開発効率を優先し、フォールバック処理は不要です。入力検証で異常を検知した場合は即座にエラーを投げ、早期に失敗を把握してください。
+- メソッドやコードパスは指示がない限り最小限の完成度で構いません。追加要件が生じたタイミングで拡張してください。基本的に後方互換性も不要です。
+
+## アーキテクチャ概要
+- OpenAI Node SDK の `responses.create` を使用し、会話継続には `previous_response_id` を付加します。
+- 履歴は `history_index.json` に追記保存され、CLI からのオプション指定で読み書きパスを切り替えられます。
