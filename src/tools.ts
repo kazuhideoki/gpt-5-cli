@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { ResponseFunctionToolCall } from "openai/resources/responses/responses";
-import type { FunctionTool } from "openai/resources/responses/responses";
+import type { FunctionTool, ResponseFunctionToolCall } from "openai/resources/responses/responses";
 
 export interface ToolExecutionContext {
   cwd: string;
@@ -36,91 +35,87 @@ type CommandResult = BaseToolResult & {
 export const FUNCTION_TOOLS: FunctionTool[] = [
   {
     type: "function",
-    function: {
-      name: "read_file",
-      description: "Read a UTF-8 text file from the local workspace.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "File path relative to the workspace root.",
-          },
-          encoding: {
-            type: "string",
-            description: "Text encoding (default: utf8).",
-          },
+    strict: true,
+    name: "read_file",
+    description: "Read a UTF-8 text file from the local workspace.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "File path relative to the workspace root.",
         },
-        required: ["path"],
-        additionalProperties: false,
+        encoding: {
+          type: "string",
+          description: "Text encoding (default: utf8).",
+        },
       },
+      required: ["path"],
+      additionalProperties: false,
     },
   },
   {
     type: "function",
-    function: {
-      name: "write_file",
-      description:
-        "Overwrite a text file in the local workspace. Creates the file if it does not exist.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Target file path relative to the workspace root.",
-          },
-          content: {
-            type: "string",
-            description: "Text content to write into the file.",
-          },
-          encoding: {
-            type: "string",
-            description: "Text encoding (default: utf8).",
-          },
-          make_parents: {
-            type: "boolean",
-            description: "Create parent directories when they do not exist (default: true).",
-          },
+    strict: true,
+    name: "write_file",
+    description:
+      "Overwrite a text file in the local workspace. Creates the file if it does not exist.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Target file path relative to the workspace root.",
         },
-        required: ["path", "content"],
-        additionalProperties: false,
+        content: {
+          type: "string",
+          description: "Text content to write into the file.",
+        },
+        encoding: {
+          type: "string",
+          description: "Text encoding (default: utf8).",
+        },
+        make_parents: {
+          type: "boolean",
+          description: "Create parent directories when they do not exist (default: true).",
+        },
       },
+      required: ["path", "content"],
+      additionalProperties: false,
     },
   },
   {
     type: "function",
-    function: {
-      name: "d2_check",
-      description: "Run `d2` to validate a diagram file without modifying it.",
-      parameters: {
-        type: "object",
-        properties: {
-          file_path: {
-            type: "string",
-            description: "Path to the D2 file relative to the workspace root.",
-          },
+    strict: true,
+    name: "d2_check",
+    description: "Run `d2` to validate a diagram file without modifying it.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the D2 file relative to the workspace root.",
         },
-        required: ["file_path"],
-        additionalProperties: false,
       },
+      required: ["file_path"],
+      additionalProperties: false,
     },
   },
   {
     type: "function",
-    function: {
-      name: "d2_fmt",
-      description: "Run `d2 fmt` to format a diagram file in-place.",
-      parameters: {
-        type: "object",
-        properties: {
-          file_path: {
-            type: "string",
-            description: "Path to the D2 file relative to the workspace root.",
-          },
+    strict: true,
+    name: "d2_fmt",
+    description: "Run `d2 fmt` to format a diagram file in-place.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the D2 file relative to the workspace root.",
         },
-        required: ["file_path"],
-        additionalProperties: false,
       },
+      required: ["file_path"],
+      additionalProperties: false,
     },
   },
 ];
@@ -138,9 +133,10 @@ function resolveWorkspacePath(rawPath: string, cwd: string): string {
 }
 
 async function readFileTool(args: any, cwd: string): Promise<ReadFileResult> {
-  const encoding = typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
+  const encoding =
+    typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
-  const buffer = await fs.readFile(resolvedPath, { encoding });
+  const buffer = await fs.readFile(resolvedPath, { encoding: encoding as BufferEncoding });
   return {
     success: true,
     path: path.relative(cwd, resolvedPath),
@@ -150,13 +146,14 @@ async function readFileTool(args: any, cwd: string): Promise<ReadFileResult> {
 }
 
 async function writeFileTool(args: any, cwd: string): Promise<WriteFileResult> {
-  const encoding = typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
+  const encoding =
+    typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
   if (args?.make_parents !== false) {
     await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
   }
   const content = String(args?.content ?? "");
-  await fs.writeFile(resolvedPath, content, { encoding });
+  await fs.writeFile(resolvedPath, content, { encoding: encoding as BufferEncoding });
   return {
     success: true,
     path: path.relative(cwd, resolvedPath),

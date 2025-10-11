@@ -17,7 +17,7 @@ function createCall(name: string, args: Record<string, unknown>): ResponseFuncti
 
 describe("FUNCTION_TOOLS", () => {
   it("含まれるツール名が期待通り", () => {
-    const toolNames = FUNCTION_TOOLS.map((tool) => tool.function.name);
+    const toolNames = FUNCTION_TOOLS.map((tool) => tool.name);
     expect(toolNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
   });
 });

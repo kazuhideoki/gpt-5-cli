@@ -44,6 +44,12 @@ interface DetermineInputResult {
 
 type DetermineResult = DetermineInputExit | DetermineInputResult;
 
+interface D2ContextInfo {
+  relativePath: string;
+  absolutePath: string;
+  exists: boolean;
+}
+
 function logError(message: string): void {
   console.error(message);
 }
@@ -121,47 +127,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
   helpRequested: z.boolean(),
 });
 
-const messageContentSchema = z
-  .object({
-    type: z.string(),
-  })
-  .passthrough();
-
-const messageInputSchema = z.object({
-  role: z.string(),
-  content: z.array(messageContentSchema).min(1),
-});
-
-const functionCallOutputSchema = z.object({
-  type: z.literal("function_call_output"),
-  call_id: z.string().min(1),
-  output: z.string(),
-});
-
-const responseInputItemSchema = z.union([messageInputSchema, functionCallOutputSchema]);
-
-const responseRequestSchema: z.ZodType<ResponseCreateParamsNonStreaming> = z
-  .object({
-    model: z.string().min(1),
-    reasoning: z.object({
-      effort: z.enum(["low", "medium", "high"]),
-    }),
-    text: z
-      .object({
-        verbosity: z.enum(["low", "medium", "high"]).optional(),
-      })
-      .passthrough(),
-    tools: z.array(z.object({ type: z.string().min(1) }).passthrough()).min(1),
-    input: z.array(responseInputItemSchema).min(1),
-    previous_response_id: z.string().optional(),
-  })
-  .passthrough();
-
 function buildToolList(): ResponseCreateParamsNonStreaming["tools"] {
-  return [
-    ...FUNCTION_TOOLS,
-    { type: "web_search_preview" as const },
-  ];
+  return [...FUNCTION_TOOLS, { type: "web_search_preview" as const }];
 }
 
 function parseHistoryFlag(raw: string | boolean | undefined): {
@@ -786,13 +753,15 @@ async function executeWithTools(
 
     const toolOutputs = await Promise.all(
       toolCalls.map(async (call) => {
+        const callId = call.call_id ?? call.id ?? "";
+        logError(`[tool] handling ${call.name} (${callId})`);
         const output = await executeFunctionToolCall(call, {
           cwd: process.cwd(),
           log: logError,
         });
         return {
           type: "function_call_output" as const,
-          call_id: call.id ?? call.call_id,
+          call_id: call.call_id,
           output,
         };
       }),
@@ -806,10 +775,70 @@ async function executeWithTools(
       input: toolOutputs,
       previous_response_id: response.id,
     };
-    const parsed = responseRequestSchema.parse(followupRequest);
-    response = await client.responses.create(parsed);
+    response = await client.responses.create(followupRequest);
     iteration += 1;
   }
+}
+
+function ensureD2Context(options: CliOptions): D2ContextInfo | undefined {
+  if (options.taskMode !== "d2") {
+    return undefined;
+  }
+  const cwd = process.cwd();
+  const rawPath =
+    options.d2FilePath && options.d2FilePath.trim().length > 0 ? options.d2FilePath : "diagram.d2";
+  const absolutePath = path.resolve(cwd, rawPath);
+  const normalizedRoot = path.resolve(cwd);
+  if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
+    throw new Error(
+      `Error: d2出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
+    );
+  }
+  if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+    throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
+  }
+  const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  options.d2FilePath = relativePath;
+  const exists = fs.existsSync(absolutePath);
+  return { relativePath, absolutePath, exists };
+}
+
+function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessage[] {
+  const pathHint = d2Context.relativePath;
+  const existenceNote = d2Context.exists
+    ? "必要に応じて read_file で既存の内容を確認し、変更範囲を決定してください。"
+    : "ファイルが存在しない場合は write_file で新規作成してください。";
+
+  const toolSummary = [
+    "- read_file: 指定ファイルを読み取り現在の内容を確認する",
+    "- write_file: 指定ファイルを UTF-8 テキストで上書きする（diffは自分で計画する）",
+    "- d2_fmt: D2ファイルを整形してフォーマットを揃える",
+    "- d2_check: D2の構文を検証してエラーが無いことを確認する",
+  ].join("\n");
+
+  const workflow = [
+    "作業手順:",
+    `1. ${existenceNote}`,
+    "2. 変更後は必ず d2_fmt を実行し、整形結果を確認する",
+    "3. d2_check を実行し、エラーが出たら修正して 2〜3 を繰り返す",
+    "4. 問題が残る場合は理由と次のアクションを述べる",
+    "5. 最終応答では、日本語で変更内容・ファイルパス・d2_fmt/d2_check の結果を要約し、D2コード全文は回答に貼らない",
+  ].join("\n");
+
+  const systemText = [
+    "あなたは D2 ダイアグラムを作成・更新するアシスタントです。",
+    "ローカルワークスペース内のファイルのみ操作し、許可されたツール以外は使用しないでください。",
+    `対象ファイル: ${pathHint}`,
+    toolSummary,
+    workflow,
+  ].join("\n\n");
+
+  return [
+    {
+      role: "system",
+      content: [{ type: "input_text", text: systemText }],
+    },
+  ];
 }
 
 function buildRequest(
@@ -819,6 +848,7 @@ function buildRequest(
   systemPrompt?: string,
   imageDataUrl?: string,
   defaults?: CliDefaults,
+  d2Context?: D2ContextInfo,
 ): ResponseCreateParamsNonStreaming {
   const modelLog = formatModelValue(
     options.model,
@@ -845,6 +875,10 @@ function buildRequest(
       role: "system",
       content: [{ type: "input_text", text: systemPrompt }],
     });
+  }
+
+  if (options.taskMode === "d2" && d2Context) {
+    inputMessages.push(...buildD2InstructionMessages(d2Context));
   }
 
   if (context.resumeBaseMessages.length > 0) {
@@ -885,7 +919,7 @@ function buildRequest(
     logError("[openai_api] warn: 直前の response.id が見つからないため、新規会話として開始します");
   }
 
-  return responseRequestSchema.parse(request);
+  return request;
 }
 
 function extractResponseText(response: any): string | null {
@@ -1193,6 +1227,8 @@ async function main(): Promise<void> {
       determine.previousTitle,
     );
 
+    const d2Context = ensureD2Context(options);
+
     const imageInfo = prepareImageData(options.imagePath);
     const request = buildRequest(
       options,
@@ -1201,6 +1237,7 @@ async function main(): Promise<void> {
       systemPrompt,
       imageInfo.dataUrl,
       defaults,
+      d2Context,
     );
     const response = await executeWithTools(client, request, options);
     const content = extractResponseText(response);
