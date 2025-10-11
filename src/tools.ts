@@ -45,10 +45,6 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
           type: "string",
           description: "File path relative to the workspace root.",
         },
-        encoding: {
-          type: "string",
-          description: "Text encoding (default: utf8).",
-        },
       },
       required: ["path"],
       additionalProperties: false,
@@ -59,7 +55,7 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     strict: true,
     name: "write_file",
     description:
-      "Overwrite a text file in the local workspace. Creates the file if it does not exist.",
+      "Overwrite a text file in the local workspace using UTF-8. Creates the file if it does not exist.",
     parameters: {
       type: "object",
       properties: {
@@ -70,14 +66,6 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
         content: {
           type: "string",
           description: "Text content to write into the file.",
-        },
-        encoding: {
-          type: "string",
-          description: "Text encoding (default: utf8).",
-        },
-        make_parents: {
-          type: "boolean",
-          description: "Create parent directories when they do not exist (default: true).",
         },
       },
       required: ["path", "content"],
@@ -133,31 +121,25 @@ function resolveWorkspacePath(rawPath: string, cwd: string): string {
 }
 
 async function readFileTool(args: any, cwd: string): Promise<ReadFileResult> {
-  const encoding =
-    typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
-  const buffer = await fs.readFile(resolvedPath, { encoding: encoding as BufferEncoding });
+  const buffer = await fs.readFile(resolvedPath, { encoding: "utf8" });
   return {
     success: true,
     path: path.relative(cwd, resolvedPath),
     content: buffer,
-    encoding,
+    encoding: "utf8",
   };
 }
 
 async function writeFileTool(args: any, cwd: string): Promise<WriteFileResult> {
-  const encoding =
-    typeof args?.encoding === "string" && args.encoding.length > 0 ? args.encoding : "utf8";
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
-  if (args?.make_parents !== false) {
-    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-  }
+  await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
   const content = String(args?.content ?? "");
-  await fs.writeFile(resolvedPath, content, { encoding: encoding as BufferEncoding });
+  await fs.writeFile(resolvedPath, content, { encoding: "utf8" });
   return {
     success: true,
     path: path.relative(cwd, resolvedPath),
-    bytes_written: Buffer.byteLength(content, encoding as BufferEncoding),
+    bytes_written: Buffer.byteLength(content, "utf8"),
   };
 }
 
