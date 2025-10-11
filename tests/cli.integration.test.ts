@@ -59,9 +59,7 @@ describe("CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;
   let historyPath: string;
   let cleanupHistory: () => void;
-  let currentHandler:
-    | ((request: Request) => Promise<Response> | Response)
-    | null;
+  let currentHandler: ((request: Request) => Promise<Response> | Response) | null;
 
   beforeEach(() => {
     const temp = createTempHistoryPath();

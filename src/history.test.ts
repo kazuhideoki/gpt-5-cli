@@ -41,6 +41,17 @@ describe("HistoryStore", () => {
     expect(store.loadEntries()).toEqual(entries);
   });
 
+  it("task メタデータも保存・復元できる", () => {
+    const entries: HistoryEntry[] = [
+      {
+        last_response_id: "d2-1",
+        task: { mode: "d2", d2: { file_path: "/tmp/out.d2" } },
+      },
+    ];
+    store.saveEntries(entries);
+    expect(store.loadEntries()).toEqual(entries);
+  });
+
   it("selectByNumber は更新日時でソートする", () => {
     const entries: HistoryEntry[] = [
       { last_response_id: "a", updated_at: "2024-06-01T00:00:00Z" },

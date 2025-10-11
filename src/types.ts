@@ -2,6 +2,7 @@ import type { EasyInputMessage } from "openai/resources/responses/responses";
 
 export type EffortLevel = "low" | "medium" | "high";
 export type VerbosityLevel = "low" | "medium" | "high";
+export type TaskMode = "default" | "d2";
 
 export interface HistoryTurn {
   role: string;
@@ -22,6 +23,15 @@ export interface HistoryResume {
   summary?: HistorySummary;
 }
 
+export interface HistoryTaskD2 {
+  file_path?: string;
+}
+
+export interface HistoryTask {
+  mode?: TaskMode | string;
+  d2?: HistoryTaskD2;
+}
+
 export interface HistoryEntry {
   title?: string;
   model?: string;
@@ -34,6 +44,7 @@ export interface HistoryEntry {
   request_count?: number;
   resume?: HistoryResume;
   turns?: HistoryTurn[];
+  task?: HistoryTask;
 }
 
 export interface CliDefaults {
@@ -51,7 +62,7 @@ export interface CliOptions {
   effort: EffortLevel;
   verbosity: VerbosityLevel;
   continueConversation: boolean;
-  taskMode: "default" | "d2";
+  taskMode: TaskMode;
   resumeIndex?: number;
   resumeListOnly: boolean;
   deleteIndex?: number;

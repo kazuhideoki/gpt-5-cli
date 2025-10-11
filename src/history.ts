@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { HistoryEntry, HistoryTurn } from "./types.js";
+import type { HistoryEntry, HistoryTask, HistoryTurn } from "./types.js";
 
 const historyTurnSchema: z.ZodType<HistoryTurn> = z.object({
   role: z.string(),
@@ -20,6 +20,15 @@ const historyResumeSchema = z.object({
   mode: z.string().optional(),
   previous_response_id: z.string().optional(),
   summary: historySummarySchema.optional(),
+});
+
+const historyTaskD2Schema = z.object({
+  file_path: z.string().optional(),
+});
+
+const historyTaskSchema: z.ZodType<HistoryTask> = z.object({
+  mode: z.string().optional(),
+  d2: historyTaskD2Schema.optional(),
 });
 
 const historyEntrySchema: z.ZodType<HistoryEntry> = z.object({
@@ -48,6 +57,7 @@ const historyEntrySchema: z.ZodType<HistoryEntry> = z.object({
     .optional(),
   resume: historyResumeSchema.optional(),
   turns: z.array(historyTurnSchema).optional(),
+  task: historyTaskSchema.optional(),
 });
 
 const historyEntriesSchema = z.array(historyEntrySchema);

@@ -15,6 +15,7 @@ import type {
   CliOptions,
   ConversationContext,
   HistoryEntry,
+  HistoryTask,
   OpenAIInputMessage,
 } from "./types.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
@@ -610,6 +611,26 @@ function computeContext(
       }
     }
 
+    if (!options.taskModeExplicit) {
+      const historyMode = activeEntry.task?.mode;
+      if (historyMode === "d2") {
+        options.taskMode = "d2";
+      } else if (typeof historyMode === "string" && historyMode.length > 0) {
+        options.taskMode = "default";
+      }
+    }
+
+    if (!options.d2FileExplicit) {
+      if (options.taskMode === "d2") {
+        const historyFile = activeEntry.task?.d2?.file_path;
+        if (historyFile) {
+          options.d2FilePath = historyFile;
+        }
+      } else if (!options.taskModeExplicit) {
+        options.d2FilePath = undefined;
+      }
+    }
+
     resumeMode = activeEntry.resume?.mode ?? "";
     resumePrev = activeEntry.resume?.previous_response_id ?? "";
     resumeSummaryText = activeEntry.resume?.summary?.text ?? undefined;
@@ -685,6 +706,33 @@ function prepareImageData(imagePath?: string): {
   const dataUrl = `data:${mime};base64,${base64}`;
   logError(`[openai_api] image_attached: ${resolved} (${mime})`);
   return { dataUrl, mime, resolvedPath: resolved };
+}
+
+function buildTaskMetadata(
+  options: CliOptions,
+  previousTask?: HistoryTask,
+): HistoryTask | undefined {
+  if (options.taskMode === "d2") {
+    const task: HistoryTask = { mode: "d2" };
+    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+    let filePath = options.d2FilePath;
+    if (!filePath && !options.d2FileExplicit) {
+      filePath = d2Meta?.file_path;
+    }
+    if (filePath) {
+      d2Meta = { ...d2Meta, file_path: filePath };
+    }
+    if (d2Meta && Object.keys(d2Meta).length > 0) {
+      task.d2 = d2Meta;
+    }
+    return task;
+  }
+
+  if (options.taskModeExplicit) {
+    return { mode: options.taskMode };
+  }
+
+  return previousTask;
 }
 
 function buildRequest(
@@ -845,6 +893,7 @@ function historyUpsert(
   };
 
   if (context.isNewConversation && !targetLastId) {
+    const newTask = buildTaskMetadata(options, context.activeEntry?.task);
     const newEntry: HistoryEntry = {
       title: context.titleToUse,
       model: options.model,
@@ -857,6 +906,7 @@ function historyUpsert(
       request_count: 1,
       resume,
       turns: [userTurn, assistantTurn],
+      task: newTask,
     };
     entries.push(newEntry);
     historyStore.saveEntries(entries);
@@ -890,6 +940,7 @@ function historyUpsert(
       if (!resumeSummaryText && nextResume.summary) {
         delete nextResume.summary;
       }
+      const nextTask = buildTaskMetadata(options, entry.task);
       return {
         ...entry,
         updated_at: tsNow,
@@ -900,6 +951,7 @@ function historyUpsert(
         request_count: (entry.request_count ?? 0) + 1,
         turns,
         resume: nextResume,
+        task: nextTask,
       };
     }
     return entry;
@@ -910,6 +962,7 @@ function historyUpsert(
     return;
   }
 
+  const fallbackTask = buildTaskMetadata(options, context.activeEntry?.task);
   const fallbackEntry: HistoryEntry = {
     title: context.titleToUse,
     model: options.model,
@@ -922,6 +975,7 @@ function historyUpsert(
     request_count: 1,
     resume,
     turns: [userTurn, assistantTurn],
+    task: fallbackTask,
   };
   nextEntries.push(fallbackEntry);
   historyStore.saveEntries(nextEntries);
