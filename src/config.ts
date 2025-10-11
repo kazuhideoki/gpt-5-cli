@@ -41,6 +41,7 @@ const envConfigSchema = z
     OPENAI_MODEL_NANO: z.string().trim().min(1).optional(),
     OPENAI_DEFAULT_EFFORT: effortLevelSchema.optional(),
     OPENAI_DEFAULT_VERBOSITY: verbosityLevelSchema.optional(),
+    OPENAI_PROMPTS_DIR: z.string().optional(),
   })
   .passthrough();
 
@@ -76,6 +77,20 @@ export function resolveHistoryPath(defaultPath: string): string {
   return path.resolve(expanded);
 }
 
+export function resolvePromptsDir(defaultPath: string): string {
+  const configured = process.env.OPENAI_PROMPTS_DIR;
+  if (typeof configured === "string") {
+    const trimmed = configured.trim();
+    if (trimmed.length === 0) {
+      throw new Error("OPENAI_PROMPTS_DIR is set but empty.");
+    }
+    const expanded = expandHome(trimmed);
+    return path.resolve(expanded);
+  }
+  const expanded = expandHome(defaultPath);
+  return path.resolve(expanded);
+}
+
 export function loadDefaults(): CliDefaults {
   let envConfig: z.infer<typeof envConfigSchema>;
   try {
@@ -90,7 +105,7 @@ export function loadDefaults(): CliDefaults {
     throw error;
   }
   const historyIndexPath = resolveHistoryPath(path.join(ROOT_DIR, "history_index.json"));
-  const promptsDir = path.join(ROOT_DIR, "prompts");
+  const promptsDir = resolvePromptsDir(path.join(ROOT_DIR, "prompts"));
 
   return {
     modelMain: envConfig.OPENAI_MODEL_MAIN ?? "gpt-5",

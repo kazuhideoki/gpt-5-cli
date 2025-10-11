@@ -2,10 +2,17 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ROOT_DIR, ensureApiKey, loadDefaults, resolveHistoryPath } from "./config.js";
+import {
+  ROOT_DIR,
+  ensureApiKey,
+  loadDefaults,
+  resolveHistoryPath,
+  resolvePromptsDir,
+} from "./config.js";
 
 const envKeys = [
   "OPENAI_HISTORY_INDEX_FILE",
+  "OPENAI_PROMPTS_DIR",
   "HOME",
   "OPENAI_MODEL_MAIN",
   "OPENAI_MODEL_MINI",
@@ -73,6 +80,34 @@ describe("resolveHistoryPath", () => {
   });
 });
 
+describe("resolvePromptsDir", () => {
+  it("環境変数が設定されていれば展開して返す", () => {
+    process.env.OPENAI_PROMPTS_DIR = "~/prompts/custom";
+    const resolved = resolvePromptsDir("/default/prompts");
+    expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "prompts/custom")));
+  });
+
+  it("環境変数が未設定なら既定値を返す", () => {
+    const resolved = resolvePromptsDir("/default/prompts");
+    expect(resolved).toBe(path.resolve("/default/prompts"));
+  });
+
+  it("空文字列を設定するとエラーになる", () => {
+    process.env.OPENAI_PROMPTS_DIR = "   ";
+    expect(() => resolvePromptsDir("/default/prompts")).toThrow(
+      "OPENAI_PROMPTS_DIR is set but empty.",
+    );
+  });
+
+  it("HOME が無い状態で ~ を使うとエラーになる", () => {
+    delete process.env.HOME;
+    process.env.OPENAI_PROMPTS_DIR = "~/prompts";
+    expect(() => resolvePromptsDir("/default/prompts")).toThrow(
+      "HOME environment variable is required when using '~' paths.",
+    );
+  });
+});
+
 describe("loadDefaults", () => {
   it("既定値を返す", () => {
     const defaults = loadDefaults();
@@ -92,6 +127,7 @@ describe("loadDefaults", () => {
     process.env.OPENAI_DEFAULT_EFFORT = "high";
     process.env.OPENAI_DEFAULT_VERBOSITY = "medium";
     process.env.OPENAI_HISTORY_INDEX_FILE = "~/data/hist.json";
+    process.env.OPENAI_PROMPTS_DIR = "~/data/prompts";
     const defaults = loadDefaults();
     expect(defaults.modelMain).toBe("main-x");
     expect(defaults.modelMini).toBe("mini-x");
@@ -101,6 +137,7 @@ describe("loadDefaults", () => {
     expect(defaults.historyIndexPath).toBe(
       path.resolve(path.join(process.env.HOME!, "data/hist.json")),
     );
+    expect(defaults.promptsDir).toBe(path.resolve(path.join(process.env.HOME!, "data/prompts")));
   });
 
   it("不正なレベルはエラーになる", () => {

@@ -81,6 +81,9 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log(
     "  OPENAI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）",
   );
+  console.log(
+    "  OPENAI_PROMPTS_DIR        : systemプロンプトテンプレートの配置ディレクトリ（例: ~/Library/Application Support/gpt-5-cli/prompts）",
+  );
   console.log("");
   console.log(
     `既定: model=${defaults.modelNano}, effort=${options.effort}, verbosity=${options.verbosity}（フラグ未指定時）`,
