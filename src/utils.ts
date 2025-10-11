@@ -8,25 +8,18 @@ interface LogStyle {
   reset: string;
 }
 
-let cachedLogStyle: LogStyle | null = null;
-
 function resolveLogStyle(): LogStyle {
-  if (cachedLogStyle) {
-    return cachedLogStyle;
-  }
-
+  // TTY(端末)で実行されている場合のみカラーを有効化する
   const supportsColor = Boolean(process.stderr.isTTY) && !process.env.NO_COLOR;
   if (!supportsColor) {
-    cachedLogStyle = { mediumPrefix: "", highPrefix: "", reset: "" };
-    return cachedLogStyle;
+    return { mediumPrefix: "", highPrefix: "", reset: "" };
   }
 
-  cachedLogStyle = {
+  return {
     mediumPrefix: "\u001b[33m",
     highPrefix: "\u001b[1;31m",
     reset: "\u001b[0m",
   };
-  return cachedLogStyle;
 }
 
 /**
@@ -107,20 +100,4 @@ export function formatModelValue(
  */
 export function formatScaleValue(value: string): string {
   return decorateLevelValue(value, levelForScaleValue(value));
-}
-
-/**
- * テスト用にログスタイルキャッシュをリセットする。
- */
-export function __resetLogStyleCacheForTest(): void {
-  cachedLogStyle = null;
-}
-
-/**
- * テスト用にログスタイルキャッシュを上書きする。
- *
- * @param style 設定するスタイル。nullでキャッシュ無効。
- */
-export function __setLogStyleForTest(style: LogStyle | null): void {
-  cachedLogStyle = style;
 }

@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
-  __resetLogStyleCacheForTest,
-  __setLogStyleForTest,
   decorateLevelValue,
   formatModelValue,
   formatScaleValue,
@@ -10,15 +8,33 @@ import {
 } from "./utils.js";
 
 const originalNoColor = process.env.NO_COLOR;
+const hadOriginalStderrIsTTY = Object.hasOwn(process.stderr, "isTTY");
+const originalStderrIsTTY = process.stderr.isTTY;
+
+function restoreNoColor(): void {
+  if (originalNoColor === undefined) {
+    delete process.env.NO_COLOR;
+  } else {
+    process.env.NO_COLOR = originalNoColor;
+  }
+}
+
+function restoreIsTTY(): void {
+  if (hadOriginalStderrIsTTY) {
+    process.stderr.isTTY = originalStderrIsTTY;
+  } else {
+    delete process.stderr.isTTY;
+  }
+}
 
 beforeEach(() => {
-  process.env.NO_COLOR = originalNoColor;
-  __resetLogStyleCacheForTest();
+  restoreNoColor();
+  restoreIsTTY();
 });
 
 afterEach(() => {
-  process.env.NO_COLOR = originalNoColor;
-  __resetLogStyleCacheForTest();
+  restoreNoColor();
+  restoreIsTTY();
 });
 
 describe("levelForScaleValue", () => {
@@ -55,15 +71,16 @@ describe("levelForModelValue", () => {
 
 describe("decorateLevelValue", () => {
   it("スタイルがあれば medium/high の文字列を装飾する", () => {
-    __setLogStyleForTest({ mediumPrefix: "<m>", highPrefix: "<h>", reset: "</>" });
+    delete process.env.NO_COLOR;
+    process.stderr.isTTY = true;
     expect(decorateLevelValue("value", "low")).toBe("value");
-    expect(decorateLevelValue("value", "medium")).toBe("<m>+value+</>");
-    expect(decorateLevelValue("value", "high")).toBe("<h>!value!</>");
+    expect(decorateLevelValue("value", "medium")).toBe("\u001b[33m+value+\u001b[0m");
+    expect(decorateLevelValue("value", "high")).toBe("\u001b[1;31m!value!\u001b[0m");
   });
 
   it("NO_COLOR 環境でも強調記号は残る", () => {
     process.env.NO_COLOR = "1";
-    __resetLogStyleCacheForTest();
+    process.stderr.isTTY = true;
     expect(decorateLevelValue("value", "high")).toBe("!value!");
   });
 });
@@ -74,21 +91,23 @@ describe("formatModelValue / formatScaleValue", () => {
   const nano = "gpt-5-nano";
 
   it("モデル値をスタイル付きで表示する", () => {
-    __setLogStyleForTest({ mediumPrefix: "[m]", highPrefix: "[h]", reset: "[/]" });
-    expect(formatModelValue(mini, main, mini, nano)).toBe("[m]+gpt-5-mini+[/]");
-    expect(formatModelValue(main, main, mini, nano)).toBe("[h]!gpt-5![/]");
+    delete process.env.NO_COLOR;
+    process.stderr.isTTY = true;
+    expect(formatModelValue(mini, main, mini, nano)).toBe("\u001b[33m+gpt-5-mini+\u001b[0m");
+    expect(formatModelValue(main, main, mini, nano)).toBe("\u001b[1;31m!gpt-5!\u001b[0m");
   });
 
   it("尺度値をスタイル付きで表示する", () => {
-    __setLogStyleForTest({ mediumPrefix: "{m}", highPrefix: "{h}", reset: "{/}" });
-    expect(formatScaleValue("medium")).toBe("{m}+medium+{/}");
-    expect(formatScaleValue("high")).toBe("{h}!high!{/}");
+    delete process.env.NO_COLOR;
+    process.stderr.isTTY = true;
+    expect(formatScaleValue("medium")).toBe("\u001b[33m+medium+\u001b[0m");
+    expect(formatScaleValue("high")).toBe("\u001b[1;31m!high!\u001b[0m");
     expect(formatScaleValue("low")).toBe("low");
   });
 
   it("NO_COLOR 環境でも記号は維持される", () => {
     process.env.NO_COLOR = "1";
-    __resetLogStyleCacheForTest();
+    process.stderr.isTTY = true;
     expect(formatModelValue(main, main, mini, nano)).toBe("!gpt-5!");
     expect(formatScaleValue("medium")).toBe("+medium+");
   });
