@@ -9,6 +9,8 @@ import { z } from "zod";
 import type {
   ResponseCreateParamsNonStreaming,
   ResponseTextConfig,
+  Response,
+  ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
 import type {
   CliDefaults,
@@ -21,6 +23,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "./utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment, readSystemPrompt } from "./config.js";
 import { formatTurnsForSummary, HistoryStore } from "./history.js";
+import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
 
 type ResponseTextConfigWithVerbosity = ResponseTextConfig & {
   verbosity?: CliOptions["verbosity"];
@@ -118,16 +121,24 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
   helpRequested: z.boolean(),
 });
 
-const openAiMessageContentSchema = z
+const messageContentSchema = z
   .object({
     type: z.string(),
   })
   .passthrough();
 
-const openAiMessageSchema = z.object({
+const messageInputSchema = z.object({
   role: z.string(),
-  content: z.array(openAiMessageContentSchema).min(1),
+  content: z.array(messageContentSchema).min(1),
 });
+
+const functionCallOutputSchema = z.object({
+  type: z.literal("function_call_output"),
+  call_id: z.string().min(1),
+  output: z.string(),
+});
+
+const responseInputItemSchema = z.union([messageInputSchema, functionCallOutputSchema]);
 
 const responseRequestSchema: z.ZodType<ResponseCreateParamsNonStreaming> = z
   .object({
@@ -141,10 +152,17 @@ const responseRequestSchema: z.ZodType<ResponseCreateParamsNonStreaming> = z
       })
       .passthrough(),
     tools: z.array(z.object({ type: z.string().min(1) }).passthrough()).min(1),
-    input: z.array(openAiMessageSchema).min(1),
+    input: z.array(responseInputItemSchema).min(1),
     previous_response_id: z.string().optional(),
   })
   .passthrough();
+
+function buildToolList(): ResponseCreateParamsNonStreaming["tools"] {
+  return [
+    ...FUNCTION_TOOLS,
+    { type: "web_search_preview" as const },
+  ];
+}
 
 function parseHistoryFlag(raw: string | boolean | undefined): {
   index?: number;
@@ -735,6 +753,65 @@ function buildTaskMetadata(
   return previousTask;
 }
 
+function collectFunctionToolCalls(response: Response): ResponseFunctionToolCall[] {
+  const calls: ResponseFunctionToolCall[] = [];
+  if (!Array.isArray(response.output)) {
+    return calls;
+  }
+  for (const item of response.output) {
+    if (item?.type === "function_call") {
+      calls.push(item as ResponseFunctionToolCall);
+    }
+  }
+  return calls;
+}
+
+async function executeWithTools(
+  client: OpenAI,
+  initialRequest: ResponseCreateParamsNonStreaming,
+  _options: CliOptions,
+): Promise<Response> {
+  let response = await client.responses.create(initialRequest);
+  let iteration = 0;
+  const maxIterations = 8;
+
+  while (true) {
+    const toolCalls = collectFunctionToolCalls(response);
+    if (toolCalls.length === 0) {
+      return response;
+    }
+    if (iteration >= maxIterations) {
+      throw new Error("Error: Tool call iteration limit exceeded");
+    }
+
+    const toolOutputs = await Promise.all(
+      toolCalls.map(async (call) => {
+        const output = await executeFunctionToolCall(call, {
+          cwd: process.cwd(),
+          log: logError,
+        });
+        return {
+          type: "function_call_output" as const,
+          call_id: call.id ?? call.call_id,
+          output,
+        };
+      }),
+    );
+
+    const followupRequest: ResponseCreateParamsNonStreaming = {
+      model: initialRequest.model,
+      reasoning: initialRequest.reasoning,
+      text: initialRequest.text,
+      tools: initialRequest.tools,
+      input: toolOutputs,
+      previous_response_id: response.id,
+    };
+    const parsed = responseRequestSchema.parse(followupRequest);
+    response = await client.responses.create(parsed);
+    iteration += 1;
+  }
+}
+
 function buildRequest(
   options: CliOptions,
   context: ConversationContext,
@@ -794,7 +871,7 @@ function buildRequest(
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: [{ type: "web_search_preview" }],
+    tools: buildToolList(),
     input: inputForRequest,
   };
 
@@ -1125,7 +1202,7 @@ async function main(): Promise<void> {
       imageInfo.dataUrl,
       defaults,
     );
-    const response = await client.responses.create(request);
+    const response = await executeWithTools(client, request, options);
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
