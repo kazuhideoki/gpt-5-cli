@@ -195,4 +195,19 @@ describe("CLI integration", () => {
     expect(secondEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(callIndex).toBe(responses.length);
   });
+
+  test("--compact は他の履歴系フラグと併用できない", async () => {
+    currentHandler = () =>
+      new Response("unexpected request", {
+        status: 500,
+        headers: { "Content-Type": "text/plain" },
+      });
+
+    const env = createBaseEnv(server.port, historyPath);
+    const result = await runCli(["--compact", "1", "-c"], env);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("Error: --compact と他のフラグは併用できません");
+  });
 });

@@ -101,29 +101,47 @@ const historyIndexSchema = z
 
 const historyFlagSchema = z.union([z.literal(true), historyIndexSchema]);
 
-const cliOptionsSchema: z.ZodType<CliOptions> = z.object({
-  model: z.string(),
-  effort: z.enum(["low", "medium", "high"]),
-  verbosity: z.enum(["low", "medium", "high"]),
-  continueConversation: z.boolean(),
-  taskMode: z.enum(["default", "d2"]),
-  resumeIndex: z.number().optional(),
-  resumeListOnly: z.boolean(),
-  deleteIndex: z.number().optional(),
-  showIndex: z.number().optional(),
-  imagePath: z.string().optional(),
-  operation: z.union([z.literal("ask"), z.literal("compact")]),
-  compactIndex: z.number().optional(),
-  d2FilePath: z.string().min(1).optional(),
-  args: z.array(z.string()),
-  modelExplicit: z.boolean(),
-  effortExplicit: z.boolean(),
-  verbosityExplicit: z.boolean(),
-  taskModeExplicit: z.boolean(),
-  d2FileExplicit: z.boolean(),
-  hasExplicitHistory: z.boolean(),
-  helpRequested: z.boolean(),
-});
+const cliOptionsSchema: z.ZodType<CliOptions> = z
+  .object({
+    model: z.string(),
+    effort: z.enum(["low", "medium", "high"]),
+    verbosity: z.enum(["low", "medium", "high"]),
+    continueConversation: z.boolean(),
+    taskMode: z.enum(["default", "d2"]),
+    resumeIndex: z.number().optional(),
+    resumeListOnly: z.boolean(),
+    deleteIndex: z.number().optional(),
+    showIndex: z.number().optional(),
+    imagePath: z.string().optional(),
+    operation: z.union([z.literal("ask"), z.literal("compact")]),
+    compactIndex: z.number().optional(),
+    d2FilePath: z.string().min(1).optional(),
+    args: z.array(z.string()),
+    modelExplicit: z.boolean(),
+    effortExplicit: z.boolean(),
+    verbosityExplicit: z.boolean(),
+    taskModeExplicit: z.boolean(),
+    d2FileExplicit: z.boolean(),
+    hasExplicitHistory: z.boolean(),
+    helpRequested: z.boolean(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.operation === "compact" &&
+      (value.continueConversation ||
+        value.resumeListOnly ||
+        typeof value.resumeIndex === "number" ||
+        typeof value.deleteIndex === "number" ||
+        typeof value.showIndex === "number" ||
+        value.args.length > 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Error: --compact と他のフラグは併用できません",
+        path: ["operation"],
+      });
+    }
+  });
 
 function buildToolList(): ResponseCreateParamsNonStreaming["tools"] {
   return [...FUNCTION_TOOLS, { type: "web_search_preview" as const }];
@@ -419,29 +437,37 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
   const helpRequested = Boolean(opts.help);
 
-  return cliOptionsSchema.parse({
-    model,
-    effort,
-    verbosity,
-    continueConversation,
-    resumeIndex,
-    resumeListOnly,
-    deleteIndex,
-    showIndex,
-    imagePath,
-    operation,
-    compactIndex,
-    taskMode,
-    d2FilePath,
-    args,
-    modelExplicit,
-    effortExplicit,
-    verbosityExplicit,
-    taskModeExplicit,
-    d2FileExplicit,
-    hasExplicitHistory,
-    helpRequested,
-  });
+  try {
+    return cliOptionsSchema.parse({
+      model,
+      effort,
+      verbosity,
+      continueConversation,
+      resumeIndex,
+      resumeListOnly,
+      deleteIndex,
+      showIndex,
+      imagePath,
+      operation,
+      compactIndex,
+      taskMode,
+      d2FilePath,
+      args,
+      modelExplicit,
+      effortExplicit,
+      verbosityExplicit,
+      taskModeExplicit,
+      d2FileExplicit,
+      hasExplicitHistory,
+      helpRequested,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const firstIssue = error.issues[0];
+      throw new Error(firstIssue?.message ?? error.message);
+    }
+    throw error;
+  }
 }
 
 function resolveImagePath(raw: string): string {
@@ -1191,18 +1217,6 @@ async function main(): Promise<void> {
     if (options.helpRequested) {
       printHelp(defaults, options);
       return;
-    }
-
-    if (
-      options.operation === "compact" &&
-      (options.continueConversation ||
-        options.resumeListOnly ||
-        options.resumeIndex !== undefined ||
-        options.deleteIndex !== undefined ||
-        options.showIndex !== undefined ||
-        options.args.length > 0)
-    ) {
-      throw new Error("Error: --compact と他のフラグは併用できません");
     }
 
     if (options.taskMode === "d2" && options.operation === "compact") {
