@@ -9,3 +9,4 @@ dist/
 history_index.json
 # デフォルトのプロンプトディレクトリ
 prompts/
+.DS_Store

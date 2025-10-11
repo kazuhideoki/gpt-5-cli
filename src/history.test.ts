@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { HistoryStore, formatTurnsForSummary } from "./history.js";
-import type { HistoryEntry } from "./types.js";
+import type { HistoryEntry } from "./history.js";
 
 let tempDir: string;
 let historyPath: string;

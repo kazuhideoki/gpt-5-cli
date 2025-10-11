@@ -12,14 +12,8 @@ import type {
   Response,
   ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
-import type {
-  CliDefaults,
-  CliOptions,
-  ConversationContext,
-  HistoryEntry,
-  HistoryTask,
-  OpenAIInputMessage,
-} from "./types.js";
+import type { CliDefaults, CliOptions, ConversationContext, OpenAIInputMessage } from "./types.js";
+import type { HistoryEntry, HistoryTask } from "./history.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "./config.js";
 import { formatTurnsForSummary, HistoryStore } from "./history.js";

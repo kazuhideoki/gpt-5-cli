@@ -1,51 +1,9 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
+import type { HistoryEntry } from "./history.js";
 
 export type EffortLevel = "low" | "medium" | "high";
 export type VerbosityLevel = "low" | "medium" | "high";
 export type TaskMode = "default" | "d2";
-
-export interface HistoryTurn {
-  role: string;
-  text?: string;
-  at?: string;
-  response_id?: string;
-  kind?: string;
-}
-
-export interface HistorySummary {
-  text?: string;
-  created_at?: string;
-}
-
-export interface HistoryResume {
-  mode?: string;
-  previous_response_id?: string;
-  summary?: HistorySummary;
-}
-
-export interface HistoryTaskD2 {
-  file_path?: string;
-}
-
-export interface HistoryTask {
-  mode?: TaskMode | string;
-  d2?: HistoryTaskD2;
-}
-
-export interface HistoryEntry {
-  title?: string;
-  model?: string;
-  effort?: EffortLevel | string;
-  verbosity?: VerbosityLevel | string;
-  created_at?: string;
-  updated_at?: string;
-  first_response_id?: string;
-  last_response_id?: string;
-  request_count?: number;
-  resume?: HistoryResume;
-  turns?: HistoryTurn[];
-  task?: HistoryTask;
-}
 
 export interface CliDefaults {
   modelMain: string;

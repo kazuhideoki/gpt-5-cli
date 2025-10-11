@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { HistoryEntry, HistoryTask, HistoryTurn } from "./types.js";
 
-const historyTurnSchema: z.ZodType<HistoryTurn> = z.object({
+export const historyTurnSchema = z.object({
   role: z.string(),
   text: z.string().optional(),
   at: z.string().optional(),
@@ -11,27 +10,37 @@ const historyTurnSchema: z.ZodType<HistoryTurn> = z.object({
   kind: z.string().optional(),
 });
 
-const historySummarySchema = z.object({
+export type HistoryTurn = z.infer<typeof historyTurnSchema>;
+
+export const historySummarySchema = z.object({
   text: z.string().optional(),
   created_at: z.string().optional(),
 });
 
-const historyResumeSchema = z.object({
+export type HistorySummary = z.infer<typeof historySummarySchema>;
+
+export const historyResumeSchema = z.object({
   mode: z.string().optional(),
   previous_response_id: z.string().optional(),
   summary: historySummarySchema.optional(),
 });
 
-const historyTaskD2Schema = z.object({
+export type HistoryResume = z.infer<typeof historyResumeSchema>;
+
+export const historyTaskD2Schema = z.object({
   file_path: z.string().optional(),
 });
 
-const historyTaskSchema: z.ZodType<HistoryTask> = z.object({
+export type HistoryTaskD2 = z.infer<typeof historyTaskD2Schema>;
+
+export const historyTaskSchema = z.object({
   mode: z.string().optional(),
   d2: historyTaskD2Schema.optional(),
 });
 
-const historyEntrySchema: z.ZodType<HistoryEntry> = z.object({
+export type HistoryTask = z.infer<typeof historyTaskSchema>;
+
+export const historyEntrySchema = z.object({
   title: z.string().optional(),
   model: z.string().optional(),
   effort: z.string().optional(),
@@ -59,6 +68,8 @@ const historyEntrySchema: z.ZodType<HistoryEntry> = z.object({
   turns: z.array(historyTurnSchema).optional(),
   task: historyTaskSchema.optional(),
 });
+
+export type HistoryEntry = z.infer<typeof historyEntrySchema>;
 
 const historyEntriesSchema = z.array(historyEntrySchema);
 
