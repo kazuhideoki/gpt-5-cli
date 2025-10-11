@@ -309,7 +309,10 @@ function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
 }
 
 function resolveImagePath(raw: string): string {
-  const home = process.env.HOME ?? "";
+  const home = process.env.HOME;
+  if (!home || home.trim().length === 0) {
+    throw new Error("HOME environment variable must be set to use image attachments.");
+  }
   if (path.isAbsolute(raw)) {
     if (!raw.startsWith(home)) {
       throw new Error(`Error: -i で指定できるフルパスは ${home || "$HOME"} 配下のみです: ${raw}`);

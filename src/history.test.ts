@@ -26,10 +26,10 @@ describe("HistoryStore", () => {
     expect(fs.readFileSync(historyPath, "utf8")).toBe("[]\n");
   });
 
-  it("loadEntries は不正な JSON を無視する", () => {
+  it("loadEntries は不正な JSON でエラーを投げる", () => {
     store.ensureInitialized();
     fs.writeFileSync(historyPath, "{", "utf8");
-    expect(store.loadEntries()).toEqual([]);
+    expect(() => store.loadEntries()).toThrow("[openai_api] failed to parse history index");
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {

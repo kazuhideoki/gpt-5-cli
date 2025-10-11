@@ -21,10 +21,11 @@ export class HistoryStore {
       if (Array.isArray(parsed)) {
         return parsed as HistoryEntry[];
       }
+      throw new Error("[openai_api] history index is not an array.");
     } catch (error) {
-      console.error(`[openai_api] failed to parse history index: ${String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`[openai_api] failed to parse history index: ${message}`);
     }
-    return [];
   }
 
   saveEntries(entries: HistoryEntry[]): void {
@@ -51,12 +52,12 @@ export class HistoryStore {
 
     console.log("=== 履歴一覧（新しい順） ===");
     entries.forEach((entry, index) => {
-      const model = entry.model ?? "-";
-      const effort = entry.effort ?? "-";
-      const verbosity = entry.verbosity ?? "-";
+      const model = entry.model ?? "(model 未設定)";
+      const effort = entry.effort ?? "(effort 未設定)";
+      const verbosity = entry.verbosity ?? "(verbosity 未設定)";
       const requestCount = entry.request_count ?? 0;
-      const updated = entry.updated_at ?? "-";
-      const title = entry.title ?? "(no title)";
+      const updated = entry.updated_at ?? "(更新日時 未設定)";
+      const title = entry.title ?? "(タイトル未設定)";
       console.log(
         `${String(index + 1).padStart(2, " ")}) ${title} [${model}/${effort}/${verbosity} ${requestCount}回] ${updated}`,
       );
@@ -83,7 +84,7 @@ export class HistoryStore {
     }
     const filtered = this.loadEntries().filter((item) => item.last_response_id !== lastId);
     this.saveEntries(filtered);
-    return { removedTitle: entry.title ?? "(no title)", removedId: lastId };
+    return { removedTitle: entry.title ?? "(タイトル未設定)", removedId: lastId };
   }
 
   showByNumber(index: number, noColor: boolean): void {
@@ -92,8 +93,8 @@ export class HistoryStore {
       throw new Error(`[openai_api] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
     const entry = entries[index - 1];
-    const title = entry.title ?? "(no title)";
-    const updated = entry.updated_at ?? "-";
+    const title = entry.title ?? "(タイトル未設定)";
+    const updated = entry.updated_at ?? "(更新日時 未設定)";
     const requestCount = entry.request_count ?? 0;
     console.log(`=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`);
 

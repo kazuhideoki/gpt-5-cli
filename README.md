@@ -30,6 +30,9 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    OPENAI_DEFAULT_VERBOSITY=low   # low|medium|high
    OPENAI_HISTORY_INDEX_FILE=~/gpt-5-cli/history_index.json
    ```
+   - `OPENAI_DEFAULT_EFFORT` と `OPENAI_DEFAULT_VERBOSITY` に無効な値を設定すると起動時にエラーになります。
+   - `OPENAI_HISTORY_INDEX_FILE` を設定する場合は空文字不可・`~` を含む場合は `HOME` が必須です。
+   - 画像添付（`-i`）機能を使う際も `HOME` が未設定だとエラーになります。
 6. 任意: `system_prompt.txt` を作成すると、新規会話の先頭に固定の指示を自動付与できます（削除または空ファイルで無効化）。
 
 ## 使い方

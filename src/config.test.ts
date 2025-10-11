@@ -55,12 +55,23 @@ describe("resolveHistoryPath", () => {
   it("環境変数が設定されていれば展開して返す", () => {
     process.env.OPENAI_HISTORY_INDEX_FILE = "~/history/log.json";
     const resolved = resolveHistoryPath("/default.json");
-    expect(resolved).toBe(path.resolve(path.join(process.env.HOME ?? "", "history/log.json")));
+    expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
   });
 
   it("環境変数が未設定なら既定値を返す", () => {
     const resolved = resolveHistoryPath("/default.json");
     expect(resolved).toBe(path.resolve("/default.json"));
+  });
+
+  it("空文字列を設定するとエラーになる", () => {
+    process.env.OPENAI_HISTORY_INDEX_FILE = "   ";
+    expect(() => resolveHistoryPath("/default.json")).toThrow("OPENAI_HISTORY_INDEX_FILE is set but empty.");
+  });
+
+  it("HOME が無い状態で ~ を使うとエラーになる", () => {
+    delete process.env.HOME;
+    process.env.OPENAI_HISTORY_INDEX_FILE = "~/history.json";
+    expect(() => resolveHistoryPath("/default.json")).toThrow("HOME environment variable is required when using '~' paths.");
   });
 });
 
@@ -89,17 +100,13 @@ describe("loadDefaults", () => {
     expect(defaults.modelNano).toBe("nano-x");
     expect(defaults.effort).toBe("high");
     expect(defaults.verbosity).toBe("medium");
-    expect(defaults.historyIndexPath).toBe(
-      path.resolve(path.join(process.env.HOME ?? "", "data/hist.json")),
-    );
+    expect(defaults.historyIndexPath).toBe(path.resolve(path.join(process.env.HOME!, "data/hist.json")));
   });
 
-  it("不正なレベルはフォールバックする", () => {
+  it("不正なレベルはエラーになる", () => {
     process.env.OPENAI_DEFAULT_EFFORT = "invalid";
     process.env.OPENAI_DEFAULT_VERBOSITY = "other";
-    const defaults = loadDefaults();
-    expect(defaults.effort).toBe("low");
-    expect(defaults.verbosity).toBe("low");
+    expect(() => loadDefaults()).toThrow('OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high". Received: invalid');
   });
 });
 

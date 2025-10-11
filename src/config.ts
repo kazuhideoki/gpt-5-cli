@@ -18,13 +18,24 @@ function expandHome(p: string): string {
   if (!p.startsWith("~")) {
     return p;
   }
-  return path.join(process.env.HOME ?? "", p.slice(1));
+  const home = process.env.HOME;
+  if (!home || home.trim().length === 0) {
+    throw new Error("HOME environment variable is required when using '~' paths.");
+  }
+  return path.join(home, p.slice(1));
 }
 
 export function resolveHistoryPath(defaultPath: string): string {
   const configured = process.env.OPENAI_HISTORY_INDEX_FILE;
-  const resolved = configured && configured.trim().length > 0 ? configured.trim() : defaultPath;
-  const expanded = expandHome(resolved);
+  if (typeof configured === "string") {
+    const trimmed = configured.trim();
+    if (trimmed.length === 0) {
+      throw new Error("OPENAI_HISTORY_INDEX_FILE is set but empty.");
+    }
+    const expanded = expandHome(trimmed);
+    return path.resolve(expanded);
+  }
+  const expanded = expandHome(defaultPath);
   return path.resolve(expanded);
 }
 
@@ -34,7 +45,7 @@ function coerceEffort(value: string | undefined, fallback: EffortLevel): EffortL
   if (lower === "low" || lower === "medium" || lower === "high") {
     return lower as EffortLevel;
   }
-  return fallback;
+  throw new Error(`OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high". Received: ${value}`);
 }
 
 function coerceVerbosity(value: string | undefined, fallback: VerbosityLevel): VerbosityLevel {
@@ -43,7 +54,9 @@ function coerceVerbosity(value: string | undefined, fallback: VerbosityLevel): V
   if (lower === "low" || lower === "medium" || lower === "high") {
     return lower as VerbosityLevel;
   }
-  return fallback;
+  throw new Error(
+    `OPENAI_DEFAULT_VERBOSITY must be one of "low", "medium", or "high". Received: ${value}`,
+  );
 }
 
 export function loadDefaults(): CliDefaults {
