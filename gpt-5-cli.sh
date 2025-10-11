@@ -130,7 +130,7 @@ format_scale_value() {
 
 # システムプロンプト（任意）。存在すれば新規会話時に最初の system メッセージとして付与
 PROMPTS_DIR="$SCRIPT_DIR/prompts"
-SYSTEM_PROMPT_FILE="$PROMPTS_DIR/default.txt"
+SYSTEM_PROMPT_FILE="$PROMPTS_DIR/default.md"
 SYSTEM_PROMPT=""
 
 # 依存コマンドの存在確認（挙動は変えないが早期にわかるように）

@@ -144,7 +144,14 @@ describe("buildRequest", () => {
     const defaults = createDefaults();
     const options = createOptions();
     const context = createContext();
-    const request = buildRequest(options, context, "最初の質問", "system message", undefined, defaults);
+    const request = buildRequest(
+      options,
+      context,
+      "最初の質問",
+      "system message",
+      undefined,
+      defaults,
+    );
     const input = request.input as any[];
     expect(input[0]).toEqual({
       role: "system",
@@ -165,7 +172,14 @@ describe("buildRequest", () => {
         },
       ],
     });
-    const request = buildRequest(options, context, "続きの質問", "system message", undefined, defaults);
+    const request = buildRequest(
+      options,
+      context,
+      "続きの質問",
+      "system message",
+      undefined,
+      defaults,
+    );
     const input = request.input as any[];
     const systemTexts = input
       .filter((msg) => msg.role === "system")

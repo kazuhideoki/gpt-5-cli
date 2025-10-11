@@ -19,19 +19,19 @@ afterAll(() => {
 });
 
 describe("resolvePromptPath", () => {
-  it("モードが未指定なら default.txt を指す", () => {
+  it("モードが未指定なら default.md を指す", () => {
     const resolved = resolvePromptPath(undefined, tempDir);
-    expect(resolved).toBe(path.join(tempDir, "default.txt"));
+    expect(resolved).toBe(path.join(tempDir, "default.md"));
   });
 
-  it("空文字列なら default.txt を指す", () => {
+  it("空文字列なら default.md を指す", () => {
     const resolved = resolvePromptPath("   ", tempDir);
-    expect(resolved).toBe(path.join(tempDir, "default.txt"));
+    expect(resolved).toBe(path.join(tempDir, "default.md"));
   });
 
   it("モードに応じたファイル名を返す", () => {
     const resolved = resolvePromptPath("d2", tempDir);
-    expect(resolved).toBe(path.join(tempDir, "d2.txt"));
+    expect(resolved).toBe(path.join(tempDir, "d2.md"));
   });
 });
 
@@ -42,12 +42,12 @@ describe("loadPrompt", () => {
   });
 
   it("空ファイルなら undefined", () => {
-    fs.writeFileSync(path.join(tempDir, "default.txt"), "   \n", "utf8");
+    fs.writeFileSync(path.join(tempDir, "default.md"), "   \n", "utf8");
     expect(loadPrompt("default", tempDir)).toBeUndefined();
   });
 
   it("内容があれば返す", () => {
-    fs.writeFileSync(path.join(tempDir, "default.txt"), "こんにちは\n", "utf8");
+    fs.writeFileSync(path.join(tempDir, "default.md"), "こんにちは\n", "utf8");
     expect(loadPrompt("default", tempDir)).toBe("こんにちは\n");
   });
 });

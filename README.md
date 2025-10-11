@@ -33,7 +33,7 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    - `OPENAI_DEFAULT_EFFORT` と `OPENAI_DEFAULT_VERBOSITY` に無効な値を設定すると起動時にエラーになります。
    - `OPENAI_HISTORY_INDEX_FILE` を設定する場合は空文字不可・`~` を含む場合は `HOME` が必須です。
    - 画像添付（`-i`）機能を使う際も `HOME` が未設定だとエラーになります。
-6. 任意: `prompts/default.txt` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。`prompts/d2.txt` などモード名と同じファイルを置くと `--d2-mode` 時のみ適用されます（存在しない／空ファイルは無視）。
+6. 任意: `prompts/default.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。`prompts/d2.md` などモード名と同じファイルを置くと `--d2-mode` 時のみ適用されます（存在しない／空ファイルは無視）。
 
 ## 使い方
 
@@ -73,7 +73,7 @@ bun start -- --compact 1     # 1 番目の履歴を要約
 
 - 既定の履歴ファイルはリポジトリ直下の `history_index.json`（`OPENAI_HISTORY_INDEX_FILE` で変更可。`~` 展開対応）。
 - 履歴にはタイトル・最終 response.id・メタ情報・`turns`（user/assistant 各発話）を保存。共有前に機微情報の有無を確認してください。
-- `prompts/<mode>.txt` が存在すると、そのモードで新規会話開始時に system メッセージとして付与されます（例: `default.txt`, `d2.txt`）。ファイルが無い場合は system メッセージ無しで実行されます。
+- `prompts/<mode>.md` が存在すると、そのモードで新規会話開始時に system メッセージとして付与されます（例: `default.md`, `d2.md`）。ファイルが無い場合は system メッセージ無しで実行されます。
 
 ## 内部動作のメモ
 

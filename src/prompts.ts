@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { TaskMode } from "./types.js";
 
+const PROMPT_EXTENSION = ".md";
+
 function normalizeMode(mode?: string | TaskMode): string {
   if (typeof mode === "string") {
     const trimmed = mode.trim();
@@ -39,5 +41,5 @@ export function loadPrompt(
 
 export function resolvePromptPath(mode: string | TaskMode | undefined, promptsDir: string): string {
   const normalized = normalizeMode(mode);
-  return path.join(promptsDir, `${normalized}.txt`);
+  return path.join(promptsDir, `${normalized}${PROMPT_EXTENSION}`);
 }
