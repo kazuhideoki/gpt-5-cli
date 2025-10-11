@@ -11,7 +11,9 @@
   "scripts": {
     "build": "bunx tsc",
     "start": "bun dist/cli.js",
-    "dev": "bun run src/cli.ts"
+    "dev": "bun run src/cli.ts",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

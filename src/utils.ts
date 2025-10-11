@@ -80,3 +80,13 @@ export function formatModelValue(
 export function formatScaleValue(value: string): string {
   return decorateLevelValue(value, levelForScaleValue(value));
 }
+
+// テスト用途でスタイルキャッシュをリセットする。
+export function __resetLogStyleCacheForTest(): void {
+  cachedLogStyle = null;
+}
+
+// テスト用途でスタイルキャッシュを上書きする。
+export function __setLogStyleForTest(style: LogStyle | null): void {
+  cachedLogStyle = style;
+}
