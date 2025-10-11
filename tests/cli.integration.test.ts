@@ -51,7 +51,7 @@ function createBaseEnv(port: number, historyPath: string): Record<string, string
   return {
     OPENAI_API_KEY: "test-key",
     OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
-    OPENAI_HISTORY_INDEX_FILE: historyPath,
+    GPT_5_CLI_HISTORY_INDEX_FILE: historyPath,
   };
 }
 

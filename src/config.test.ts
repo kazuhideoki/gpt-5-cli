@@ -11,8 +11,8 @@ import {
 } from "./config.js";
 
 const envKeys = [
-  "OPENAI_HISTORY_INDEX_FILE",
-  "OPENAI_PROMPTS_DIR",
+  "GPT_5_CLI_HISTORY_INDEX_FILE",
+  "GPT_5_CLI_PROMPTS_DIR",
   "HOME",
   "OPENAI_MODEL_MAIN",
   "OPENAI_MODEL_MINI",
@@ -54,7 +54,7 @@ afterAll(() => {
 
 describe("resolveHistoryPath", () => {
   it("環境変数が設定されていれば展開して返す", () => {
-    process.env.OPENAI_HISTORY_INDEX_FILE = "~/history/log.json";
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/log.json";
     const resolved = resolveHistoryPath("/default.json");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
   });
@@ -65,15 +65,15 @@ describe("resolveHistoryPath", () => {
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    process.env.OPENAI_HISTORY_INDEX_FILE = "   ";
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "   ";
     expect(() => resolveHistoryPath("/default.json")).toThrow(
-      "OPENAI_HISTORY_INDEX_FILE is set but empty.",
+      "GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.",
     );
   });
 
   it("HOME が無い状態で ~ を使うとエラーになる", () => {
     delete process.env.HOME;
-    process.env.OPENAI_HISTORY_INDEX_FILE = "~/history.json";
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history.json";
     expect(() => resolveHistoryPath("/default.json")).toThrow(
       "HOME environment variable is required when using '~' paths.",
     );
@@ -82,7 +82,7 @@ describe("resolveHistoryPath", () => {
 
 describe("resolvePromptsDir", () => {
   it("環境変数が設定されていれば展開して返す", () => {
-    process.env.OPENAI_PROMPTS_DIR = "~/prompts/custom";
+    process.env.GPT_5_CLI_PROMPTS_DIR = "~/prompts/custom";
     const resolved = resolvePromptsDir("/default/prompts");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "prompts/custom")));
   });
@@ -93,15 +93,15 @@ describe("resolvePromptsDir", () => {
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    process.env.OPENAI_PROMPTS_DIR = "   ";
+    process.env.GPT_5_CLI_PROMPTS_DIR = "   ";
     expect(() => resolvePromptsDir("/default/prompts")).toThrow(
-      "OPENAI_PROMPTS_DIR is set but empty.",
+      "GPT_5_CLI_PROMPTS_DIR is set but empty.",
     );
   });
 
   it("HOME が無い状態で ~ を使うとエラーになる", () => {
     delete process.env.HOME;
-    process.env.OPENAI_PROMPTS_DIR = "~/prompts";
+    process.env.GPT_5_CLI_PROMPTS_DIR = "~/prompts";
     expect(() => resolvePromptsDir("/default/prompts")).toThrow(
       "HOME environment variable is required when using '~' paths.",
     );
@@ -126,8 +126,8 @@ describe("loadDefaults", () => {
     process.env.OPENAI_MODEL_NANO = "nano-x";
     process.env.OPENAI_DEFAULT_EFFORT = "high";
     process.env.OPENAI_DEFAULT_VERBOSITY = "medium";
-    process.env.OPENAI_HISTORY_INDEX_FILE = "~/data/hist.json";
-    process.env.OPENAI_PROMPTS_DIR = "~/data/prompts";
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/data/hist.json";
+    process.env.GPT_5_CLI_PROMPTS_DIR = "~/data/prompts";
     const defaults = loadDefaults();
     expect(defaults.modelMain).toBe("main-x");
     expect(defaults.modelMini).toBe("mini-x");

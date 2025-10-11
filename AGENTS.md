@@ -4,7 +4,7 @@
 - 主要ロジックは `src/cli.ts` に集約され、OpenAI Responses API をラップしています。
 - ビルド済みエントリーポイントは `dist/cli.js` で、`bun run build` により `src` から生成されます。
 - `.env` は `OPENAI_API_KEY` などの認証情報を保持し、共有用の既定値は `.env.example` を更新してください。
-- `history_index.json` は実行時に生成される会話履歴の索引用ファイルで、`OPENAI_HISTORY_INDEX_FILE` で出力先を変更できます。
+- `history_index.json` は実行時に生成される会話履歴の索引用ファイルで、`GPT_5_CLI_HISTORY_INDEX_FILE` で出力先を変更できます。
 - `prompts/` ディレクトリに `<mode>.md` を置くと、新規会話開始時の system メッセージテンプレートとして利用できます（例: `default.md`, `d2.md`）。
 
 ## ビルド・テスト・開発コマンド
@@ -12,7 +12,7 @@
 - `bun run build`: TypeScript をコンパイルして `dist/` 以下を更新。
 - `bun run dev`: `tsx` 実行で `src/cli.ts` をホットリロード付きで起動。
 - `bun run start -- --help`: ビルド済み CLI のヘルプを確認。
-- `OPENAI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
+- `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
 
 ## コーディングスタイルと命名規約
 - TypeScript は `strict` 設定、ES Modules (`type: module`) を採用。
@@ -36,7 +36,7 @@
 
 ## セキュリティと設定の注意
 - `.env` をコミットせず、共有情報は `.env.example` に反映します。
-- 履歴ファイルには機微情報が含まれる可能性があるため、共有前に `OPENAI_HISTORY_INDEX_FILE` で書き出し先を変更するか、不要データを削除してください。
+- 履歴ファイルには機微情報が含まれる可能性があるため、共有前に `GPT_5_CLI_HISTORY_INDEX_FILE` で書き出し先を変更するか、不要データを削除してください。
 
 ## 個人用スクリプトとしての運用
 - 開発効率を優先し、フォールバック処理は不要です。入力検証で異常を検知した場合は即座にエラーを投げ、早期に失敗を把握してください。

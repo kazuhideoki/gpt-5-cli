@@ -180,9 +180,9 @@ load_env() {
         exit 1
     fi
 
-    # 履歴インデックスの保存先（.env の OPENAI_HISTORY_INDEX_FILE で上書き可能）
+    # 履歴インデックスの保存先（.env の GPT_5_CLI_HISTORY_INDEX_FILE で上書き可能）
     local hist_path
-    hist_path="${OPENAI_HISTORY_INDEX_FILE:-$HISTORY_INDEX_DEFAULT}"
+    hist_path="${GPT_5_CLI_HISTORY_INDEX_FILE:-$HISTORY_INDEX_DEFAULT}"
     # 先頭の ~ を $HOME に展開（.env で引用されている場合に備える）
     if [ "${hist_path#~}" != "$hist_path" ]; then
         hist_path="${hist_path/#\~/$HOME}"
@@ -221,7 +221,7 @@ show_help() {
     echo "  -i <image>   : 入力に画像を添付（\$HOME 配下のフルパスまたは 'スクリーンショット *.png'）"
     echo ""
     echo "環境変数(.env):"
-    echo "  OPENAI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）"
+    echo "  GPT_5_CLI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）"
     echo ""
     echo "既定: model=${MODEL_NANO}, effort=${EFFORT_DEFAULT}, verbosity=${VERBOSITY_DEFAULT}（フラグ未指定時）"
     echo ""

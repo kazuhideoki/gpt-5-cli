@@ -41,7 +41,7 @@ const envConfigSchema = z
     OPENAI_MODEL_NANO: z.string().trim().min(1).optional(),
     OPENAI_DEFAULT_EFFORT: effortLevelSchema.optional(),
     OPENAI_DEFAULT_VERBOSITY: verbosityLevelSchema.optional(),
-    OPENAI_PROMPTS_DIR: z.string().optional(),
+    GPT_5_CLI_PROMPTS_DIR: z.string().optional(),
   })
   .passthrough();
 
@@ -64,11 +64,11 @@ function expandHome(p: string): string {
 }
 
 export function resolveHistoryPath(defaultPath: string): string {
-  const configured = process.env.OPENAI_HISTORY_INDEX_FILE;
+  const configured = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
   if (typeof configured === "string") {
     const trimmed = configured.trim();
     if (trimmed.length === 0) {
-      throw new Error("OPENAI_HISTORY_INDEX_FILE is set but empty.");
+      throw new Error("GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.");
     }
     const expanded = expandHome(trimmed);
     return path.resolve(expanded);
@@ -78,11 +78,11 @@ export function resolveHistoryPath(defaultPath: string): string {
 }
 
 export function resolvePromptsDir(defaultPath: string): string {
-  const configured = process.env.OPENAI_PROMPTS_DIR;
+  const configured = process.env.GPT_5_CLI_PROMPTS_DIR;
   if (typeof configured === "string") {
     const trimmed = configured.trim();
     if (trimmed.length === 0) {
-      throw new Error("OPENAI_PROMPTS_DIR is set but empty.");
+      throw new Error("GPT_5_CLI_PROMPTS_DIR is set but empty.");
     }
     const expanded = expandHome(trimmed);
     return path.resolve(expanded);
