@@ -13,6 +13,7 @@ export interface CliDefaults {
   verbosity: VerbosityLevel;
   historyIndexPath: string;
   promptsDir: string;
+  d2MaxIterations: number;
 }
 
 export interface CliOptions {
@@ -35,6 +36,8 @@ export interface CliOptions {
   verbosityExplicit: boolean;
   taskModeExplicit: boolean;
   d2FileExplicit: boolean;
+  d2MaxIterations: number;
+  d2MaxIterationsExplicit: boolean;
   hasExplicitHistory: boolean;
   helpRequested: boolean;
 }

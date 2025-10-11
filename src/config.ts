@@ -42,6 +42,25 @@ const envConfigSchema = z
     OPENAI_DEFAULT_EFFORT: effortLevelSchema.optional(),
     OPENAI_DEFAULT_VERBOSITY: verbosityLevelSchema.optional(),
     GPT_5_CLI_PROMPTS_DIR: z.string().optional(),
+    GPT_5_CLI_D2_MAX_ITERATIONS: z
+      .string()
+      .transform((value) => value.trim())
+      .pipe(
+        z
+          .string()
+          .min(1)
+          .transform((value) => Number.parseInt(value, 10))
+          .superRefine((value, ctx) => {
+            if (!Number.isInteger(value) || value <= 0) {
+              ctx.addIssue({
+                code: "custom",
+                message: "GPT_5_CLI_D2_MAX_ITERATIONS must be a positive integer when specified.",
+              });
+            }
+          }),
+      )
+      .transform((value) => value as number)
+      .optional(),
   })
   .passthrough();
 
@@ -115,6 +134,7 @@ export function loadDefaults(): CliDefaults {
     verbosity: envConfig.OPENAI_DEFAULT_VERBOSITY ?? "low",
     historyIndexPath,
     promptsDir,
+    d2MaxIterations: envConfig.GPT_5_CLI_D2_MAX_ITERATIONS ?? 8,
   };
 }
 

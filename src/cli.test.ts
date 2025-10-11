@@ -12,6 +12,7 @@ function createDefaults(): CliDefaults {
     verbosity: "low",
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
+    d2MaxIterations: 8,
   };
 }
 
@@ -31,6 +32,8 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     verbosityExplicit: false,
     taskModeExplicit: false,
     d2FileExplicit: false,
+    d2MaxIterations: 8,
+    d2MaxIterationsExplicit: false,
     hasExplicitHistory: false,
     helpRequested: false,
     ...overrides,
@@ -107,6 +110,20 @@ describe("parseArgs", () => {
     const options = parseArgs(["-D", "ダイアグラム"], defaults);
     expect(options.taskMode).toBe("d2");
     expect(options.taskModeExplicit).toBe(true);
+  });
+
+  it("d2 モードで --d2-iterations を指定できる", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["-D", "--d2-iterations", "5", "図"], defaults);
+    expect(options.d2MaxIterations).toBe(5);
+    expect(options.d2MaxIterationsExplicit).toBe(true);
+  });
+
+  it("d2 モード以外で --d2-iterations を指定するとエラーになる", () => {
+    const defaults = createDefaults();
+    expect(() => parseArgs(["--d2-iterations", "4", "テスト"], defaults)).toThrow(
+      "Error: --d2-iterations は d2モードと併用してください",
+    );
   });
 
   it("--d2-file 単体ではエラーになる", () => {
