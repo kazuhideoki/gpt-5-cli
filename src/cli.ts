@@ -995,17 +995,17 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
   const toolSummary = [
     "- read_file: 指定ファイルを読み取り現在の内容を確認する",
     "- write_file: 指定ファイルを UTF-8 テキストで上書きする（diffは自分で計画する）",
-    "- d2_fmt: D2ファイルを整形してフォーマットを揃える",
     "- d2_check: D2の構文を検証してエラーが無いことを確認する",
+    "- d2_fmt: D2ファイルを整形してフォーマットを揃える",
   ].join("\n");
 
   const workflow = [
     "作業手順:",
     `1. ${existenceNote}`,
-    "2. 変更後は必ず d2_fmt を実行し、整形結果を確認する",
-    "3. d2_check を実行し、エラーが出たら修正して 2〜3 を繰り返す",
-    "4. 問題が残る場合は理由と次のアクションを述べる",
-    "5. 最終応答では、日本語で変更内容・ファイルパス・d2_fmt/d2_check の結果を要約し、D2コード全文は回答に貼らない",
+    "2. 変更後は必ず d2_check を実行し、構文エラーを確認する",
+    "3. エラーが無いことを確認したら d2_fmt を実行し、整形結果を確認する",
+    "4. エラーが続く場合は修正しつつ 2〜3 を繰り返す",
+    "5. 最終応答では、日本語で変更内容・ファイルパス・d2_check/d2_fmt の結果を要約し、D2コード全文は回答に貼らない",
   ].join("\n");
 
   const systemText = [
