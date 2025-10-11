@@ -5,7 +5,7 @@
 - ビルド済みエントリーポイントは `dist/cli.js` で、`bun run build` により `src` から生成されます。
 - `.env` は `OPENAI_API_KEY` などの認証情報を保持し、共有用の既定値は `.env.example` を更新してください。
 - `history_index.json` は実行時に生成される会話履歴の索引用ファイルで、`OPENAI_HISTORY_INDEX_FILE` で出力先を変更できます。
-- `system_prompt.txt` は新規会話開始時の system メッセージテンプレートとして利用できます。
+- `prompts/` ディレクトリに `<mode>.txt` を置くと、新規会話開始時の system メッセージテンプレートとして利用できます（例: `default.txt`, `d2.txt`）。
 
 ## ビルド・テスト・開発コマンド
 - `bun install`: 依存パッケージをインストール。

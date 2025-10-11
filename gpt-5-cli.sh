@@ -129,7 +129,8 @@ format_scale_value() {
 }
 
 # システムプロンプト（任意）。存在すれば新規会話時に最初の system メッセージとして付与
-SYSTEM_PROMPT_FILE="$SCRIPT_DIR/system_prompt.txt"
+PROMPTS_DIR="$SCRIPT_DIR/prompts"
+SYSTEM_PROMPT_FILE="$PROMPTS_DIR/default.txt"
 SYSTEM_PROMPT=""
 
 # 依存コマンドの存在確認（挙動は変えないが早期にわかるように）
@@ -197,7 +198,9 @@ load_system_prompt() {
         # ログ（長文は出さず、文字数のみ）
         local n
         n=$(printf %s "$SYSTEM_PROMPT" | wc -c | awk '{print $1}')
-        echo "[openai_api] system_prompt: loaded (${n} bytes)" >&2
+        echo "[openai_api] system_prompt: loaded (${n} bytes) path=$SYSTEM_PROMPT_FILE" >&2
+    else
+        echo "[openai_api] system_prompt: not found or empty path=$SYSTEM_PROMPT_FILE" >&2
     fi
 }
 

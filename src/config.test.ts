@@ -2,13 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  ROOT_DIR,
-  ensureApiKey,
-  loadDefaults,
-  readSystemPrompt,
-  resolveHistoryPath,
-} from "./config.js";
+import { ROOT_DIR, ensureApiKey, loadDefaults, resolveHistoryPath } from "./config.js";
 
 const envKeys = [
   "OPENAI_HISTORY_INDEX_FILE",
@@ -88,7 +82,7 @@ describe("loadDefaults", () => {
     expect(defaults.effort).toBe("low");
     expect(defaults.verbosity).toBe("low");
     expect(defaults.historyIndexPath).toBe(path.join(ROOT_DIR, "history_index.json"));
-    expect(defaults.systemPromptPath).toBe(path.join(ROOT_DIR, "system_prompt.txt"));
+    expect(defaults.promptsDir).toBe(path.join(ROOT_DIR, "prompts"));
   });
 
   it("環境変数を反映する", () => {
@@ -126,24 +120,5 @@ describe("ensureApiKey", () => {
   it("API キーがあれば返す", () => {
     process.env.OPENAI_API_KEY = "test-key";
     expect(ensureApiKey()).toBe("test-key");
-  });
-});
-
-describe("readSystemPrompt", () => {
-  it("存在しない場合は undefined", () => {
-    const filePath = path.join(tempDir ?? ".", "missing.txt");
-    expect(readSystemPrompt(filePath)).toBeUndefined();
-  });
-
-  it("空ファイルなら undefined", () => {
-    const filePath = path.join(tempDir ?? ".", "empty.txt");
-    fs.writeFileSync(filePath, "   \n", "utf8");
-    expect(readSystemPrompt(filePath)).toBeUndefined();
-  });
-
-  it("内容があればそのまま返す", () => {
-    const filePath = path.join(tempDir ?? ".", "prompt.txt");
-    fs.writeFileSync(filePath, "こんにちは\n", "utf8");
-    expect(readSystemPrompt(filePath)).toBe("こんにちは\n");
   });
 });

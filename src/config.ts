@@ -90,7 +90,7 @@ export function loadDefaults(): CliDefaults {
     throw error;
   }
   const historyIndexPath = resolveHistoryPath(path.join(ROOT_DIR, "history_index.json"));
-  const systemPromptPath = path.join(ROOT_DIR, "system_prompt.txt");
+  const promptsDir = path.join(ROOT_DIR, "prompts");
 
   return {
     modelMain: envConfig.OPENAI_MODEL_MAIN ?? "gpt-5",
@@ -99,7 +99,7 @@ export function loadDefaults(): CliDefaults {
     effort: envConfig.OPENAI_DEFAULT_EFFORT ?? "low",
     verbosity: envConfig.OPENAI_DEFAULT_VERBOSITY ?? "low",
     historyIndexPath,
-    systemPromptPath,
+    promptsDir,
   };
 }
 
@@ -109,15 +109,4 @@ export function ensureApiKey(): string {
     throw new Error("OPENAI_API_KEY not found. Please set it in .env");
   }
   return apiKey;
-}
-
-export function readSystemPrompt(filePath: string): string | undefined {
-  if (!fs.existsSync(filePath)) {
-    return undefined;
-  }
-  const content = fs.readFileSync(filePath, "utf8");
-  if (!content.trim()) {
-    return undefined;
-  }
-  return content;
 }

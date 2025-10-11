@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput, parseArgs } from "./cli.js";
-import type { CliDefaults, CliOptions, HistoryEntry } from "./types.js";
+import { buildRequest, determineInput, parseArgs } from "./cli.js";
+import type { CliDefaults, CliOptions, ConversationContext, HistoryEntry } from "./types.js";
 import type { HistoryStore } from "./history.js";
 
 function createDefaults(): CliDefaults {
@@ -11,7 +11,7 @@ function createDefaults(): CliDefaults {
     effort: "low",
     verbosity: "low",
     historyIndexPath: "/tmp/history.json",
-    systemPromptPath: "/tmp/system_prompt.txt",
+    promptsDir: "/tmp/prompts",
   };
 }
 
@@ -121,6 +121,58 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["-m"], defaults)).toThrow(
       "Invalid option: -m には 0/1/2 を続けてください（例: -m1）",
     );
+  });
+});
+
+describe("buildRequest", () => {
+  function createContext(overrides: Partial<ConversationContext> = {}): ConversationContext {
+    return {
+      isNewConversation: true,
+      previousResponseId: undefined,
+      previousTitle: undefined,
+      titleToUse: "title",
+      resumeBaseMessages: [],
+      resumeSummaryText: undefined,
+      resumeSummaryCreatedAt: undefined,
+      activeEntry: undefined,
+      activeLastResponseId: undefined,
+      ...overrides,
+    };
+  }
+
+  it("新規会話では system プロンプトを最初に付与する", () => {
+    const defaults = createDefaults();
+    const options = createOptions();
+    const context = createContext();
+    const request = buildRequest(options, context, "最初の質問", "system message", undefined, defaults);
+    const input = request.input as any[];
+    expect(input[0]).toEqual({
+      role: "system",
+      content: [{ type: "input_text", text: "system message" }],
+    });
+  });
+
+  it("継続会話では system プロンプトを追加しない", () => {
+    const defaults = createDefaults();
+    const options = createOptions({ continueConversation: true });
+    const context = createContext({
+      isNewConversation: false,
+      previousResponseId: "resp_123",
+      resumeBaseMessages: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: "previous summary" }],
+        },
+      ],
+    });
+    const request = buildRequest(options, context, "続きの質問", "system message", undefined, defaults);
+    const input = request.input as any[];
+    const systemTexts = input
+      .filter((msg) => msg.role === "system")
+      .flatMap((msg) => (Array.isArray(msg.content) ? msg.content : []))
+      .map((item: any) => item?.text)
+      .filter((text: unknown): text is string => typeof text === "string");
+    expect(systemTexts).not.toContain("system message");
   });
 });
 

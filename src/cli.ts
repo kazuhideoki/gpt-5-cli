@@ -21,9 +21,10 @@ import type {
   OpenAIInputMessage,
 } from "./types.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
-import { ensureApiKey, loadDefaults, loadEnvironment, readSystemPrompt } from "./config.js";
+import { ensureApiKey, loadDefaults, loadEnvironment } from "./config.js";
 import { formatTurnsForSummary, HistoryStore } from "./history.js";
 import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
+import { loadPrompt, resolvePromptPath } from "./prompts.js";
 
 type ResponseTextConfigWithVerbosity = ResponseTextConfig & {
   verbosity?: CliOptions["verbosity"];
@@ -845,7 +846,7 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
   ];
 }
 
-function buildRequest(
+export function buildRequest(
   options: CliOptions,
   context: ConversationContext,
   inputText: string,
@@ -1180,13 +1181,16 @@ async function main(): Promise<void> {
     loadEnvironment();
     const defaults = loadDefaults();
     logError(`[openai_api] history_index: ${defaults.historyIndexPath}`);
-    const systemPrompt = readSystemPrompt(defaults.systemPromptPath);
-    if (systemPrompt) {
-      const bytes = Buffer.byteLength(systemPrompt, "utf8");
-      logError(`[openai_api] system_prompt: loaded (${bytes} bytes)`);
-    }
 
     const options = parseArgs(process.argv.slice(2), defaults);
+    const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
+    const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
+    if (systemPrompt) {
+      const bytes = Buffer.byteLength(systemPrompt, "utf8");
+      logError(`[openai_api] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
+    } else {
+      logError(`[openai_api] system_prompt: not found or empty path=${promptPath}`);
+    }
     if (options.helpRequested) {
       printHelp(defaults, options);
       return;

@@ -54,7 +54,7 @@ export interface CliDefaults {
   effort: EffortLevel;
   verbosity: VerbosityLevel;
   historyIndexPath: string;
-  systemPromptPath: string;
+  promptsDir: string;
 }
 
 export interface CliOptions {
