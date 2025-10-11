@@ -1,10 +1,14 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
 import type { HistoryEntry } from "./history.js";
 
+/** OpenAI Reasoning APIへ渡すeffortレベル。 */
 export type EffortLevel = "low" | "medium" | "high";
+/** アシスタント出力の詳細度レベル。 */
 export type VerbosityLevel = "low" | "medium" | "high";
+/** CLIがサポートするタスクモード。 */
 export type TaskMode = "default" | "d2";
 
+/** 環境から読み込んだCLI既定値。 */
 export interface CliDefaults {
   modelMain: string;
   modelMini: string;
@@ -16,6 +20,7 @@ export interface CliDefaults {
   d2MaxIterations: number;
 }
 
+/** ユーザー入力を解析して得たCLI実行時オプション。 */
 export interface CliOptions {
   model: string;
   effort: EffortLevel;
@@ -42,11 +47,13 @@ export interface CliOptions {
   helpRequested: boolean;
 }
 
+/** アクティブな履歴エントリの情報。 */
 export interface ActiveHistory {
   entry?: HistoryEntry;
   lastResponseId?: string;
 }
 
+/** OpenAIリクエスト構築時に共有する文脈情報。 */
 export interface ConversationContext {
   isNewConversation: boolean;
   previousResponseId?: string;
@@ -59,9 +66,11 @@ export interface ConversationContext {
   activeLastResponseId?: string;
 }
 
+/** リクエスト生成時に必要な追加リソース。 */
 export interface RequestResources {
   systemPrompt?: string;
   imageDataUrl?: string;
 }
 
+/** OpenAI Responses API入力メッセージ型のエイリアス。 */
 export type OpenAIInputMessage = EasyInputMessage;

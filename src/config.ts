@@ -6,6 +6,7 @@ import { z, ZodError } from "zod";
 import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** プロジェクトのルートディレクトリ絶対パス。 */
 export const ROOT_DIR = path.resolve(__dirname, "..");
 
 const effortLevelSchema = z
@@ -34,6 +35,7 @@ const verbosityLevelSchema = z
   })
   .transform((value) => value as VerbosityLevel);
 
+/** `.env`と環境変数から読み取る設定値を検証するスキーマ。 */
 const envConfigSchema = z
   .object({
     OPENAI_MODEL_MAIN: z.string().trim().min(1).optional(),
@@ -64,6 +66,9 @@ const envConfigSchema = z
   })
   .passthrough();
 
+/**
+ * リポジトリ直下の`.env`を読み込み、環境変数へ反映する。
+ */
 export function loadEnvironment(): void {
   const envPath = path.join(ROOT_DIR, ".env");
   if (fs.existsSync(envPath)) {
@@ -71,6 +76,12 @@ export function loadEnvironment(): void {
   }
 }
 
+/**
+ * `~`始まりのパスをHOME環境変数で展開する。
+ *
+ * @param p 変換対象のパス。
+ * @returns 展開済みパス。
+ */
 function expandHome(p: string): string {
   if (!p.startsWith("~")) {
     return p;
@@ -82,6 +93,12 @@ function expandHome(p: string): string {
   return path.join(home, p.slice(1));
 }
 
+/**
+ * 履歴ファイルの保存先パスを決定する。
+ *
+ * @param defaultPath 既定パス。
+ * @returns 解析済みの絶対パス。
+ */
 export function resolveHistoryPath(defaultPath: string): string {
   const configured = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
   if (typeof configured === "string") {
@@ -96,6 +113,12 @@ export function resolveHistoryPath(defaultPath: string): string {
   return path.resolve(expanded);
 }
 
+/**
+ * プロンプトディレクトリのパスを決定する。
+ *
+ * @param defaultPath 既定パス。
+ * @returns 解析済みの絶対パス。
+ */
 export function resolvePromptsDir(defaultPath: string): string {
   const configured = process.env.GPT_5_CLI_PROMPTS_DIR;
   if (typeof configured === "string") {
@@ -110,6 +133,11 @@ export function resolvePromptsDir(defaultPath: string): string {
   return path.resolve(expanded);
 }
 
+/**
+ * 環境変数や既定値からCLIで使用するデフォルト設定を読み込む。
+ *
+ * @returns CLIデフォルト値。
+ */
 export function loadDefaults(): CliDefaults {
   let envConfig: z.infer<typeof envConfigSchema>;
   try {
@@ -138,6 +166,12 @@ export function loadDefaults(): CliDefaults {
   };
 }
 
+/**
+ * `OPENAI_API_KEY`の存在を検証し、値を返す。
+ *
+ * @returns OpenAI APIキー。
+ * @throws 設定されていない場合。
+ */
 export function ensureApiKey(): string {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {

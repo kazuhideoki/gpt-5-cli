@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import type { FunctionTool, ResponseFunctionToolCall } from "openai/resources/responses/responses";
 
+/** ツール実行時に利用する作業ディレクトリとロガーを保持する。 */
 export interface ToolExecutionContext {
   cwd: string;
   log: (message: string) => void;
@@ -32,6 +33,7 @@ type CommandResult = BaseToolResult & {
   stderr: string;
 };
 
+/** OpenAIへ公開する関数ツール一覧。 */
 export const FUNCTION_TOOLS: FunctionTool[] = [
   {
     type: "function",
@@ -108,6 +110,13 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
   },
 ];
 
+/**
+ * ワークスペース内の安全なパスへ正規化し、外部アクセスを防ぐ。
+ *
+ * @param rawPath ユーザーから指定されたパス。
+ * @param cwd ワークスペースのルート。
+ * @returns 絶対パス。
+ */
 export function resolveWorkspacePath(rawPath: string, cwd: string): string {
   if (!rawPath || rawPath.trim().length === 0) {
     throw new Error("path must be a non-empty string");
@@ -123,6 +132,13 @@ export function resolveWorkspacePath(rawPath: string, cwd: string): string {
   return candidate;
 }
 
+/**
+ * read_fileツールの実装。ファイルをUTF-8で読み込む。
+ *
+ * @param args ツール呼び出し引数。
+ * @param cwd ワークスペースルート。
+ * @returns 読み取った内容。
+ */
 async function readFileTool(args: any, cwd: string): Promise<ReadFileResult> {
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
   const buffer = await fs.readFile(resolvedPath, { encoding: "utf8" });
@@ -134,6 +150,13 @@ async function readFileTool(args: any, cwd: string): Promise<ReadFileResult> {
   };
 }
 
+/**
+ * write_fileツールの実装。UTF-8でファイルを上書きする。
+ *
+ * @param args ツール呼び出し引数。
+ * @param cwd ワークスペースルート。
+ * @returns 書き込み結果。
+ */
 async function writeFileTool(args: any, cwd: string): Promise<WriteFileResult> {
   const resolvedPath = resolveWorkspacePath(String(args?.path), cwd);
   await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
@@ -146,6 +169,14 @@ async function writeFileTool(args: any, cwd: string): Promise<WriteFileResult> {
   };
 }
 
+/**
+ * サブプロセスでコマンドを実行し、結果を収集する。
+ *
+ * @param command 実行するコマンド。
+ * @param commandArgs 引数配列。
+ * @param cwd 実行ディレクトリ。
+ * @returns 実行結果。
+ */
 async function runCommand(
   command: string,
   commandArgs: string[],
@@ -184,16 +215,37 @@ async function runCommand(
   });
 }
 
+/**
+ * d2の構文チェックを実行するツール。
+ *
+ * @param args ツール引数。
+ * @param cwd ワークスペースルート。
+ * @returns コマンド結果。
+ */
 async function d2CheckTool(args: any, cwd: string): Promise<CommandResult> {
   const resolvedPath = resolveWorkspacePath(String(args?.file_path), cwd);
   return runCommand("d2", [resolvedPath], cwd);
 }
 
+/**
+ * d2 fmtを実行し、ダイアグラムファイルを整形するツール。
+ *
+ * @param args ツール引数。
+ * @param cwd ワークスペースルート。
+ * @returns コマンド結果。
+ */
 async function d2FmtTool(args: any, cwd: string): Promise<CommandResult> {
   const resolvedPath = resolveWorkspacePath(String(args?.file_path), cwd);
   return runCommand("d2", ["fmt", resolvedPath], cwd);
 }
 
+/**
+ * OpenAIからのツール呼び出しを受け取り、ローカル実装へディスパッチする。
+ *
+ * @param call Responses APIからのツール呼び出し。
+ * @param context 実行時コンテキスト。
+ * @returns JSON文字列化したツール結果。
+ */
 export async function executeFunctionToolCall(
   call: ResponseFunctionToolCall,
   context: ToolExecutionContext,

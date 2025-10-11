@@ -29,6 +29,13 @@ function resolveLogStyle(): LogStyle {
   return cachedLogStyle;
 }
 
+/**
+ * 指定したレベルに応じて値を強調表示する。
+ *
+ * @param value 表示文字列。
+ * @param level 強調レベル。
+ * @returns 装飾済みの文字列。
+ */
 export function decorateLevelValue(value: string, level: Level): string {
   const style = resolveLogStyle();
   if (level === "medium") {
@@ -40,6 +47,12 @@ export function decorateLevelValue(value: string, level: Level): string {
   return value;
 }
 
+/**
+ * 文字列値からeffort/verbosityに対応するレベルを推測する。
+ *
+ * @param value 比較対象の文字列。
+ * @returns 判定されたレベル。
+ */
 export function levelForScaleValue(value: string): Level {
   const lower = value.toLowerCase();
   if (lower === "low") return "low";
@@ -48,6 +61,15 @@ export function levelForScaleValue(value: string): Level {
   return "high";
 }
 
+/**
+ * モデル名と既定モデルを比較して推定レベルを返す。
+ *
+ * @param value モデル名。
+ * @param modelMain メインモデル名。
+ * @param modelMini ミニモデル名。
+ * @param modelNano ナノモデル名。
+ * @returns 推定レベル。
+ */
 export function levelForModelValue(
   value: string,
   modelMain: string,
@@ -68,6 +90,9 @@ export function levelForModelValue(
   return "high";
 }
 
+/**
+ * モデル名をレベルに応じて装飾し、ログ向けに整形する。
+ */
 export function formatModelValue(
   value: string,
   modelMain: string,
@@ -77,16 +102,25 @@ export function formatModelValue(
   return decorateLevelValue(value, levelForModelValue(value, modelMain, modelMini, modelNano));
 }
 
+/**
+ * スケール値（effort/verbosity）を装飾して整形する。
+ */
 export function formatScaleValue(value: string): string {
   return decorateLevelValue(value, levelForScaleValue(value));
 }
 
-// テスト用途でスタイルキャッシュをリセットする。
+/**
+ * テスト用にログスタイルキャッシュをリセットする。
+ */
 export function __resetLogStyleCacheForTest(): void {
   cachedLogStyle = null;
 }
 
-// テスト用途でスタイルキャッシュを上書きする。
+/**
+ * テスト用にログスタイルキャッシュを上書きする。
+ *
+ * @param style 設定するスタイル。nullでキャッシュ無効。
+ */
 export function __setLogStyleForTest(style: LogStyle | null): void {
   cachedLogStyle = style;
 }
