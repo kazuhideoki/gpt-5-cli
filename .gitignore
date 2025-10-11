@@ -1,7 +1,11 @@
 .env
 .tsbuildinfo
-history_index.json
 node_modules/
 dist/
 .cache/
 .tmp/
+
+# デフォルトの履歴ファイル
+history_index.json
+# デフォルトのプロンプトディレクトリ
+prompts/
