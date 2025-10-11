@@ -144,4 +144,55 @@ describe("CLI integration", () => {
     expect(result.stderr).toContain("[openai_api]");
     expect(fs.existsSync(historyPath)).toBe(false);
   });
+
+  test("d2 モード: 履歴に絶対パスを保持し継続時も固定される", async () => {
+    const responses = [
+      { id: "resp-d2-1", text: "D2 OK (1)" },
+      { id: "resp-d2-2", text: "D2 OK (2)" },
+    ];
+    let callIndex = 0;
+
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        if (callIndex >= responses.length) {
+          return new Response("unexpected request", { status: 500 });
+        }
+        const payload = responses[callIndex];
+        callIndex += 1;
+        return new Response(JSON.stringify({ id: payload.id, output_text: [payload.text] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const relativePath = path.join("diagrams", "sample.d2");
+    const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
+
+    const first = await runCli(["-D", "-F", relativePath, "初回D2"], env);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout.trim()).toBe("D2 OK (1)");
+
+    expect(fs.existsSync(historyPath)).toBe(true);
+    const historyAfterFirst = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
+    expect(historyAfterFirst.length).toBe(1);
+    const firstEntry = historyAfterFirst[0];
+    expect(firstEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
+    expect(firstEntry.request_count).toBe(1);
+
+    const second = await runCli(["-c", "2回目"], env);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout.trim()).toBe("D2 OK (2)");
+
+    const historyAfterSecond = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
+    expect(historyAfterSecond.length).toBe(1);
+    const secondEntry = historyAfterSecond[0];
+    expect(secondEntry.request_count).toBe(2);
+    expect(secondEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
+    expect(callIndex).toBe(responses.length);
+  });
 });

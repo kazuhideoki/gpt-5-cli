@@ -696,15 +696,19 @@ function prepareImageData(imagePath?: string): {
 function buildTaskMetadata(
   options: CliOptions,
   previousTask?: HistoryTask,
+  d2Context?: D2ContextInfo,
 ): HistoryTask | undefined {
   if (options.taskMode === "d2") {
     const task: HistoryTask = { mode: "d2" };
     let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-    let filePath = options.d2FilePath;
+    const contextPath = d2Context?.absolutePath;
+    let filePath = contextPath ?? options.d2FilePath;
     if (!filePath && !options.d2FileExplicit) {
       filePath = d2Meta?.file_path;
     }
-    if (filePath) {
+    if (contextPath) {
+      d2Meta = { ...d2Meta, file_path: contextPath };
+    } else if (filePath) {
       d2Meta = { ...d2Meta, file_path: filePath };
     }
     if (d2Meta && Object.keys(d2Meta).length > 0) {
@@ -966,6 +970,7 @@ function historyUpsert(
   responseId: string,
   userText: string,
   assistantText: string,
+  d2Context?: D2ContextInfo,
 ): void {
   historyStore.ensureInitialized();
   const entries = historyStore.loadEntries();
@@ -1004,7 +1009,7 @@ function historyUpsert(
   };
 
   if (context.isNewConversation && !targetLastId) {
-    const newTask = buildTaskMetadata(options, context.activeEntry?.task);
+    const newTask = buildTaskMetadata(options, context.activeEntry?.task, d2Context);
     const newEntry: HistoryEntry = {
       title: context.titleToUse,
       model: options.model,
@@ -1051,7 +1056,7 @@ function historyUpsert(
       if (!resumeSummaryText && nextResume.summary) {
         delete nextResume.summary;
       }
-      const nextTask = buildTaskMetadata(options, entry.task);
+      const nextTask = buildTaskMetadata(options, entry.task, d2Context);
       return {
         ...entry,
         updated_at: tsNow,
@@ -1073,7 +1078,7 @@ function historyUpsert(
     return;
   }
 
-  const fallbackTask = buildTaskMetadata(options, context.activeEntry?.task);
+  const fallbackTask = buildTaskMetadata(options, context.activeEntry?.task, d2Context);
   const fallbackEntry: HistoryEntry = {
     title: context.titleToUse,
     model: options.model,
@@ -1246,7 +1251,15 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      historyUpsert(options, context, historyStore, response.id, determine.inputText, content);
+      historyUpsert(
+        options,
+        context,
+        historyStore,
+        response.id,
+        determine.inputText,
+        content,
+        d2Context,
+      );
     }
 
     process.stdout.write(`${content}\n`);
