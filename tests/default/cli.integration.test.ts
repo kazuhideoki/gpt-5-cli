@@ -9,7 +9,7 @@ type CliResult = {
   exitCode: number;
 };
 
-const projectRoot = path.resolve(import.meta.dir, "..");
+const projectRoot = path.resolve(import.meta.dir, "../..");
 
 function createTempHistoryPath(): { historyPath: string; cleanup: () => void } {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt5-cli-int-"));
@@ -27,7 +27,7 @@ function createTempHistoryPath(): { historyPath: string; cleanup: () => void } {
 }
 
 async function runCli(args: string[], env: Record<string, string>): Promise<CliResult> {
-  const proc = Bun.spawn(["bun", "run", "src/cli.ts", ...args], {
+  const proc = Bun.spawn(["bun", "run", "src/cli/default/cli.ts", ...args], {
     cwd: projectRoot,
     env: {
       ...process.env,

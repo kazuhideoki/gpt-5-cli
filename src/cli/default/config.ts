@@ -7,7 +7,7 @@ import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** プロジェクトのルートディレクトリ絶対パス。 */
-export const ROOT_DIR = path.resolve(__dirname, "..");
+export const ROOT_DIR = path.resolve(__dirname, "../../..");
 
 const effortLevelSchema = z
   .string()
