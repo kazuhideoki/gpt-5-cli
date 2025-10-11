@@ -16,6 +16,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
+    "commander": "^14.0.1",
     "dotenv": "^16.4.5",
     "openai": "^4.57.0"
   },
