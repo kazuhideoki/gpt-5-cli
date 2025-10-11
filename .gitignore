@@ -1,3 +1,12 @@
 .env
-system_prompt.txt
+.tsbuildinfo
+node_modules/
+dist/
+.cache/
+.tmp/
+
+# デフォルトの履歴ファイル
 history_index.json
+# デフォルトのプロンプトディレクトリ
+prompts/
+.DS_Store
