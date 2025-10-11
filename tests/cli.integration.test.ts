@@ -55,6 +55,13 @@ function createBaseEnv(port: number, historyPath: string): Record<string, string
   };
 }
 
+function extractUserLines(output: string): string[] {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0 && !line.startsWith("[gpt-5-cli]"));
+}
+
 describe("CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;
   let historyPath: string;
@@ -100,8 +107,8 @@ describe("CLI integration", () => {
     const result = await runCli(["正常テスト"], env);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.trim()).toBe("OK!");
-    expect(result.stderr).toContain("[openai_api]");
+    expect(result.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(result.stdout).at(-1)).toBe("OK!");
 
     expect(fs.existsSync(historyPath)).toBe(true);
     const historyRaw = fs.readFileSync(historyPath, "utf8");
@@ -139,9 +146,9 @@ describe("CLI integration", () => {
     const result = await runCli(["異常テスト"], env);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stdout.trim()).toBe("");
+    expect(result.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(result.stdout)).toHaveLength(0);
     expect(result.stderr).toContain("mock failure");
-    expect(result.stderr).toContain("[openai_api]");
     expect(fs.existsSync(historyPath)).toBe(false);
   });
 
@@ -175,7 +182,8 @@ describe("CLI integration", () => {
 
     const first = await runCli(["-D", "-F", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
-    expect(first.stdout.trim()).toBe("D2 OK (1)");
+    expect(first.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
 
     expect(fs.existsSync(historyPath)).toBe(true);
     const historyAfterFirst = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
@@ -186,7 +194,8 @@ describe("CLI integration", () => {
 
     const second = await runCli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
-    expect(second.stdout.trim()).toBe("D2 OK (2)");
+    expect(second.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(second.stdout).at(-1)).toBe("D2 OK (2)");
 
     const historyAfterSecond = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSecond.length).toBe(1);
@@ -207,7 +216,8 @@ describe("CLI integration", () => {
     const result = await runCli(["--compact", "1", "-c"], env);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stdout.trim()).toBe("");
+    expect(result.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(result.stdout)).toHaveLength(0);
     expect(result.stderr).toContain("Error: --compact と他のフラグは併用できません");
   });
 });

@@ -29,7 +29,7 @@ describe("HistoryStore", () => {
   it("loadEntries は不正な JSON でエラーを投げる", () => {
     store.ensureInitialized();
     fs.writeFileSync(historyPath, "{", "utf8");
-    expect(() => store.loadEntries()).toThrow("[openai_api] failed to parse history index");
+    expect(() => store.loadEntries()).toThrow("[gpt-5-cli] failed to parse history index");
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {
@@ -61,7 +61,7 @@ describe("HistoryStore", () => {
     store.saveEntries(entries);
     expect(store.selectByNumber(1).last_response_id).toBe("b");
     expect(store.selectByNumber(2).last_response_id).toBe("c");
-    expect(() => store.selectByNumber(4)).toThrow("[openai_api] 無効な履歴番号です");
+    expect(() => store.selectByNumber(4)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
 
   it("deleteByNumber は対象を削除する", () => {
@@ -76,7 +76,7 @@ describe("HistoryStore", () => {
     expect(result.removedTitle).toBe("mid");
     const remaining = store.loadEntries().map((entry) => entry.last_response_id);
     expect(remaining).toEqual(["a", "b"]);
-    expect(() => store.deleteByNumber(3)).toThrow("[openai_api] 無効な履歴番号です");
+    expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
 });
 

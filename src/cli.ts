@@ -45,10 +45,6 @@ interface D2ContextInfo {
   exists: boolean;
 }
 
-function logError(message: string): void {
-  console.error(message);
-}
-
 function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("Usage:");
   console.log("  gpt-5-cli [-i <image>] [flag] <input>");
@@ -324,7 +320,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       writeErr: (str) => {
         const trimmed = str.replace(/\s+$/u, "");
         if (trimmed.length > 0) {
-          logError(trimmed);
+          console.error(trimmed);
         }
       },
     });
@@ -587,7 +583,7 @@ function computeContext(
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      logError("[openai_api] warn: 継続できる履歴が見つかりません（新規開始）。");
+      console.error("[gpt-5-cli] warn: 継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
@@ -713,7 +709,7 @@ function prepareImageData(imagePath?: string): {
     throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
   }
   const dataUrl = `data:${mime};base64,${base64}`;
-  logError(`[openai_api] image_attached: ${resolved} (${mime})`);
+  console.log(`[gpt-5-cli] image_attached: ${resolved} (${mime})`);
   return { dataUrl, mime, resolvedPath: resolved };
 }
 
@@ -782,10 +778,10 @@ async function executeWithTools(
     const toolOutputs = await Promise.all(
       toolCalls.map(async (call) => {
         const callId = call.call_id ?? call.id ?? "";
-        logError(`[tool] handling ${call.name} (${callId})`);
+        console.error(`[gpt-5-cli] tool handling ${call.name} (${callId})`);
         const output = await executeFunctionToolCall(call, {
           cwd: process.cwd(),
-          log: logError,
+          log: console.error,
         });
         return {
           type: "function_call_output" as const,
@@ -887,11 +883,11 @@ export function buildRequest(
   const effortLog = formatScaleValue(options.effort);
   const verbosityLog = formatScaleValue(options.verbosity);
 
-  logError(
-    `[openai_api] model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
+  console.log(
+    `[gpt-5-cli] model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
   );
-  logError(
-    `             resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
+  console.log(
+    `[gpt-5-cli] resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
       options.deleteIndex ?? ""
     }`,
   );
@@ -944,7 +940,9 @@ export function buildRequest(
     !context.previousResponseId &&
     !context.resumeSummaryText
   ) {
-    logError("[openai_api] warn: 直前の response.id が見つからないため、新規会話として開始します");
+    console.error(
+      "[gpt-5-cli] warn: 直前の response.id が見つからないため、新規会話として開始します",
+    );
   }
 
   return request;
@@ -1195,7 +1193,7 @@ async function performCompact(
     return item;
   });
   historyStore.saveEntries(nextEntries);
-  logError(`[openai_api] compact: history=${options.compactIndex}, summarized=${turns.length}`);
+  console.log(`[gpt-5-cli] compact: history=${options.compactIndex}, summarized=${turns.length}`);
   process.stdout.write(`${summaryText}\n`);
 }
 
@@ -1203,16 +1201,16 @@ async function main(): Promise<void> {
   try {
     loadEnvironment();
     const defaults = loadDefaults();
-    logError(`[openai_api] history_index: ${defaults.historyIndexPath}`);
+    console.log(`[gpt-5-cli] history_index: ${defaults.historyIndexPath}`);
 
     const options = parseArgs(process.argv.slice(2), defaults);
     const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
     const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
     if (systemPrompt) {
       const bytes = Buffer.byteLength(systemPrompt, "utf8");
-      logError(`[openai_api] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
+      console.log(`[gpt-5-cli] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
     } else {
-      logError(`[openai_api] system_prompt: not found or empty path=${promptPath}`);
+      console.error(`[gpt-5-cli] system_prompt: not found or empty path=${promptPath}`);
     }
     if (options.helpRequested) {
       printHelp(defaults, options);

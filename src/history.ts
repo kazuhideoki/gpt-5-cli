@@ -92,7 +92,7 @@ export class HistoryStore {
       return historyEntriesSchema.parse(parsed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`[openai_api] failed to parse history index: ${message}`);
+      throw new Error(`[gpt-5-cli] failed to parse history index: ${message}`);
     }
   }
 
@@ -136,7 +136,7 @@ export class HistoryStore {
   selectByNumber(index: number): HistoryEntry {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[openai_api] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
     return entries[index - 1];
   }
@@ -144,12 +144,12 @@ export class HistoryStore {
   deleteByNumber(index: number): { removedTitle: string; removedId: string } {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[openai_api] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
     const entry = entries[index - 1];
     const lastId = entry.last_response_id;
     if (!lastId) {
-      throw new Error("[openai_api] 選択した履歴の last_response_id が無効です。");
+      throw new Error("[gpt-5-cli] 選択した履歴の last_response_id が無効です。");
     }
     const filtered = this.loadEntries().filter((item) => item.last_response_id !== lastId);
     this.saveEntries(filtered);
@@ -159,7 +159,7 @@ export class HistoryStore {
   showByNumber(index: number, noColor: boolean): void {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[openai_api] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
     const entry = entries[index - 1];
     const title = entry.title ?? "(タイトル未設定)";
