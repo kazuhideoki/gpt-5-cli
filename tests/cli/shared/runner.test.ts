@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { bootstrapCli } from "../../../src/cli/shared/runner.js";
-import type { CliDefaults, CliOptions } from "../../../src/cli/default/types.js";
+import type { CliDefaults, CliOptions } from "../../../src/cli/default-types.js";
 import { createTempHistoryPath } from "../../helpers/cli.ts";
 
 interface TempResources {

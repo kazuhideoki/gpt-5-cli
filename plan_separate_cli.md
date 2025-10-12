@@ -6,8 +6,8 @@
 - 将来的な追加モード（SQL など）に備え、共通基盤を整理する必要があった。
 
 ## 進捗状況
-- [x] default 用 CLI を `src/cli/default/cli.ts` に実装し、`dist/cli/default/cli.js` をエントリーポイントとしてビルド。
-- [x] d2 用 CLI を `src/cli/d2/cli.ts` に実装し、`dist/cli/d2/cli.js` をエントリーポイントとしてビルド。
+- [x] default 用 CLI を `src/cli/default.ts` に実装し、`dist/cli/default.js` をエントリーポイントとしてビルド。
+- [x] d2 用 CLI を `src/cli/d2.ts` に実装し、`dist/cli/d2.js` をエントリーポイントとしてビルド。
 - [x] 共通ロジック（設定・履歴ストア・OpenAI クライアントなど）を `src/core/` と `src/cli/shared/` へ集約。
 - [x] 業務ロジック（会話開始/再開など）を `src/commands/` に配置し、両 CLI から再利用。
 - [x] 履歴タスクのスキーマを `task.mode` 付きで保持できるよう `cliHistoryTaskSchema` を整備。
@@ -24,15 +24,15 @@
 
 ## 実現方針
 1. **ディレクトリ構成**
-   - CLI エントリーポイントは `src/cli/default/cli.ts` と `src/cli/d2/cli.ts` に配置する。
+   - CLI エントリーポイントは `src/cli/default.ts` と `src/cli/d2.ts` に配置する。
    - 共通基盤を `src/core/` および CLI 共有ユーティリティを `src/cli/shared/` にまとめる。
    - 業務ロジックを `src/commands/` でユースケース単位に定義し、CLI 層は引数パースと入出力に専念する。
 2. **ビルド・エントリーポイント**
-   - `tsconfig.json` と `package.json` を複数エントリに対応させ、`bun run build` で `dist/cli/default/cli.js` と `dist/cli/d2/cli.js` を生成する。
+   - `tsconfig.json` と `package.json` を複数エントリに対応させ、`bun run build` で `dist/cli/default.js` と `dist/cli/d2.js` を生成する。
    - `bun run start` / `bun run start:d2` によりビルド済み CLI を直接実行できるようにする。
 3. **既存機能の移植**
    - default 版：旧 CLI のコマンド群を移植し、既存オプションとの互換を維持する。
-   - d2 版：`d2` 固有の初期化を `src/cli/d2/cli.ts` に集中させ、不要な分岐を排除する。
+   - d2 版：`d2` 固有の初期化を `src/cli/d2.ts` に集中させ、不要な分岐を排除する。
 4. **履歴と設定の共通化**
    - 履歴スキーマ定義を `src/core/history/` 系へ集約し、モードに応じた型安全なアクセスを提供する。
    - `.env` 読み込みやデフォルト値は `src/core/config/` に集約し、両 CLI から共有する。
@@ -48,8 +48,8 @@
 - `src/core/`: 共通インフラ層（設定、履歴スキーマ、OpenAI クライアント等）
 - `src/cli/shared/`: CLI 共通のヘルパー（ブートストラップ、履歴ストアの生成など）
 - `src/commands/`: 業務ロジック層（会話開始、d2 レンダリング等のユースケース処理）
-- `src/cli/default/cli.ts`: default CLI エントリーポイント
-- `src/cli/d2/cli.ts`: d2 CLI エントリーポイント
-- `dist/cli/default/cli.js`, `dist/cli/d2/cli.js`: ビルド成果物
+- `src/cli/default.ts`: default CLI エントリーポイント
+- `src/cli/d2.ts`: d2 CLI エントリーポイント
+- `dist/cli/default.js`, `dist/cli/d2.js`: ビルド成果物
 - `tests/default/`: default CLI の統合テスト
 - `tests/d2/`: d2 CLI の統合テスト

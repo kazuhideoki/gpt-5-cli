@@ -103,7 +103,7 @@ d2 モード固有のレンダリングやフラグ構成を持ちます。履�
 
 ## 開発コマンド
 
-- `bun run build`: TypeScript をコンパイルして `dist/cli/default/cli.js` と `dist/cli/d2/cli.js` を生成
+- `bun run build`: TypeScript をコンパイルして `dist/cli/default.js` と `dist/cli/d2.js` を生成
 - `bun run dev`: Bun の TypeScript 実行機能で default CLI を実行
 - `bun run dev:d2`: Bun の TypeScript 実行機能で d2 CLI を実行
 - `bun run test`: Bun のテストランナーでユニットテスト・統合テストを実行

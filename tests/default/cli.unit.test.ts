@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../../src/commands/conversation.js";
 import { determineInput } from "../../src/cli/shared/input.js";
-import { parseArgs } from "../../src/cli/default/cli.js";
-import type { CliDefaults, CliOptions, ConversationContext } from "../../src/cli/default/types.js";
+import { parseArgs } from "../../src/cli/default.js";
+import type { CliDefaults, CliOptions, ConversationContext } from "../../src/cli/default-types.js";
 import type { HistoryEntry, HistoryStore } from "../../src/core/history.js";
-import type { DefaultCliHistoryTask } from "../../src/cli/default/cli.js";
+import type { DefaultCliHistoryTask } from "../../src/cli/default.js";
 
 type TestHistoryEntry = HistoryEntry<DefaultCliHistoryTask>;
 type HistoryStoreLike = HistoryStore<DefaultCliHistoryTask>;

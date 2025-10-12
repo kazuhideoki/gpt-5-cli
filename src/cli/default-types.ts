@@ -1,7 +1,7 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
-import type { HistoryEntry } from "../../core/history.js";
-import type { EffortLevel, TaskMode, VerbosityLevel } from "../../core/types.js";
-export type { CliDefaults, EffortLevel, TaskMode, VerbosityLevel } from "../../core/types.js";
+import type { HistoryEntry } from "../core/history.js";
+import type { EffortLevel, TaskMode, VerbosityLevel } from "../core/types.js";
+export type { CliDefaults, EffortLevel, TaskMode, VerbosityLevel } from "../core/types.js";
 
 /** ユーザー入力を解析して得たCLI実行時オプション。 */
 export interface CliOptions {

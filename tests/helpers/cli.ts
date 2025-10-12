@@ -29,7 +29,7 @@ export async function runDefaultCli(
   args: string[],
   env: Record<string, string>,
 ): Promise<CliResult> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/default/cli.ts", ...args], {
+  const proc = Bun.spawn(["bun", "run", "src/cli/default.ts", ...args], {
     cwd: projectRoot,
     env: {
       ...process.env,
@@ -50,7 +50,7 @@ export async function runDefaultCli(
 }
 
 export async function runD2Cli(args: string[], env: Record<string, string>): Promise<CliResult> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/d2/cli.ts", ...args], {
+  const proc = Bun.spawn(["bun", "run", "src/cli/d2.ts", ...args], {
     cwd: projectRoot,
     env: {
       ...process.env,

@@ -17,7 +17,7 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../cli/default/types.js";
+} from "../cli/default-types.js";
 
 const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
