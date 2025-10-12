@@ -2,13 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  ROOT_DIR,
-  ensureApiKey,
-  loadDefaults,
-  resolveHistoryPath,
-  resolvePromptsDir,
-} from "./config.js";
+import { ROOT_DIR, loadDefaults, resolveHistoryPath, resolvePromptsDir } from "./config.js";
 
 const envKeys = [
   "GPT_5_CLI_HISTORY_INDEX_FILE",
@@ -146,16 +140,5 @@ describe("loadDefaults", () => {
     expect(() => loadDefaults()).toThrow(
       'OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high". Received: invalid',
     );
-  });
-});
-
-describe("ensureApiKey", () => {
-  it("API キーが無い場合は例外を投げる", () => {
-    expect(() => ensureApiKey()).toThrow("OPENAI_API_KEY not found");
-  });
-
-  it("API キーがあれば返す", () => {
-    process.env.OPENAI_API_KEY = "test-key";
-    expect(ensureApiKey()).toBe("test-key");
   });
 });

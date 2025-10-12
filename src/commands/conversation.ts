@@ -10,8 +10,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "../core/formatting.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import { formatTurnsForSummary } from "../core/history.js";
-import { createCoreToolRuntime } from "../core/tools.js";
-import { buildCliToolList } from "../core/options.js";
+import { buildCliToolList, createCoreToolRuntime } from "../core/tools.js";
 import type {
   CliDefaults,
   CliOptions,

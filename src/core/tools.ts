@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { FunctionTool, ResponseFunctionToolCall } from "openai/resources/responses/responses";
+import type {
+  FunctionTool,
+  ResponseCreateParamsNonStreaming,
+  ResponseFunctionToolCall,
+} from "openai/resources/responses/responses";
 
 /** ツール実行時に利用する作業ディレクトリとロガーを保持する。 */
 export interface ToolExecutionContext {
@@ -331,3 +335,12 @@ export function createToolRuntime<TContext extends ToolExecutionContext = ToolEx
 }
 
 export const CORE_FUNCTION_TOOLS = CORE_TOOL_REGISTRATIONS.map((entry) => entry.definition);
+
+/**
+ * OpenAI Responses API へ渡すツール設定を構築する。
+ *
+ * @returns CLI が利用可能な関数ツールとプレビュー検索の配列。
+ */
+export function buildCliToolList(): ResponseCreateParamsNonStreaming["tools"] {
+  return [...CORE_FUNCTION_TOOLS, { type: "web_search_preview" as const }];
+}

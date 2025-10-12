@@ -165,17 +165,3 @@ export function loadDefaults(): CliDefaults {
     d2MaxIterations: envConfig.GPT_5_CLI_D2_MAX_ITERATIONS ?? 8,
   };
 }
-
-/**
- * `OPENAI_API_KEY`の存在を検証し、値を返す。
- *
- * @returns OpenAI APIキー。
- * @throws 設定されていない場合。
- */
-export function ensureApiKey(): string {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY not found. Please set it in .env");
-  }
-  return apiKey;
-}

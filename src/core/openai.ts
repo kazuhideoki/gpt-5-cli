@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { ensureApiKey } from "./config.js";
 
 export interface CreateOpenAIClientOptions {
   /**
@@ -15,6 +14,17 @@ export interface CreateOpenAIClientOptions {
  * @returns 初期化済みのOpenAIクライアント。
  */
 export function createOpenAIClient(options: CreateOpenAIClientOptions = {}): OpenAI {
-  const apiKey = options.apiKey ?? ensureApiKey();
+  const apiKey = resolveApiKey(options.apiKey);
   return new OpenAI({ apiKey });
+}
+
+function resolveApiKey(explicit?: string): string {
+  if (typeof explicit === "string") {
+    return explicit;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY not found. Please set it in .env");
+  }
+  return apiKey;
 }

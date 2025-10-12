@@ -2,7 +2,11 @@
 
 ## プロジェクト構成とモジュール
 
-WIP
+- `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/commands/` や `src/cli/`）から横並びで組み合わせる設計。
+  - `config.ts` は設定値の読み込みと検証を担当し、他 core モジュールには依存しない。
+  - `tools.ts` は関数ツール定義とランタイム生成を担い、Responses API 用のツール配列 `buildCliToolList` もここから提供する。
+  - `openai.ts` は OpenAI クライアント生成のみを扱い、API キーの解決も内部で完結させている。
+  - `options.ts`・`formatting.ts`・`prompts.ts`・`history.ts` は `types.ts` の型だけを参照する純粋なユーティリティ。
 
 ## ビルド・テスト・開発コマンド
 - `bun install`: 依存パッケージをインストール。

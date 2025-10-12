@@ -1,7 +1,5 @@
 import { InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import { CORE_FUNCTION_TOOLS } from "./tools.js";
 import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 /** CLI履歴番号フラグを数値に変換するスキーマ。 */
@@ -210,13 +208,4 @@ export function parseVerbosityFlag(value: string): VerbosityLevel {
     default:
       throw new InvalidArgumentError("Invalid option: -v には 0/1/2 を続けてください（例: -v0）");
   }
-}
-
-/**
- * OpenAI Responses APIへ渡すツール設定を構築する。
- *
- * @returns CLIが利用可能な関数ツールとプレビュー検索の配列。
- */
-export function buildCliToolList(): ResponseCreateParamsNonStreaming["tools"] {
-  return [...CORE_FUNCTION_TOOLS, { type: "web_search_preview" as const }];
 }
