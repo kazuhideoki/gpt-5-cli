@@ -13,12 +13,12 @@ import type {
   ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
 import type { CliDefaults, CliOptions, ConversationContext, OpenAIInputMessage } from "./types.js";
-import type { HistoryEntry, HistoryTask } from "../../core/history.js";
+import type { HistoryEntry } from "../../core/history.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
 import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
 import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
-import { loadPrompt, resolvePromptPath } from "./prompts.js";
+import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
 
 /**
  * OpenAIレスポンス設定にCLI固有のverbosity指定を付加したラッパー型。
@@ -838,45 +838,6 @@ function prepareImageData(imagePath?: string): {
 }
 
 /**
- * 履歴に保存するタスクメタデータを組み立てる。
- *
- * @param options 現在のCLIオプション。
- * @param previousTask 既存履歴に保存されているタスク情報。
- * @param d2Context d2モード時のファイル情報。
- * @returns 保存対象のタスクメタデータ。
- */
-function buildTaskMetadata(
-  options: CliOptions,
-  previousTask?: HistoryTask,
-  d2Context?: D2ContextInfo,
-): HistoryTask | undefined {
-  if (options.taskMode === "d2") {
-    const task: HistoryTask = { mode: "d2" };
-    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-    const contextPath = d2Context?.absolutePath;
-    let filePath = contextPath ?? options.d2FilePath;
-    if (!filePath && !options.d2FileExplicit) {
-      filePath = d2Meta?.file_path;
-    }
-    if (contextPath) {
-      d2Meta = { ...d2Meta, file_path: contextPath };
-    } else if (filePath) {
-      d2Meta = { ...d2Meta, file_path: filePath };
-    }
-    if (d2Meta && Object.keys(d2Meta).length > 0) {
-      task.d2 = d2Meta;
-    }
-    return task;
-  }
-
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
-  }
-
-  return previousTask;
-}
-
-/**
  * レスポンス内で要求されたツール呼び出しを抽出する。
  *
  * @param response OpenAI Responses APIのレスポンス。
@@ -1163,151 +1124,6 @@ function extractResponseText(response: any): string | null {
 }
 
 /**
- * OpenAIレスポンスの結果を履歴へ反映する。
- *
- * @param options CLIオプション。
- * @param context 対話コンテキスト。
- * @param historyStore 履歴ストア。
- * @param responseId 取得したレスポンスID。
- * @param userText ユーザー入力。
- * @param assistantText アシスタント出力。
- * @param d2Context d2モードコンテキスト。
- */
-function historyUpsert(
-  options: CliOptions,
-  context: ConversationContext,
-  historyStore: HistoryStore,
-  responseId: string,
-  userText: string,
-  assistantText: string,
-  d2Context?: D2ContextInfo,
-): void {
-  historyStore.ensureInitialized();
-  const entries = historyStore.loadEntries();
-  const tsNow = new Date().toISOString();
-  let targetLastId = context.previousResponseId;
-  if (!targetLastId && context.activeLastResponseId) {
-    targetLastId = context.activeLastResponseId;
-  }
-
-  const resumeSummaryText = context.resumeSummaryText ?? "";
-  let resumeSummaryCreated = context.resumeSummaryCreatedAt ?? "";
-  if (resumeSummaryText && !resumeSummaryCreated) {
-    resumeSummaryCreated = tsNow;
-  }
-
-  const resume = resumeSummaryText
-    ? {
-        mode: "response_id",
-        previous_response_id: responseId,
-        summary: {
-          text: resumeSummaryText,
-          created_at: resumeSummaryCreated,
-        },
-      }
-    : {
-        mode: "response_id",
-        previous_response_id: responseId,
-      };
-
-  const userTurn = { role: "user", text: userText, at: tsNow };
-  const assistantTurn = {
-    role: "assistant",
-    text: assistantText,
-    at: tsNow,
-    response_id: responseId,
-  };
-
-  if (context.isNewConversation && !targetLastId) {
-    const newTask = buildTaskMetadata(options, context.activeEntry?.task, d2Context);
-    const newEntry: HistoryEntry = {
-      title: context.titleToUse,
-      model: options.model,
-      effort: options.effort,
-      verbosity: options.verbosity,
-      created_at: tsNow,
-      updated_at: tsNow,
-      first_response_id: responseId,
-      last_response_id: responseId,
-      request_count: 1,
-      resume,
-      turns: [userTurn, assistantTurn],
-      task: newTask,
-    };
-    entries.push(newEntry);
-    historyStore.saveEntries(entries);
-    return;
-  }
-
-  let updated = false;
-  const nextEntries = entries.map((entry) => {
-    if ((entry.last_response_id ?? "") === (targetLastId ?? "")) {
-      updated = true;
-      const turns = [...(entry.turns ?? []), userTurn, assistantTurn];
-      const nextResume = resumeSummaryText
-        ? {
-            ...(entry.resume ?? {}),
-            mode: "response_id",
-            previous_response_id: responseId,
-            summary: {
-              text: resumeSummaryText,
-              created_at:
-                resumeSummaryCreated ||
-                entry.resume?.summary?.created_at ||
-                entry.created_at ||
-                tsNow,
-            },
-          }
-        : {
-            ...(entry.resume ?? {}),
-            mode: "response_id",
-            previous_response_id: responseId,
-          };
-      if (!resumeSummaryText && nextResume.summary) {
-        delete nextResume.summary;
-      }
-      const nextTask = buildTaskMetadata(options, entry.task, d2Context);
-      return {
-        ...entry,
-        updated_at: tsNow,
-        last_response_id: responseId,
-        model: options.model,
-        effort: options.effort,
-        verbosity: options.verbosity,
-        request_count: (entry.request_count ?? 0) + 1,
-        turns,
-        resume: nextResume,
-        task: nextTask,
-      };
-    }
-    return entry;
-  });
-
-  if (updated) {
-    historyStore.saveEntries(nextEntries);
-    return;
-  }
-
-  const fallbackTask = buildTaskMetadata(options, context.activeEntry?.task, d2Context);
-  const fallbackEntry: HistoryEntry = {
-    title: context.titleToUse,
-    model: options.model,
-    effort: options.effort,
-    verbosity: options.verbosity,
-    created_at: tsNow,
-    updated_at: tsNow,
-    first_response_id: responseId,
-    last_response_id: responseId,
-    request_count: 1,
-    resume,
-    turns: [userTurn, assistantTurn],
-    task: fallbackTask,
-  };
-  nextEntries.push(fallbackEntry);
-  historyStore.saveEntries(nextEntries);
-}
-
-/**
  * 履歴要約モードを実行し、選択した対話の概要を生成・保存する。
  *
  * @param options CLIオプション。
@@ -1463,15 +1279,30 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      historyUpsert(
-        options,
-        context,
-        historyStore,
-        response.id,
-        determine.inputText,
-        content,
-        d2Context,
-      );
+      historyStore.upsertConversation({
+        options: {
+          model: options.model,
+          effort: options.effort,
+          verbosity: options.verbosity,
+          taskMode: options.taskMode,
+          taskModeExplicit: options.taskModeExplicit,
+          d2FilePath: options.d2FilePath,
+          d2FileExplicit: options.d2FileExplicit,
+        },
+        context: {
+          isNewConversation: context.isNewConversation,
+          titleToUse: context.titleToUse,
+          previousResponseId: context.previousResponseId,
+          activeLastResponseId: context.activeLastResponseId,
+          resumeSummaryText: context.resumeSummaryText,
+          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
+          previousTask: context.activeEntry?.task,
+        },
+        responseId: response.id,
+        userText: determine.inputText,
+        assistantText: content,
+        d2Context: d2Context ? { absolutePath: d2Context.absolutePath } : undefined,
+      });
     }
 
     process.stdout.write(`${content}\n`);

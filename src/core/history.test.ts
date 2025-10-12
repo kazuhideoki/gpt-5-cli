@@ -78,6 +78,101 @@ describe("HistoryStore", () => {
     expect(remaining).toEqual(["a", "b"]);
     expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
+
+  it("upsertConversation が新規エントリを追加する", () => {
+    store.upsertConversation({
+      options: {
+        model: "gpt-5-nano",
+        effort: "low",
+        verbosity: "low",
+        taskMode: "default",
+        taskModeExplicit: false,
+        d2FileExplicit: false,
+      },
+      context: {
+        isNewConversation: true,
+        titleToUse: "first",
+      },
+      responseId: "resp-1",
+      userText: "hello",
+      assistantText: "hi",
+    });
+
+    const entries = store.loadEntries();
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.last_response_id).toBe("resp-1");
+    expect(entry.turns?.map((turn) => turn.text)).toEqual(["hello", "hi"]);
+    expect(entry.resume?.previous_response_id).toBe("resp-1");
+  });
+
+  it("upsertConversation が既存エントリを更新し要約を維持する", () => {
+    const existing: HistoryEntry = {
+      title: "existing",
+      last_response_id: "resp-prev",
+      request_count: 2,
+      turns: [
+        { role: "user", text: "old" },
+        { role: "assistant", text: "reply" },
+      ],
+      resume: { mode: "response_id", previous_response_id: "resp-prev" },
+    };
+    store.saveEntries([existing]);
+
+    store.upsertConversation({
+      options: {
+        model: "gpt-5-mini",
+        effort: "medium",
+        verbosity: "high",
+        taskMode: "default",
+        taskModeExplicit: false,
+        d2FileExplicit: false,
+      },
+      context: {
+        isNewConversation: false,
+        titleToUse: "existing",
+        previousResponseId: "resp-prev",
+        resumeSummaryText: "まとめ",
+      },
+      responseId: "resp-new",
+      userText: "question",
+      assistantText: "answer",
+    });
+
+    const [updated] = store.loadEntries();
+    expect(updated.last_response_id).toBe("resp-new");
+    expect(updated.request_count).toBe(3);
+    expect(updated.turns?.slice(-2).map((turn) => turn.text)).toEqual(["question", "answer"]);
+    expect(updated.resume?.previous_response_id).toBe("resp-new");
+    expect(updated.resume?.summary?.text).toBe("まとめ");
+  });
+
+  it("upsertConversation が d2 タスクメタデータを保存する", () => {
+    const absPath = path.join(tempDir, "diagram.d2");
+
+    store.upsertConversation({
+      options: {
+        model: "gpt-5-nano",
+        effort: "low",
+        verbosity: "low",
+        taskMode: "d2",
+        taskModeExplicit: false,
+        d2FileExplicit: false,
+      },
+      context: {
+        isNewConversation: true,
+        titleToUse: "diagram",
+      },
+      responseId: "resp-d2",
+      userText: "draw",
+      assistantText: "done",
+      d2Context: { absolutePath: absPath },
+    });
+
+    const entry = store.loadEntries()[0];
+    expect(entry.task?.mode).toBe("d2");
+    expect(entry.task?.d2?.file_path).toBe(absPath);
+  });
 });
 
 describe("formatTurnsForSummary", () => {
