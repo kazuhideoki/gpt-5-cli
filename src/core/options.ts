@@ -1,6 +1,8 @@
+import { InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { CORE_FUNCTION_TOOLS } from "./tools.js";
+import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 /** CLI履歴番号フラグを数値に変換するスキーマ。 */
 export const historyIndexSchema = z
@@ -147,6 +149,67 @@ export function expandLegacyShortFlags(argv: string[]): string[] {
     }
   }
   return result;
+}
+
+/**
+ * モデル指定フラグの数値インデックスを実際のモデル名へ変換する。
+ *
+ * @param value ユーザー入力のインデックス。
+ * @param defaults 既定モデル名。
+ * @returns 対応するモデル名。
+ */
+export function parseModelFlag(
+  value: string,
+  defaults: Pick<CliDefaults, "modelNano" | "modelMini" | "modelMain">,
+): string {
+  switch (value) {
+    case "0":
+      return defaults.modelNano;
+    case "1":
+      return defaults.modelMini;
+    case "2":
+      return defaults.modelMain;
+    default:
+      throw new InvalidArgumentError("Invalid option: -m には 0/1/2 を続けてください（例: -m1）");
+  }
+}
+
+/**
+ * effort フラグの数値インデックスを EffortLevel に変換する。
+ *
+ * @param value ユーザー入力のインデックス。
+ * @returns 対応する EffortLevel。
+ */
+export function parseEffortFlag(value: string): EffortLevel {
+  switch (value) {
+    case "0":
+      return "low";
+    case "1":
+      return "medium";
+    case "2":
+      return "high";
+    default:
+      throw new InvalidArgumentError("Invalid option: -e には 0/1/2 を続けてください（例: -e2）");
+  }
+}
+
+/**
+ * verbosity フラグの数値インデックスを VerbosityLevel に変換する。
+ *
+ * @param value ユーザー入力のインデックス。
+ * @returns 対応する VerbosityLevel。
+ */
+export function parseVerbosityFlag(value: string): VerbosityLevel {
+  switch (value) {
+    case "0":
+      return "low";
+    case "1":
+      return "medium";
+    case "2":
+      return "high";
+    default:
+      throw new InvalidArgumentError("Invalid option: -v には 0/1/2 を続けてください（例: -v0）");
+  }
 }
 
 /**

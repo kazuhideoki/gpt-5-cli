@@ -3,7 +3,13 @@ import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions } from "./default-types.js";
 import { createOpenAIClient } from "../core/openai.js";
-import { expandLegacyShortFlags, parseHistoryFlag } from "../core/options.js";
+import {
+  expandLegacyShortFlags,
+  parseEffortFlag,
+  parseHistoryFlag,
+  parseModelFlag,
+  parseVerbosityFlag,
+} from "../core/options.js";
 import {
   buildRequest,
   computeContext,
@@ -136,45 +142,6 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const program = new Command();
 
-  const parseModelIndex = (value: string): string => {
-    switch (value) {
-      case "0":
-        return defaults.modelNano;
-      case "1":
-        return defaults.modelMini;
-      case "2":
-        return defaults.modelMain;
-      default:
-        throw new InvalidArgumentError("Invalid option: -m には 0/1/2 を続けてください（例: -m1）");
-    }
-  };
-
-  const parseEffortIndex = (value: string): CliOptions["effort"] => {
-    switch (value) {
-      case "0":
-        return "low";
-      case "1":
-        return "medium";
-      case "2":
-        return "high";
-      default:
-        throw new InvalidArgumentError("Invalid option: -e には 0/1/2 を続けてください（例: -e2）");
-    }
-  };
-
-  const parseVerbosityIndex = (value: string): CliOptions["verbosity"] => {
-    switch (value) {
-      case "0":
-        return "low";
-      case "1":
-        return "medium";
-      case "2":
-        return "high";
-      default:
-        throw new InvalidArgumentError("Invalid option: -v には 0/1/2 を続けてください（例: -v0）");
-    }
-  };
-
   const parseCompactIndex = (value: string): number => {
     if (!/^\d+$/.test(value)) {
       throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
@@ -198,12 +165,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   program.helpOption(false);
   program
     .option("-?, --help", "ヘルプを表示します")
-    .option("-m, --model <index>", "モデルを選択 (0/1/2)", parseModelIndex, defaults.modelNano)
-    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortIndex, defaults.effort)
+    .option(
+      "-m, --model <index>",
+      "モデルを選択 (0/1/2)",
+      (value) => parseModelFlag(value, defaults),
+      defaults.modelNano,
+    )
+    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortFlag, defaults.effort)
     .option(
       "-v, --verbosity <index>",
       "verbosity を選択 (0/1/2)",
-      parseVerbosityIndex,
+      parseVerbosityFlag,
       defaults.verbosity,
     )
     .option("-c, --continue-conversation", "直前の会話から継続します")
