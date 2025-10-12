@@ -2,22 +2,23 @@ import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions } from "../default/types.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
-import type { CliHistoryTask } from "../history/taskAdapter.js";
 
 export interface DetermineInputExit {
   kind: "exit";
   code: number;
 }
 
-export interface DetermineInputResult {
+export interface DetermineInputResult<THistoryTask = unknown> {
   kind: "input";
   inputText: string;
-  activeEntry?: HistoryEntry<CliHistoryTask>;
+  activeEntry?: HistoryEntry<THistoryTask>;
   previousResponseId?: string;
   previousTitle?: string;
 }
 
-export type DetermineResult = DetermineInputExit | DetermineInputResult;
+export type DetermineResult<THistoryTask = unknown> =
+  | DetermineInputExit
+  | DetermineInputResult<THistoryTask>;
 
 export interface DetermineInputDependencies {
   printHelp: (defaults: CliDefaults, options: CliOptions) => void;
@@ -33,12 +34,12 @@ async function promptForInput(): Promise<string> {
   }
 }
 
-export async function determineInput(
+export async function determineInput<THistoryTask = unknown>(
   options: CliOptions,
-  historyStore: HistoryStore<CliHistoryTask>,
+  historyStore: HistoryStore<THistoryTask>,
   defaults: CliDefaults,
   deps: DetermineInputDependencies,
-): Promise<DetermineResult> {
+): Promise<DetermineResult<THistoryTask>> {
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
     console.log(`削除しました: ${options.deleteIndex}) ${removedTitle}`);

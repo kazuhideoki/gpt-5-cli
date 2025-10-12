@@ -3,7 +3,10 @@ import { determineInput } from "../../src/cli/shared/input.js";
 import { parseArgs } from "../../src/cli/d2/cli.js";
 import type { CliDefaults, CliOptions } from "../../src/cli/default/types.js";
 import type { HistoryEntry, HistoryStore } from "../../src/core/history.js";
-import type { CliHistoryTask } from "../../src/cli/history/taskAdapter.js";
+import type { D2CliHistoryTask } from "../../src/cli/d2/cli.js";
+
+type HistoryStoreLike = HistoryStore<D2CliHistoryTask>;
+type D2HistoryEntry = HistoryEntry<D2CliHistoryTask>;
 
 const noopDeps = { printHelp: () => {} };
 
@@ -86,9 +89,6 @@ describe("d2 parseArgs", () => {
     expect(options.d2FileExplicit).toBe(true);
   });
 });
-
-type HistoryStoreLike = HistoryStore<CliHistoryTask>;
-type D2HistoryEntry = HistoryEntry<CliHistoryTask>;
 
 class StubHistoryStore {
   selected: number | undefined;

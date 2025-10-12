@@ -5,7 +5,6 @@ import type { CliDefaults, CliOptions } from "./types.js";
 import type { HistoryStore } from "../../core/history.js";
 import { createOpenAIClient } from "../../core/openai.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "../../core/cli/options.js";
-import { buildCliHistoryTask, type CliHistoryTask } from "../history/taskAdapter.js";
 import {
   buildRequest,
   computeContext,
@@ -16,6 +15,59 @@ import {
 } from "../../commands/conversation.js";
 import { determineInput } from "../shared/input.js";
 import { bootstrapCli } from "../shared/runner.js";
+
+export const defaultCliHistoryTaskSchema = z.object({
+  mode: z.string().optional(),
+  d2: z
+    .object({
+      file_path: z.string().optional(),
+    })
+    .optional(),
+});
+
+export type DefaultCliHistoryTask = z.infer<typeof defaultCliHistoryTaskSchema>;
+
+interface DefaultCliHistoryD2Context {
+  absolutePath?: string;
+}
+
+interface DefaultCliHistoryTaskOptions {
+  taskMode: CliOptions["taskMode"];
+  taskModeExplicit: boolean;
+  d2FilePath?: string;
+  d2FileExplicit: boolean;
+}
+
+function buildDefaultCliHistoryTask(
+  options: DefaultCliHistoryTaskOptions,
+  previousTask?: DefaultCliHistoryTask,
+  d2Context?: DefaultCliHistoryD2Context,
+): DefaultCliHistoryTask | undefined {
+  if (options.taskMode === "d2") {
+    const task: DefaultCliHistoryTask = { mode: "d2" };
+    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+    const contextPath = d2Context?.absolutePath;
+    let filePath = contextPath ?? options.d2FilePath;
+    if (!filePath && !options.d2FileExplicit) {
+      filePath = d2Meta?.file_path;
+    }
+    if (contextPath) {
+      d2Meta = { ...d2Meta, file_path: contextPath };
+    } else if (filePath) {
+      d2Meta = { ...d2Meta, file_path: filePath };
+    }
+    if (d2Meta && Object.keys(d2Meta).length > 0) {
+      task.d2 = d2Meta;
+    }
+    return task;
+  }
+
+  if (options.taskModeExplicit) {
+    return { mode: options.taskMode };
+  }
+
+  return previousTask;
+}
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -119,7 +171,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
  */
 function shouldDelegateToD2(
   options: CliOptions,
-  historyStore: HistoryStore<CliHistoryTask>,
+  historyStore: HistoryStore<DefaultCliHistoryTask>,
 ): boolean {
   if (options.operation === "compact" && typeof options.compactIndex === "number") {
     const entry = historyStore.selectByNumber(options.compactIndex);
@@ -405,6 +457,7 @@ async function main(): Promise<void> {
       logLabel: "[gpt-5-cli]",
       parseArgs,
       printHelp,
+      historyTaskSchema: defaultCliHistoryTaskSchema,
     });
 
     if (bootstrap.status === "help") {
@@ -466,8 +519,8 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      const previousTask = context.activeEntry?.task as CliHistoryTask | undefined;
-      const historyTask = buildCliHistoryTask(
+      const previousTask = context.activeEntry?.task as DefaultCliHistoryTask | undefined;
+      const historyTask = buildDefaultCliHistoryTask(
         {
           taskMode: options.taskMode,
           taskModeExplicit: options.taskModeExplicit,

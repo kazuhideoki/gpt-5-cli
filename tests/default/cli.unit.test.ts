@@ -4,10 +4,10 @@ import { determineInput } from "../../src/cli/shared/input.js";
 import { parseArgs } from "../../src/cli/default/cli.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../../src/cli/default/types.js";
 import type { HistoryEntry, HistoryStore } from "../../src/core/history.js";
-import type { CliHistoryTask } from "../../src/cli/history/taskAdapter.js";
+import type { DefaultCliHistoryTask } from "../../src/cli/default/cli.js";
 
-type TestHistoryEntry = HistoryEntry<CliHistoryTask>;
-type HistoryStoreLike = HistoryStore<CliHistoryTask>;
+type TestHistoryEntry = HistoryEntry<DefaultCliHistoryTask>;
+type HistoryStoreLike = HistoryStore<DefaultCliHistoryTask>;
 
 const noopDeps = { printHelp: () => {} };
 

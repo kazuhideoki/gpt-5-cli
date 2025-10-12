@@ -18,29 +18,28 @@ import type {
   ConversationContext,
   OpenAIInputMessage,
 } from "../cli/default/types.js";
-import type { CliHistoryTask } from "../cli/history/taskAdapter.js";
 
 const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
-interface SynchronizeHistoryParams {
+interface SynchronizeHistoryParams<THistoryTask = unknown> {
   options: CliOptions;
-  activeEntry: HistoryEntry<CliHistoryTask>;
+  activeEntry: HistoryEntry<THistoryTask>;
   logWarning: (message: string) => void;
 }
 
-export interface ComputeContextConfig {
+export interface ComputeContextConfig<THistoryTask = unknown> {
   logLabel: string;
-  synchronizeWithHistory?: (params: SynchronizeHistoryParams) => void;
+  synchronizeWithHistory?: (params: SynchronizeHistoryParams<THistoryTask>) => void;
 }
 
-export function computeContext(
+export function computeContext<THistoryTask = unknown>(
   options: CliOptions,
-  historyStore: HistoryStore<CliHistoryTask>,
+  historyStore: HistoryStore<THistoryTask>,
   inputText: string,
-  initialActiveEntry?: HistoryEntry<CliHistoryTask>,
+  initialActiveEntry?: HistoryEntry<THistoryTask>,
   explicitPrevId?: string,
   explicitPrevTitle?: string,
-  config?: ComputeContextConfig,
+  config?: ComputeContextConfig<THistoryTask>,
 ): ConversationContext {
   const logLabel = config?.logLabel ?? "[gpt-5-cli]";
   const logWarning = (message: string): void => {
@@ -416,10 +415,10 @@ export function extractResponseText(response: Response): string | null {
   return null;
 }
 
-export async function performCompact(
+export async function performCompact<THistoryTask = unknown>(
   options: CliOptions,
   defaults: CliDefaults,
-  historyStore: HistoryStore<CliHistoryTask>,
+  historyStore: HistoryStore<THistoryTask>,
   client: OpenAI,
   logLabel: string,
 ): Promise<void> {

@@ -6,7 +6,6 @@ import { z } from "zod";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../default/types.js";
 import { createOpenAIClient } from "../../core/openai.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "../../core/cli/options.js";
-import { buildCliHistoryTask, type CliHistoryTask } from "../history/taskAdapter.js";
 import {
   buildRequest,
   computeContext,
@@ -25,6 +24,59 @@ interface D2ContextInfo {
   relativePath: string;
   absolutePath: string;
   exists: boolean;
+}
+
+export const d2CliHistoryTaskSchema = z.object({
+  mode: z.string().optional(),
+  d2: z
+    .object({
+      file_path: z.string().optional(),
+    })
+    .optional(),
+});
+
+export type D2CliHistoryTask = z.infer<typeof d2CliHistoryTaskSchema>;
+
+interface D2CliHistoryD2Context {
+  absolutePath?: string;
+}
+
+interface D2CliHistoryTaskOptions {
+  taskMode: CliOptions["taskMode"];
+  taskModeExplicit: boolean;
+  d2FilePath?: string;
+  d2FileExplicit: boolean;
+}
+
+function buildD2CliHistoryTask(
+  options: D2CliHistoryTaskOptions,
+  previousTask?: D2CliHistoryTask,
+  d2Context?: D2CliHistoryD2Context,
+): D2CliHistoryTask | undefined {
+  if (options.taskMode === "d2") {
+    const task: D2CliHistoryTask = { mode: "d2" };
+    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+    const contextPath = d2Context?.absolutePath;
+    let filePath = contextPath ?? options.d2FilePath;
+    if (!filePath && !options.d2FileExplicit) {
+      filePath = d2Meta?.file_path;
+    }
+    if (contextPath) {
+      d2Meta = { ...d2Meta, file_path: contextPath };
+    } else if (filePath) {
+      d2Meta = { ...d2Meta, file_path: filePath };
+    }
+    if (d2Meta && Object.keys(d2Meta).length > 0) {
+      task.d2 = d2Meta;
+    }
+    return task;
+  }
+
+  if (options.taskModeExplicit) {
+    return { mode: options.taskMode };
+  }
+
+  return previousTask;
 }
 
 /**
@@ -439,6 +491,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       logLabel: "[gpt-5-cli-d2]",
       parseArgs,
       printHelp,
+      historyTaskSchema: d2CliHistoryTaskSchema,
     });
 
     if (bootstrap.status === "help") {
@@ -508,8 +561,8 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
     }
 
     if (response.id) {
-      const previousTask = context.activeEntry?.task as CliHistoryTask | undefined;
-      const historyTask = buildCliHistoryTask(
+      const previousTask = context.activeEntry?.task as D2CliHistoryTask | undefined;
+      const historyTask = buildD2CliHistoryTask(
         {
           taskMode: options.taskMode,
           taskModeExplicit: options.taskModeExplicit,
