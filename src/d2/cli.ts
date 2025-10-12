@@ -12,13 +12,18 @@ import type {
   Response,
   ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
-import type { CliDefaults, CliOptions, ConversationContext, OpenAIInputMessage } from "./types.js";
-import type { HistoryEntry } from "../../core/history.js";
-import { formatModelValue, formatScaleValue } from "./utils.js";
-import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
-import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
-import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
-import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
+import type {
+  CliDefaults,
+  CliOptions,
+  ConversationContext,
+  OpenAIInputMessage,
+} from "../cli/default/types.js";
+import type { HistoryEntry } from "../core/history.js";
+import { formatModelValue, formatScaleValue } from "../cli/default/utils.js";
+import { ensureApiKey, loadDefaults, loadEnvironment } from "../core/config.js";
+import { formatTurnsForSummary, HistoryStore } from "../core/history.js";
+import { FUNCTION_TOOLS, executeFunctionToolCall } from "../cli/default/tools.js";
+import { loadPrompt, resolvePromptPath } from "../core/prompts.js";
 
 /**
  * OpenAIレスポンス設定にCLI固有のverbosity指定を付加したラッパー型。
@@ -52,6 +57,15 @@ interface DetermineInputResult {
 type DetermineResult = DetermineInputExit | DetermineInputResult;
 
 /**
+ * d2ダイアグラム生成時に利用するファイル参照情報。
+ */
+interface D2ContextInfo {
+  relativePath: string;
+  absolutePath: string;
+  exists: boolean;
+}
+
+/**
  * CLIの利用方法を標準出力に表示する。
  *
  * @param defaults 現在の既定値セット。
@@ -59,8 +73,8 @@ type DetermineResult = DetermineInputExit | DetermineInputResult;
  */
 function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("Usage:");
-  console.log("  gpt-5-cli [-i <image>] [flag] <input>");
-  console.log("  gpt-5-cli --compact <num>");
+  console.log("  gpt-5-cli-d2 [-i <image>] [flag] <input>");
+  console.log("  gpt-5-cli-d2 --compact <num>");
   console.log("");
   console.log("flag（種類+数字／連結可／ハイフン必須）:");
   console.log(
@@ -76,12 +90,19 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
+  console.log("  -D          : d2モードを明示（互換フラグ） (--d2-mode)");
+  console.log("  -F <path>   : d2出力ファイルパスを指定 (--d2-file)");
+  console.log("  -I <count>  : d2モード時のツール呼び出し上限 (--d2-iterations)");
+  console.log("");
   console.log("環境変数(.env):");
   console.log(
     "  GPT_5_CLI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）",
   );
   console.log(
     "  GPT_5_CLI_PROMPTS_DIR        : systemプロンプトテンプレートの配置ディレクトリ（例: ~/Library/Application Support/gpt-5-cli/prompts）",
+  );
+  console.log(
+    `  GPT_5_CLI_D2_MAX_ITERATIONS  : d2モードのツール呼び出し上限（正の整数、既定: ${defaults.d2MaxIterations})`,
   );
   console.log("");
   console.log(
@@ -90,13 +111,13 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("");
   console.log("例:");
   console.log(
-    "  gpt-5-cli -m1e2v2 もっと詳しく -> model=gpt-5-mini(m1), effort=high(e2), verbosity=high(v2)",
+    "  gpt-5-cli-d2 -m1e2v2 もっと詳しく -> model=gpt-5-mini(m1), effort=high(e2), verbosity=high(v2)",
   );
   console.log(
-    "  gpt-5-cli -m0e0v0 箇条書きで   -> model=gpt-5-nano(m0), effort=low(e0), verbosity=low(v0)",
+    "  gpt-5-cli-d2 -m0e0v0 箇条書きで   -> model=gpt-5-nano(m0), effort=low(e0), verbosity=low(v0)",
   );
-  console.log("  gpt-5-cli -r                 -> 履歴一覧のみ表示して終了");
-  console.log("  gpt-5-cli -r2 続きをやろう   -> 2番目の履歴を使って継続");
+  console.log("  gpt-5-cli-d2 -r                 -> 履歴一覧のみ表示して終了");
+  console.log("  gpt-5-cli-d2 -r2 続きをやろう   -> 2番目の履歴を使って継続");
 }
 
 /** CLI履歴番号フラグを数値に変換するスキーマ。 */
@@ -115,7 +136,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     effort: z.enum(["low", "medium", "high"]),
     verbosity: z.enum(["low", "medium", "high"]),
     continueConversation: z.boolean(),
-    taskMode: z.literal("default"),
+    taskMode: z.literal("d2"),
     resumeIndex: z.number().optional(),
     resumeListOnly: z.boolean(),
     deleteIndex: z.number().optional(),
@@ -152,32 +173,6 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
       });
     }
   });
-
-/**
- * 指定された履歴操作が d2 モードの会話を対象にしているか判定する。
- *
- * @param options 現在のCLIオプション。
- * @param historyStore 履歴ストア。
- * @returns d2会話を扱う必要があればtrue。
- */
-function shouldDelegateToD2(options: CliOptions, historyStore: HistoryStore): boolean {
-  if (options.operation === "compact" && typeof options.compactIndex === "number") {
-    const entry = historyStore.selectByNumber(options.compactIndex);
-    return entry.task?.mode === "d2";
-  }
-
-  if (typeof options.resumeIndex === "number") {
-    const entry = historyStore.selectByNumber(options.resumeIndex);
-    return entry.task?.mode === "d2";
-  }
-
-  if (options.continueConversation && !options.hasExplicitHistory) {
-    const latest = historyStore.findLatest();
-    return latest?.task?.mode === "d2";
-  }
-
-  return false;
-}
 
 /**
  * OpenAI Responses APIへ渡すツール設定を構築する。
@@ -376,6 +371,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     return Number.parseInt(value, 10);
   };
 
+  const parseD2Iterations = (value: string): number => {
+    if (!/^\d+$/u.test(value)) {
+      throw new InvalidArgumentError("Error: --d2-iterations の値は正の整数で指定してください");
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (parsed <= 0) {
+      throw new InvalidArgumentError("Error: --d2-iterations の値は 1 以上で指定してください");
+    }
+    return parsed;
+  };
+
   program
     .exitOverride()
     .allowUnknownOption(false)
@@ -405,6 +411,14 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-D, --d2-mode", "d2形式の生成モードを有効にします")
+    .option("-F, --d2-file <path>", "d2出力を保存するファイルパスを指定します")
+    .option(
+      "-I, --d2-iterations <count>",
+      "d2モード時のツール呼び出し上限を指定します",
+      parseD2Iterations,
+      defaults.d2MaxIterations,
+    )
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 
   program.argument("[input...]", "ユーザー入力");
@@ -430,6 +444,9 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     delete?: string | boolean;
     show?: string | boolean;
     image?: string;
+    d2Mode?: boolean;
+    d2File?: string;
+    d2Iterations?: number;
     compact?: number;
   }>();
 
@@ -447,9 +464,11 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const imagePath = opts.image;
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
-  const taskMode: CliOptions["taskMode"] = "default";
-  const d2FilePath: CliOptions["d2FilePath"] = undefined;
-  const d2MaxIterations = defaults.d2MaxIterations;
+  const taskMode: CliOptions["taskMode"] = "d2";
+  const d2FilePath =
+    typeof opts.d2File === "string" && opts.d2File.length > 0 ? opts.d2File : undefined;
+  const d2MaxIterations =
+    typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.d2MaxIterations;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -485,9 +504,9 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const taskModeExplicit = false;
-  const d2FileExplicit = false;
-  const d2MaxIterationsExplicit = false;
+  const taskModeExplicit = program.getOptionValueSource("d2Mode") === "cli";
+  const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
+  const d2MaxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -679,7 +698,7 @@ function computeContext(
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      console.error("[gpt-5-cli] warn: 継続できる履歴が見つかりません（新規開始）。");
+      console.error("[gpt-5-cli-d2] warn: 継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
@@ -712,8 +731,18 @@ function computeContext(
       }
     }
 
-    options.taskMode = "default";
-    options.d2FilePath = undefined;
+    if (!options.taskModeExplicit) {
+      const historyMode = activeEntry.task?.mode;
+      if (historyMode && historyMode !== "d2") {
+        console.error("[gpt-5-cli-d2] warn: 選択した履歴は d2 モードではありません (新規開始)");
+      }
+      options.taskMode = "d2";
+    }
+
+    if (!options.d2FileExplicit) {
+      const historyFile = activeEntry.task?.d2?.file_path;
+      options.d2FilePath = historyFile ?? options.d2FilePath;
+    }
 
     resumeMode = activeEntry.resume?.mode ?? "";
     resumePrev = activeEntry.resume?.previous_response_id ?? "";
@@ -794,7 +823,7 @@ function prepareImageData(imagePath?: string): {
     throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
   }
   const dataUrl = `data:${mime};base64,${base64}`;
-  console.log(`[gpt-5-cli] image_attached: ${resolved} (${mime})`);
+  console.log(`[gpt-5-cli-d2] image_attached: ${resolved} (${mime})`);
   return { dataUrl, mime, resolvedPath: resolved };
 }
 
@@ -847,7 +876,7 @@ async function executeWithTools(
     const toolOutputs = await Promise.all(
       toolCalls.map(async (call) => {
         const callId = call.call_id ?? call.id ?? "";
-        console.log(`[gpt-5-cli] tool handling ${call.name} (${callId})`);
+        console.log(`[gpt-5-cli-d2] tool handling ${call.name} (${callId})`);
         const output = await executeFunctionToolCall(call, {
           cwd: process.cwd(),
           log: console.error,
@@ -874,6 +903,79 @@ async function executeWithTools(
 }
 
 /**
+ * d2モードで使用するファイルパスを検証し、コンテキスト情報を構築する。
+ *
+ * @param options CLIオプション。
+ * @returns d2ファイルの存在情報。非d2モード時はundefined。
+ */
+function ensureD2Context(options: CliOptions): D2ContextInfo | undefined {
+  if (options.taskMode !== "d2") {
+    return undefined;
+  }
+  const cwd = process.cwd();
+  const rawPath =
+    options.d2FilePath && options.d2FilePath.trim().length > 0 ? options.d2FilePath : "diagram.d2";
+  const absolutePath = path.resolve(cwd, rawPath);
+  const normalizedRoot = path.resolve(cwd);
+  if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
+    throw new Error(
+      `Error: d2出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
+    );
+  }
+  if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+    throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
+  }
+  const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  options.d2FilePath = relativePath;
+  const exists = fs.existsSync(absolutePath);
+  return { relativePath, absolutePath, exists };
+}
+
+/**
+ * d2モード用の追加システムメッセージを生成する。
+ *
+ * @param d2Context 対象ファイルのコンテキスト。
+ * @returns Responses APIへ渡すシステムメッセージ配列。
+ */
+function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessage[] {
+  const pathHint = d2Context.relativePath;
+  const existenceNote = d2Context.exists
+    ? "必要に応じて read_file で既存の内容を確認し、変更範囲を決定してください。"
+    : "ファイルが存在しない場合は write_file で新規作成してください。";
+
+  const toolSummary = [
+    "- read_file: 指定ファイルを読み取り現在の内容を確認する",
+    "- write_file: 指定ファイルを UTF-8 テキストで上書きする（diffは自分で計画する）",
+    "- d2_check: D2の構文を検証してエラーが無いことを確認する",
+    "- d2_fmt: D2ファイルを整形してフォーマットを揃える",
+  ].join("\n");
+
+  const workflow = [
+    "作業手順:",
+    `1. ${existenceNote}`,
+    "2. 変更後は必ず d2_check を実行し、構文エラーを確認する",
+    "3. エラーが無いことを確認したら d2_fmt を実行し、整形結果を確認する",
+    "4. エラーが続く場合は修正しつつ 2〜3 を繰り返す",
+    "5. 最終応答では、日本語で変更内容・ファイルパス・d2_check/d2_fmt の結果を要約し、D2コード全文は回答に貼らない",
+  ].join("\n");
+
+  const systemText = [
+    "あなたは D2 ダイアグラムを作成・更新するアシスタントです。",
+    "ローカルワークスペース内のファイルのみ操作し、許可されたツール以外は使用しないでください。",
+    `対象ファイル: ${pathHint}`,
+    toolSummary,
+    workflow,
+  ].join("\n\n");
+
+  return [
+    {
+      role: "system",
+      content: [{ type: "input_text", text: systemText }],
+    },
+  ];
+}
+
+/**
  * OpenAI Responses APIへ送信するリクエストを作成する。
  *
  * @param options CLIオプション。
@@ -882,6 +984,7 @@ async function executeWithTools(
  * @param systemPrompt システムプロンプト（任意）。
  * @param imageDataUrl 添付画像のデータURL。
  * @param defaults 既定値セット。
+ * @param d2Context d2モード時のファイル情報。
  * @returns Responses APIリクエスト。
  */
 export function buildRequest(
@@ -891,6 +994,7 @@ export function buildRequest(
   systemPrompt?: string,
   imageDataUrl?: string,
   defaults?: CliDefaults,
+  d2Context?: D2ContextInfo,
 ): ResponseCreateParamsNonStreaming {
   const modelLog = formatModelValue(
     options.model,
@@ -902,10 +1006,10 @@ export function buildRequest(
   const verbosityLog = formatScaleValue(options.verbosity);
 
   console.log(
-    `[gpt-5-cli] model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
+    `[gpt-5-cli-d2] model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
   );
   console.log(
-    `[gpt-5-cli] resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
+    `[gpt-5-cli-d2] resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
       options.deleteIndex ?? ""
     }`,
   );
@@ -917,6 +1021,10 @@ export function buildRequest(
       role: "system",
       content: [{ type: "input_text", text: systemPrompt }],
     });
+  }
+
+  if (options.taskMode === "d2" && d2Context) {
+    inputMessages.push(...buildD2InstructionMessages(d2Context));
   }
 
   if (context.resumeBaseMessages.length > 0) {
@@ -955,7 +1063,7 @@ export function buildRequest(
     !context.resumeSummaryText
   ) {
     console.error(
-      "[gpt-5-cli] warn: 直前の response.id が見つからないため、新規会話として開始します",
+      "[gpt-5-cli-d2] warn: 直前の response.id が見つからないため、新規会話として開始します",
     );
   }
 
@@ -1087,73 +1195,42 @@ async function performCompact(
     return item;
   });
   historyStore.saveEntries(nextEntries);
-  console.log(`[gpt-5-cli] compact: history=${options.compactIndex}, summarized=${turns.length}`);
+  console.log(
+    `[gpt-5-cli-d2] compact: history=${options.compactIndex}, summarized=${turns.length}`,
+  );
   process.stdout.write(`${summaryText}\n`);
 }
 
 /**
  * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
  */
-async function main(): Promise<void> {
+export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<void> {
   try {
-    const argv = process.argv.slice(2);
-    const hasD2Indicator = argv.some((arg) => {
-      if (arg === "-D" || arg === "--d2-mode") {
-        return true;
-      }
-      if (!arg.startsWith("--")) {
-        if (arg.startsWith("-D")) {
-          return true;
-        }
-        if (arg.startsWith("-F") || arg.startsWith("-I")) {
-          return true;
-        }
-      }
-      if (arg === "-F" || arg === "-I") {
-        return true;
-      }
-      if (arg === "--d2-file" || arg.startsWith("--d2-file=")) {
-        return true;
-      }
-      if (arg === "--d2-iterations" || arg.startsWith("--d2-iterations=")) {
-        return true;
-      }
-      return false;
-    });
-
-    if (hasD2Indicator) {
-      const { runD2Cli } = await import("../../d2/cli.js");
-      await runD2Cli(argv);
-      return;
-    }
-
     loadEnvironment();
     const defaults = loadDefaults();
-    console.log(`[gpt-5-cli] history_index: ${defaults.historyIndexPath}`);
+    console.log(`[gpt-5-cli-d2] history_index: ${defaults.historyIndexPath}`);
 
     const options = parseArgs(argv, defaults);
     const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
     const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
     if (systemPrompt) {
       const bytes = Buffer.byteLength(systemPrompt, "utf8");
-      console.log(`[gpt-5-cli] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
+      console.log(`[gpt-5-cli-d2] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
     } else {
-      console.error(`[gpt-5-cli] system_prompt: not found or empty path=${promptPath}`);
+      console.error(`[gpt-5-cli-d2] system_prompt: not found or empty path=${promptPath}`);
     }
     if (options.helpRequested) {
       printHelp(defaults, options);
       return;
     }
 
-    const historyStore = new HistoryStore(defaults.historyIndexPath);
-    if (shouldDelegateToD2(options, historyStore)) {
-      const { runD2Cli } = await import("../../d2/cli.js");
-      await runD2Cli(argv);
-      return;
+    if (options.taskMode === "d2" && options.operation === "compact") {
+      throw new Error("Error: d2モードと --compact は併用できません");
     }
 
     const apiKey = ensureApiKey();
     const client = new OpenAI({ apiKey });
+    const historyStore = new HistoryStore(defaults.historyIndexPath);
 
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client);
@@ -1175,6 +1252,8 @@ async function main(): Promise<void> {
       determine.previousTitle,
     );
 
+    const d2Context = ensureD2Context(options);
+
     const imageInfo = prepareImageData(options.imagePath);
     const request = buildRequest(
       options,
@@ -1183,6 +1262,7 @@ async function main(): Promise<void> {
       systemPrompt,
       imageInfo.dataUrl,
       defaults,
+      d2Context,
     );
     const response = await executeWithTools(client, request, options);
     const content = extractResponseText(response);
@@ -1213,7 +1293,7 @@ async function main(): Promise<void> {
         responseId: response.id,
         userText: determine.inputText,
         assistantText: content,
-        d2Context: undefined,
+        d2Context: d2Context ? { absolutePath: d2Context.absolutePath } : undefined,
       });
     }
 
@@ -1229,5 +1309,5 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await main();
+  await runD2Cli();
 }
