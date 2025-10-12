@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { determineInput } from "./shared/input.js";
 import { parseArgs } from "./d2.js";
-import type { CliDefaults, CliOptions } from "./default-types.js";
+import type { CliDefaults, D2CliOptions } from "./default-types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import type { D2CliHistoryTask } from "./d2.js";
 
@@ -23,7 +23,7 @@ function createDefaults(): CliDefaults {
   };
 }
 
-function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
+function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
   return {
     model: "gpt-5-nano",
     effort: "low",

@@ -2,7 +2,6 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions } from "./default-types.js";
-import type { HistoryStore } from "../core/history.js";
 import { createOpenAIClient } from "../core/openai.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "../core/cli/options.js";
 import {
@@ -18,50 +17,19 @@ import { bootstrapCli } from "./shared/runner.js";
 
 export const defaultCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
-  d2: z
-    .object({
-      file_path: z.string().optional(),
-    })
-    .optional(),
 });
 
 export type DefaultCliHistoryTask = z.infer<typeof defaultCliHistoryTaskSchema>;
 
-interface DefaultCliHistoryD2Context {
-  absolutePath?: string;
-}
-
 interface DefaultCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
   taskModeExplicit: boolean;
-  d2FilePath?: string;
-  d2FileExplicit: boolean;
 }
 
 function buildDefaultCliHistoryTask(
   options: DefaultCliHistoryTaskOptions,
   previousTask?: DefaultCliHistoryTask,
-  d2Context?: DefaultCliHistoryD2Context,
 ): DefaultCliHistoryTask | undefined {
-  if (options.taskMode === "d2") {
-    const task: DefaultCliHistoryTask = { mode: "d2" };
-    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-    const contextPath = d2Context?.absolutePath;
-    let filePath = contextPath ?? options.d2FilePath;
-    if (!filePath && !options.d2FileExplicit) {
-      filePath = d2Meta?.file_path;
-    }
-    if (contextPath) {
-      d2Meta = { ...d2Meta, file_path: contextPath };
-    } else if (filePath) {
-      d2Meta = { ...d2Meta, file_path: filePath };
-    }
-    if (d2Meta && Object.keys(d2Meta).length > 0) {
-      task.d2 = d2Meta;
-    }
-    return task;
-  }
-
   if (options.taskModeExplicit) {
     return { mode: options.taskMode };
   }
@@ -132,15 +100,11 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     imagePath: z.string().optional(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    d2FilePath: z.string().min(1).optional(),
-    d2MaxIterations: z.number(),
-    d2MaxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
     taskModeExplicit: z.boolean(),
-    d2FileExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
   })
@@ -161,35 +125,6 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
       });
     }
   });
-
-/**
- * 指定された履歴操作が d2 モードの会話を対象にしているか判定する。
- *
- * @param options 現在のCLIオプション。
- * @param historyStore 履歴ストア。
- * @returns d2会話を扱う必要があればtrue。
- */
-function shouldDelegateToD2(
-  options: CliOptions,
-  historyStore: HistoryStore<DefaultCliHistoryTask>,
-): boolean {
-  if (options.operation === "compact" && typeof options.compactIndex === "number") {
-    const entry = historyStore.selectByNumber(options.compactIndex);
-    return entry.task?.mode === "d2";
-  }
-
-  if (typeof options.resumeIndex === "number") {
-    const entry = historyStore.selectByNumber(options.resumeIndex);
-    return entry.task?.mode === "d2";
-  }
-
-  if (options.continueConversation && !options.hasExplicitHistory) {
-    const latest = historyStore.findLatest();
-    return latest?.task?.mode === "d2";
-  }
-
-  return false;
-}
 
 /**
  * CLI引数を解析し、正規化・検証済みのオプションを返す。
@@ -319,8 +254,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: CliOptions["taskMode"] = "default";
-  const d2FilePath: CliOptions["d2FilePath"] = undefined;
-  const d2MaxIterations = defaults.d2MaxIterations;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -357,8 +290,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const taskModeExplicit = false;
-  const d2FileExplicit = false;
-  const d2MaxIterationsExplicit = false;
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -375,15 +306,11 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       operation,
       compactIndex,
       taskMode,
-      d2FilePath,
       args,
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
       taskModeExplicit,
-      d2FileExplicit,
-      d2MaxIterations,
-      d2MaxIterationsExplicit,
       hasExplicitHistory,
       helpRequested,
     });
@@ -422,35 +349,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const hasD2Indicator = argv.some((arg) => {
-      if (arg === "-D" || arg === "--d2-mode") {
-        return true;
-      }
-      if (!arg.startsWith("--")) {
-        if (arg.startsWith("-D")) {
-          return true;
-        }
-        if (arg.startsWith("-F") || arg.startsWith("-I")) {
-          return true;
-        }
-      }
-      if (arg === "-F" || arg === "-I") {
-        return true;
-      }
-      if (arg === "--d2-file" || arg.startsWith("--d2-file=")) {
-        return true;
-      }
-      if (arg === "--d2-iterations" || arg.startsWith("--d2-iterations=")) {
-        return true;
-      }
-      return false;
-    });
-
-    if (hasD2Indicator) {
-      const { runD2Cli } = await import("./d2.js");
-      await runD2Cli(argv);
-      return;
-    }
 
     const bootstrap = bootstrapCli({
       argv,
@@ -465,11 +363,6 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt } = bootstrap;
-    if (shouldDelegateToD2(options, historyStore)) {
-      const { runD2Cli } = await import("./d2.js");
-      await runD2Cli(argv);
-      return;
-    }
 
     const client = createOpenAIClient();
 
@@ -497,7 +390,6 @@ async function main(): Promise<void> {
         logLabel: "[gpt-5-cli]",
         synchronizeWithHistory: ({ options: nextOptions }) => {
           nextOptions.taskMode = "default";
-          nextOptions.d2FilePath = undefined;
         },
       },
     );
@@ -524,8 +416,6 @@ async function main(): Promise<void> {
         {
           taskMode: options.taskMode,
           taskModeExplicit: options.taskModeExplicit,
-          d2FilePath: options.d2FilePath,
-          d2FileExplicit: options.d2FileExplicit,
         },
         previousTask,
       );

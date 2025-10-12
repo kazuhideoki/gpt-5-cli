@@ -17,17 +17,20 @@ export interface CliOptions {
   imagePath?: string;
   operation: "ask" | "compact";
   compactIndex?: number;
-  d2FilePath?: string;
   args: string[];
   modelExplicit: boolean;
   effortExplicit: boolean;
   verbosityExplicit: boolean;
   taskModeExplicit: boolean;
+  hasExplicitHistory: boolean;
+  helpRequested: boolean;
+}
+
+export interface D2CliOptions extends CliOptions {
+  d2FilePath?: string;
   d2FileExplicit: boolean;
   d2MaxIterations: number;
   d2MaxIterationsExplicit: boolean;
-  hasExplicitHistory: boolean;
-  helpRequested: boolean;
 }
 
 /** アクティブな履歴エントリの情報。 */

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./default-types.js";
+import type { CliDefaults, D2CliOptions, OpenAIInputMessage } from "./default-types.js";
 import { createOpenAIClient } from "../core/openai.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "../core/cli/options.js";
 import {
@@ -42,7 +42,7 @@ interface D2CliHistoryD2Context {
 }
 
 interface D2CliHistoryTaskOptions {
-  taskMode: CliOptions["taskMode"];
+  taskMode: D2CliOptions["taskMode"];
   taskModeExplicit: boolean;
   d2FilePath?: string;
   d2FileExplicit: boolean;
@@ -85,7 +85,7 @@ function buildD2CliHistoryTask(
  * @param defaults 現在の既定値セット。
  * @param options 解析済みのCLIオプション。
  */
-function printHelp(defaults: CliDefaults, options: CliOptions): void {
+function printHelp(defaults: CliDefaults, options: D2CliOptions): void {
   console.log("Usage:");
   console.log("  gpt-5-cli-d2 [-i <image>] [flag] <input>");
   console.log("  gpt-5-cli-d2 --compact <num>");
@@ -135,7 +135,7 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
 }
 
 /** CLI全体のオプションを統合的に検証するスキーマ。 */
-const cliOptionsSchema: z.ZodType<CliOptions> = z
+const cliOptionsSchema: z.ZodType<D2CliOptions> = z
   .object({
     model: z.string(),
     effort: z.enum(["low", "medium", "high"]),
@@ -186,7 +186,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
  * @param defaults 環境から取得した既定値。
  * @returns CLI全体で使用するオプション集合。
  */
-export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
+export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const program = new Command();
 
   const parseModelIndex = (value: string): string => {
@@ -202,7 +202,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     }
   };
 
-  const parseEffortIndex = (value: string): CliOptions["effort"] => {
+  const parseEffortIndex = (value: string): D2CliOptions["effort"] => {
     switch (value) {
       case "0":
         return "low";
@@ -215,7 +215,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     }
   };
 
-  const parseVerbosityIndex = (value: string): CliOptions["verbosity"] => {
+  const parseVerbosityIndex = (value: string): D2CliOptions["verbosity"] => {
     switch (value) {
       case "0":
         return "low";
@@ -301,8 +301,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const opts = program.opts<{
     help?: boolean;
     model: string;
-    effort: CliOptions["effort"];
-    verbosity: CliOptions["verbosity"];
+    effort: D2CliOptions["effort"];
+    verbosity: D2CliOptions["verbosity"];
     continueConversation?: boolean;
     resume?: string | boolean;
     delete?: string | boolean;
@@ -328,7 +328,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const imagePath = opts.image;
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
-  const taskMode: CliOptions["taskMode"] = "d2";
+  const taskMode: D2CliOptions["taskMode"] = "d2";
   const d2FilePath =
     typeof opts.d2File === "string" && opts.d2File.length > 0 ? opts.d2File : undefined;
   const d2MaxIterations =
@@ -414,7 +414,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
  * @param options CLIオプション。
  * @returns d2ファイルの存在情報。非d2モード時はundefined。
  */
-function ensureD2Context(options: CliOptions): D2ContextInfo | undefined {
+function ensureD2Context(options: D2CliOptions): D2ContextInfo | undefined {
   if (options.taskMode !== "d2") {
     return undefined;
   }
