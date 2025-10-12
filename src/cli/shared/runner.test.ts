@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { bootstrapCli } from "./runner.js";
-import type { CliDefaults, CliOptions } from "../default-types.js";
+import type { CliDefaults, CliOptions } from "../types.js";
 
 interface TempResources {
   historyCleanup: () => void;

@@ -1,6 +1,6 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { CliDefaults, CliOptions } from "../default-types.js";
+import type { CliDefaults, CliOptions } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 
 export interface DetermineInputExit {

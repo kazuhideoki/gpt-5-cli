@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import type { CliDefaults, CliOptions } from "../default-types.js";
+import type { CliDefaults, CliOptions } from "../types.js";
 import type { DetermineInputDependencies } from "./input.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 

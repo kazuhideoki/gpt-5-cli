@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "./default-types.js";
+import type { CliDefaults, CliOptions } from "./types.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
   expandLegacyShortFlags,

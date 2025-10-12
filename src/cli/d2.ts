@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, D2CliOptions, OpenAIInputMessage } from "./default-types.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
   expandLegacyShortFlags,
@@ -22,6 +22,13 @@ import {
 } from "../commands/conversation.js";
 import { determineInput } from "./shared/input.js";
 import { bootstrapCli } from "./shared/runner.js";
+
+export interface D2CliOptions extends CliOptions {
+  d2FilePath?: string;
+  d2FileExplicit: boolean;
+  d2MaxIterations: number;
+  d2MaxIterationsExplicit: boolean;
+}
 
 /**
  * d2ダイアグラム生成時に利用するファイル参照情報。

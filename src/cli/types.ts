@@ -26,19 +26,6 @@ export interface CliOptions {
   helpRequested: boolean;
 }
 
-export interface D2CliOptions extends CliOptions {
-  d2FilePath?: string;
-  d2FileExplicit: boolean;
-  d2MaxIterations: number;
-  d2MaxIterationsExplicit: boolean;
-}
-
-/** アクティブな履歴エントリの情報。 */
-export interface ActiveHistory {
-  entry?: HistoryEntry;
-  lastResponseId?: string;
-}
-
 /** OpenAIリクエスト構築時に共有する文脈情報。 */
 export interface ConversationContext {
   isNewConversation: boolean;
@@ -50,12 +37,6 @@ export interface ConversationContext {
   resumeSummaryCreatedAt?: string;
   activeEntry?: HistoryEntry;
   activeLastResponseId?: string;
-}
-
-/** リクエスト生成時に必要な追加リソース。 */
-export interface RequestResources {
-  systemPrompt?: string;
-  imageDataUrl?: string;
 }
 
 /** OpenAI Responses API入力メッセージ型のエイリアス。 */

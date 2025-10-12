@@ -16,9 +16,8 @@ import type {
   CliDefaults,
   CliOptions,
   ConversationContext,
-  D2CliOptions,
   OpenAIInputMessage,
-} from "../cli/default-types.js";
+} from "../cli/types.js";
 
 const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
@@ -245,7 +244,9 @@ export async function executeWithTools(
   let iteration = 0;
   const defaultMaxIterations = 8;
   const maxIterations =
-    options.taskMode === "d2" ? (options as D2CliOptions).d2MaxIterations : defaultMaxIterations;
+    options.taskMode === "d2" && "d2MaxIterations" in options
+      ? (options as { d2MaxIterations: number }).d2MaxIterations
+      : defaultMaxIterations;
 
   while (true) {
     const toolCalls = collectFunctionToolCalls(response);
