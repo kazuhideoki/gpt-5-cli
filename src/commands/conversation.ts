@@ -22,25 +22,25 @@ import type {
 
 const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
-interface SynchronizeHistoryParams<THistoryTask = unknown> {
-  options: CliOptions;
+interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
+  options: TOptions;
   activeEntry: HistoryEntry<THistoryTask>;
   logWarning: (message: string) => void;
 }
 
-export interface ComputeContextConfig<THistoryTask = unknown> {
+export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
   logLabel: string;
-  synchronizeWithHistory?: (params: SynchronizeHistoryParams<THistoryTask>) => void;
+  synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
 }
 
-export function computeContext<THistoryTask = unknown>(
-  options: CliOptions,
+export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>(
+  options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
   inputText: string,
   initialActiveEntry?: HistoryEntry<THistoryTask>,
   explicitPrevId?: string,
   explicitPrevTitle?: string,
-  config?: ComputeContextConfig<THistoryTask>,
+  config?: ComputeContextConfig<TOptions, THistoryTask>,
 ): ConversationContext {
   const logLabel = config?.logLabel ?? "[gpt-5-cli]";
   const logWarning = (message: string): void => {

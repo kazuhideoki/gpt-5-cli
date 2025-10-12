@@ -8,7 +8,6 @@ import {
   extractUserLines,
   projectRoot,
   runD2Cli,
-  runDefaultCli,
 } from "../helpers/cli";
 
 describe("d2 CLI integration", () => {
@@ -132,7 +131,7 @@ describe("d2 CLI integration", () => {
     const relativePath = path.join("diagrams", "sample.d2");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
 
-    const first = await runDefaultCli(["-D", "-F", relativePath, "初回D2"], env);
+    const first = await runD2Cli(["-F", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
@@ -144,7 +143,7 @@ describe("d2 CLI integration", () => {
     expect(firstEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(firstEntry.request_count).toBe(1);
 
-    const second = await runDefaultCli(["-c", "2回目"], env);
+    const second = await runD2Cli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
     expect(second.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(second.stdout).at(-1)).toBe("D2 OK (2)");
@@ -197,12 +196,12 @@ describe("d2 CLI integration", () => {
     const relativePath = path.join("diagrams", "sample.d2");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
 
-    const first = await runDefaultCli(["-D", "-F", relativePath, "初回D2"], env);
+    const first = await runD2Cli(["-F", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
 
-    const second = await runDefaultCli(["-c", "2回目"], env);
+    const second = await runD2Cli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
     expect(second.stdout).toContain("[gpt-5-cli-d2]");
 
@@ -210,7 +209,7 @@ describe("d2 CLI integration", () => {
     expect(third.exitCode).toBe(0);
     expect(third.stdout).toContain("[gpt-5-cli-d2]");
 
-    const summary = await runDefaultCli(["--compact", "1"], env);
+    const summary = await runD2Cli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
     expect(summary.stdout).toContain("[gpt-5-cli-d2] compact: history=1");
     expect(extractUserLines(summary.stdout).at(-1)).toBe("D2 Summary");

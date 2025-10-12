@@ -20,8 +20,8 @@ export type DetermineResult<THistoryTask = unknown> =
   | DetermineInputExit
   | DetermineInputResult<THistoryTask>;
 
-export interface DetermineInputDependencies {
-  printHelp: (defaults: CliDefaults, options: CliOptions) => void;
+export interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
+  printHelp: (defaults: CliDefaults, options: TOptions) => void;
 }
 
 async function promptForInput(): Promise<string> {
@@ -34,11 +34,11 @@ async function promptForInput(): Promise<string> {
   }
 }
 
-export async function determineInput<THistoryTask = unknown>(
-  options: CliOptions,
+export async function determineInput<TOptions extends CliOptions, THistoryTask = unknown>(
+  options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
   defaults: CliDefaults,
-  deps: DetermineInputDependencies,
+  deps: DetermineInputDependencies<TOptions>,
 ): Promise<DetermineResult<THistoryTask>> {
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
