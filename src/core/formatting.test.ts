@@ -5,7 +5,7 @@ import {
   formatScaleValue,
   levelForModelValue,
   levelForScaleValue,
-} from "./utils.js";
+} from "./formatting.js";
 
 const originalNoColor = process.env.NO_COLOR;
 const hadOriginalStderrIsTTY = Object.hasOwn(process.stderr, "isTTY");

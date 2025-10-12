@@ -19,7 +19,7 @@ import type {
   OpenAIInputMessage,
 } from "../default/types.js";
 import type { HistoryEntry } from "../../core/history.js";
-import { formatModelValue, formatScaleValue } from "../default/utils.js";
+import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
 import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
 import { createCoreToolRuntime } from "../../core/tools.js";

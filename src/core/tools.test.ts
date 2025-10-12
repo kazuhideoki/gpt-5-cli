@@ -7,7 +7,7 @@ import {
   resolveWorkspacePath,
   type ToolRegistration,
   type ToolResult,
-} from "../../core/tools.js";
+} from "./tools.js";
 import type { ResponseFunctionToolCall } from "openai/resources/responses/responses";
 
 function createCall(name: string, args: Record<string, unknown>): ResponseFunctionToolCall {
