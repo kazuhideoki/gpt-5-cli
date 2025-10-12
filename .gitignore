@@ -10,3 +10,4 @@ history_index.json
 # デフォルトのプロンプトディレクトリ
 prompts/
 .DS_Store
+.mcp.json
