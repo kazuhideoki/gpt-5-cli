@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { parseArgs } from "./cli.js";
-import type { CliDefaults } from "../cli/default/types.js";
+import { determineInput, parseArgs } from "./cli.js";
+import type { CliDefaults, CliOptions } from "../cli/default/types.js";
+import type { HistoryEntry, HistoryStore } from "../core/history.js";
+import type { CliHistoryTask } from "../cli/history/taskAdapter.js";
 
 function createDefaults(): CliDefaults {
   return {
@@ -12,6 +14,35 @@ function createDefaults(): CliDefaults {
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
     d2MaxIterations: 8,
+  };
+}
+
+function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
+  return {
+    model: "gpt-5-nano",
+    effort: "low",
+    verbosity: "low",
+    continueConversation: false,
+    taskMode: "d2",
+    resumeIndex: undefined,
+    resumeListOnly: false,
+    deleteIndex: undefined,
+    showIndex: undefined,
+    imagePath: undefined,
+    operation: "ask",
+    compactIndex: undefined,
+    d2FilePath: undefined,
+    args: [],
+    modelExplicit: false,
+    effortExplicit: false,
+    verbosityExplicit: false,
+    taskModeExplicit: false,
+    d2FileExplicit: false,
+    d2MaxIterations: 8,
+    d2MaxIterationsExplicit: false,
+    hasExplicitHistory: false,
+    helpRequested: false,
+    ...overrides,
   };
 }
 
@@ -50,5 +81,74 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["--d2-file", "diagram.d2", "生成"], defaults);
     expect(options.d2FilePath).toBe("diagram.d2");
     expect(options.d2FileExplicit).toBe(true);
+  });
+});
+
+type HistoryStoreLike = HistoryStore<CliHistoryTask>;
+type D2HistoryEntry = HistoryEntry<CliHistoryTask>;
+
+class StubHistoryStore {
+  selected: number | undefined;
+  listed = false;
+
+  constructor(private readonly entry: D2HistoryEntry | null = null) {}
+
+  selectByNumber(index: number) {
+    this.selected = index;
+    if (!this.entry) {
+      throw new Error("missing entry");
+    }
+    return this.entry;
+  }
+
+  deleteByNumber() {
+    throw new Error("not implemented");
+  }
+
+  showByNumber() {
+    throw new Error("not implemented");
+  }
+
+  listHistory() {
+    this.listed = true;
+  }
+}
+
+describe("d2 determineInput", () => {
+  it("履歴番号指定で既存の d2 タスクを保持したまま返す", async () => {
+    const defaults = createDefaults();
+    const entry: D2HistoryEntry = {
+      last_response_id: "resp-d2",
+      title: "diagram",
+      task: { mode: "d2", d2: { file_path: "/tmp/out.d2" } },
+    };
+    const store = new StubHistoryStore(entry);
+    const options = createOptions({
+      resumeIndex: 1,
+      continueConversation: true,
+      hasExplicitHistory: true,
+      args: ["続けよう"],
+    });
+
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
+    expect(store.selected).toBe(1);
+    expect(result.kind).toBe("input");
+    if (result.kind === "input") {
+      expect(result.activeEntry).toBe(entry);
+      expect(result.previousResponseId).toBe("resp-d2");
+      expect(result.inputText).toBe("続けよう");
+    }
+  });
+
+  it("入力がない場合はヘルプ出力して終了する", async () => {
+    const defaults = createDefaults();
+    const store = new StubHistoryStore();
+    const options = createOptions();
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
+    expect(result.kind).toBe("exit");
+    if (result.kind === "exit") {
+      expect(result.code).toBe(1);
+    }
+    expect(store.listed).toBe(false);
   });
 });

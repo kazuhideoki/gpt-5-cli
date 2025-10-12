@@ -29,7 +29,9 @@ let store: HistoryStore<TestTask>;
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-test-"));
   historyPath = path.join(tempDir, "history.json");
-  store = new HistoryStore<TestTask>(historyPath, { taskSchema: testTaskSchema });
+  store = new HistoryStore<TestTask>(historyPath, {
+    taskSchema: testTaskSchema,
+  });
 });
 
 afterEach(() => {
@@ -46,7 +48,9 @@ describe("HistoryStore", () => {
   it("loadEntries は不正な JSON でエラーを投げる", () => {
     store.ensureInitialized();
     fs.writeFileSync(historyPath, "{", "utf8");
-    expect(() => store.loadEntries()).toThrow("[gpt-5-cli] failed to parse history index");
+    expect(() => store.loadEntries()).toThrow(
+      "[gpt-5-cli] failed to parse history index",
+    );
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {
@@ -78,22 +82,40 @@ describe("HistoryStore", () => {
     store.saveEntries(entries);
     expect(store.selectByNumber(1).last_response_id).toBe("b");
     expect(store.selectByNumber(2).last_response_id).toBe("c");
-    expect(() => store.selectByNumber(4)).toThrow("[gpt-5-cli] 無効な履歴番号です");
+    expect(() => store.selectByNumber(4)).toThrow(
+      "[gpt-5-cli] 無効な履歴番号です",
+    );
   });
 
   it("deleteByNumber は対象を削除する", () => {
     const entries: HistoryEntry<TestTask>[] = [
-      { last_response_id: "a", updated_at: "2024-06-01T00:00:00Z", title: "old" },
-      { last_response_id: "b", updated_at: "2024-06-03T00:00:00Z", title: "latest" },
-      { last_response_id: "c", updated_at: "2024-06-02T00:00:00Z", title: "mid" },
+      {
+        last_response_id: "a",
+        updated_at: "2024-06-01T00:00:00Z",
+        title: "old",
+      },
+      {
+        last_response_id: "b",
+        updated_at: "2024-06-03T00:00:00Z",
+        title: "latest",
+      },
+      {
+        last_response_id: "c",
+        updated_at: "2024-06-02T00:00:00Z",
+        title: "mid",
+      },
     ];
     store.saveEntries(entries);
     const result = store.deleteByNumber(2);
     expect(result.removedId).toBe("c");
     expect(result.removedTitle).toBe("mid");
-    const remaining = store.loadEntries().map((entry) => entry.last_response_id);
+    const remaining = store
+      .loadEntries()
+      .map((entry) => entry.last_response_id);
     expect(remaining).toEqual(["a", "b"]);
-    expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
+    expect(() => store.deleteByNumber(3)).toThrow(
+      "[gpt-5-cli] 無効な履歴番号です",
+    );
   });
 
   it("upsertConversation が新規エントリを追加する", () => {
@@ -154,9 +176,77 @@ describe("HistoryStore", () => {
     const [updated] = store.loadEntries();
     expect(updated.last_response_id).toBe("resp-new");
     expect(updated.request_count).toBe(3);
-    expect(updated.turns?.slice(-2).map((turn) => turn.text)).toEqual(["question", "answer"]);
+    expect(updated.turns?.slice(-2).map((turn) => turn.text)).toEqual([
+      "question",
+      "answer",
+    ]);
     expect(updated.resume?.previous_response_id).toBe("resp-new");
     expect(updated.resume?.summary?.text).toBe("まとめ");
+  });
+
+  it("upsertConversation は task を指定しない場合に previousTask を引き継ぐ", () => {
+    const absPath = path.join(tempDir, "keep.d2");
+    const existingTask: TestTask = { mode: "d2", d2: { file_path: absPath } };
+    const existing: HistoryEntry<TestTask> = {
+      title: "diagram",
+      last_response_id: "resp-prev",
+      updated_at: "2024-06-01T00:00:00Z",
+      task: existingTask,
+      turns: [{ role: "user", text: "old" }],
+    };
+    store.saveEntries([existing]);
+
+    store.upsertConversation({
+      metadata: {
+        model: "gpt-5-mini",
+        effort: "medium",
+        verbosity: "medium",
+      },
+      context: {
+        isNewConversation: false,
+        titleToUse: "diagram",
+        previousResponseId: "resp-prev",
+        previousTask: existingTask,
+      },
+      responseId: "resp-next",
+      userText: "続き",
+      assistantText: "了解",
+    });
+
+    const [updated] = store.loadEntries();
+    expect(updated.task?.d2?.file_path).toBe(absPath);
+    expect(updated.task).toEqual(existingTask);
+  });
+
+  it("upsertConversation は task を明示すると既存を置き換える", () => {
+    const existing: HistoryEntry<TestTask> = {
+      title: "diagram",
+      last_response_id: "resp-prev",
+      task: { mode: "default" },
+    };
+    store.saveEntries([existing]);
+
+    store.upsertConversation({
+      metadata: {
+        model: "gpt-5-mini",
+        effort: "medium",
+        verbosity: "medium",
+      },
+      context: {
+        isNewConversation: false,
+        titleToUse: "diagram",
+        previousResponseId: "resp-prev",
+        previousTask: existing.task,
+      },
+      responseId: "resp-next",
+      userText: "更新",
+      assistantText: "完了",
+      task: { mode: "d2", d2: { file_path: "/tmp/new.d2" } },
+    });
+
+    const [updated] = store.loadEntries();
+    expect(updated.task?.mode).toBe("d2");
+    expect(updated.task?.d2?.file_path).toBe("/tmp/new.d2");
   });
 
   it("upsertConversation が d2 タスクメタデータを保存する", () => {
