@@ -1,72 +1,28 @@
 #!/usr/bin/env bun
 import fs from "node:fs";
 import path from "node:path";
-import { stdin as input, stdout as output } from "node:process";
-import { createInterface } from "node:readline/promises";
 import OpenAI from "openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type {
-  ResponseCreateParamsNonStreaming,
-  ResponseTextConfig,
-  Response,
-  ResponseFunctionToolCall,
-} from "openai/resources/responses/responses";
-import type {
-  CliDefaults,
-  CliOptions,
-  ConversationContext,
-  OpenAIInputMessage,
-} from "../default/types.js";
-import type { HistoryEntry } from "../../core/history.js";
-import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../default/types.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
-import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
-import { createCoreToolRuntime } from "../../core/tools.js";
+import { HistoryStore } from "../../core/history.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
-import {
-  buildCliToolList,
-  expandLegacyShortFlags,
-  parseHistoryFlag,
-} from "../../core/cli/options.js";
+import { expandLegacyShortFlags, parseHistoryFlag } from "../../core/cli/options.js";
 import {
   buildCliHistoryTask,
   cliHistoryTaskSchema,
   type CliHistoryTask,
 } from "../history/taskAdapter.js";
-
-type CliHistoryEntry = HistoryEntry<CliHistoryTask>;
-
-/**
- * OpenAIレスポンス設定にCLI固有のverbosity指定を付加したラッパー型。
- */
-type ResponseTextConfigWithVerbosity = ResponseTextConfig & {
-  verbosity?: CliOptions["verbosity"];
-};
-
-/**
- * ユーザーフローを即時終了させるための結果型。
- */
-interface DetermineInputExit {
-  kind: "exit";
-  code: number;
-}
-
-/**
- * 対話継続に必要な入力情報をまとめた結果型。
- */
-interface DetermineInputResult {
-  kind: "input";
-  inputText: string;
-  activeEntry?: CliHistoryEntry;
-  previousResponseId?: string;
-  previousTitle?: string;
-}
-
-/**
- * 入力判定の戻り値。終了か継続かを表す。
- */
-type DetermineResult = DetermineInputExit | DetermineInputResult;
+import {
+  buildRequest,
+  computeContext,
+  executeWithTools,
+  extractResponseText,
+  performCompact,
+  prepareImageData,
+} from "../../commands/conversation.js";
+import { determineInput } from "../shared/input.js";
 
 /**
  * d2ダイアグラム生成時に利用するファイル参照情報。
@@ -176,13 +132,6 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
       });
     }
   });
-
-/**
- * OpenAI Responses APIへ渡すツール設定を構築する。
- *
- * @returns CLIが利用可能な関数ツールとプレビュー検索の配列。
- */
-const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
 /**
  * CLI引数を解析し、正規化・検証済みのオプションを返す。
@@ -414,364 +363,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
 }
 
 /**
- * 画像添付用に受け取ったパスを検証し、実際のファイルパスへ解決する。
- *
- * @param raw CLIで指定された画像パス文字列。
- * @returns 存在する画像ファイルの絶対パス。
- */
-function resolveImagePath(raw: string): string {
-  const home = process.env.HOME;
-  if (!home || home.trim().length === 0) {
-    throw new Error("HOME environment variable must be set to use image attachments.");
-  }
-  if (path.isAbsolute(raw)) {
-    if (!raw.startsWith(home)) {
-      throw new Error(`Error: -i で指定できるフルパスは ${home || "$HOME"} 配下のみです: ${raw}`);
-    }
-    if (!fs.existsSync(raw) || !fs.statSync(raw).isFile()) {
-      throw new Error(`Error: 画像ファイルが見つかりません: ${raw}`);
-    }
-    return raw;
-  }
-  if (raw.startsWith("スクリーンショット ") && raw.endsWith(".png")) {
-    const resolved = path.join(home, "Desktop", raw);
-    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
-      throw new Error(`Error: 画像ファイルが見つかりません: ${resolved}`);
-    }
-    return resolved;
-  }
-  throw new Error(
-    `Error: -i には ${home || "$HOME"} 配下のフルパスか 'スクリーンショット *.png' のみ指定できます: ${raw}`,
-  );
-}
-
-/**
- * 画像ファイルの拡張子からMIMEタイプを推測する。
- *
- * @param filePath 画像ファイルパス。
- * @returns 対応するMIMEタイプ。
- */
-function detectImageMime(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  switch (ext) {
-    case ".png":
-      return "image/png";
-    case ".jpg":
-    case ".jpeg":
-      return "image/jpeg";
-    case ".webp":
-      return "image/webp";
-    case ".gif":
-      return "image/gif";
-    case ".heic":
-    case ".heif":
-      return "image/heic";
-    default:
-      throw new Error(`Error: 未対応の画像拡張子です: ${filePath}`);
-  }
-}
-
-/**
- * CLIオプションから次の入力アクションを決定する。
- * 履歴操作が指定されている場合は該当処理を実行して終了する。
- *
- * @param options 解析済みオプション。
- * @param historyStore 履歴管理ストア。
- * @param defaults 既定値セット。
- * @returns 入力テキストまたは終了指示。
- */
-export async function determineInput(
-  options: CliOptions,
-  historyStore: HistoryStore<CliHistoryTask>,
-  defaults: CliDefaults,
-): Promise<DetermineResult> {
-  if (typeof options.deleteIndex === "number") {
-    const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
-    console.log(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
-    return { kind: "exit", code: 0 };
-  }
-  if (typeof options.showIndex === "number") {
-    historyStore.showByNumber(options.showIndex, Boolean(process.env.NO_COLOR));
-    return { kind: "exit", code: 0 };
-  }
-  if (options.resumeListOnly) {
-    historyStore.listHistory();
-    return { kind: "exit", code: 0 };
-  }
-
-  if (typeof options.resumeIndex === "number") {
-    const entry = historyStore.selectByNumber(options.resumeIndex);
-    const inputText = options.args.length > 0 ? options.args.join(" ") : await promptForInput();
-    if (!inputText.trim()) {
-      throw new Error("プロンプトが空です。");
-    }
-    return {
-      kind: "input",
-      inputText,
-      activeEntry: entry,
-      previousResponseId: entry.last_response_id ?? undefined,
-      previousTitle: entry.title ?? undefined,
-    };
-  }
-
-  if (options.args.length === 0) {
-    printHelp(defaults, options);
-    return { kind: "exit", code: 1 };
-  }
-
-  return { kind: "input", inputText: options.args.join(" ") };
-}
-
-/**
- * 標準入力からユーザープロンプトを取得する。
- *
- * @returns 入力された文字列。
- */
-async function promptForInput(): Promise<string> {
-  const rl = createInterface({ input, output });
-  try {
-    const answer = await rl.question("プロンプト > ");
-    return answer;
-  } finally {
-    rl.close();
-  }
-}
-
-/**
- * 履歴とオプションをもとに、今回の対話コンテキストを構築する。
- *
- * @param options CLIオプション（必要に応じて上書きされる）。
- * @param historyStore 履歴ストア。
- * @param inputText 現在のユーザー入力。
- * @param initialActiveEntry 既に選択された履歴エントリ。
- * @param explicitPrevId 明示的に指定されたレスポンスID。
- * @param explicitPrevTitle 明示的に指定されたタイトル。
- * @returns 対話に必要なコンテキスト。
- */
-function computeContext(
-  options: CliOptions,
-  historyStore: HistoryStore<CliHistoryTask>,
-  inputText: string,
-  initialActiveEntry?: CliHistoryEntry,
-  explicitPrevId?: string,
-  explicitPrevTitle?: string,
-): ConversationContext {
-  let activeEntry = initialActiveEntry;
-  let previousResponseId = explicitPrevId;
-  let previousTitle = explicitPrevTitle;
-
-  if (!options.hasExplicitHistory && options.continueConversation) {
-    const latest = historyStore.findLatest();
-    if (latest) {
-      activeEntry = latest;
-      previousResponseId = latest.last_response_id ?? previousResponseId;
-      previousTitle = latest.title ?? previousTitle;
-    } else {
-      console.error("[gpt-5-cli-d2] warn: 継続できる履歴が見つかりません（新規開始）。");
-    }
-  }
-
-  let resumeSummaryText: string | undefined;
-  let resumeSummaryCreatedAt: string | undefined;
-  let resumeMode = "";
-  let resumePrev = "";
-  const resumeBaseMessages: OpenAIInputMessage[] = [];
-
-  if (activeEntry) {
-    if (options.continueConversation) {
-      if (!options.modelExplicit && typeof activeEntry.model === "string" && activeEntry.model) {
-        options.model = activeEntry.model;
-      }
-      if (!options.effortExplicit && typeof activeEntry.effort === "string" && activeEntry.effort) {
-        const lower = String(activeEntry.effort).toLowerCase();
-        if (lower === "low" || lower === "medium" || lower === "high") {
-          options.effort = lower as CliOptions["effort"];
-        }
-      }
-      if (
-        !options.verbosityExplicit &&
-        typeof activeEntry.verbosity === "string" &&
-        activeEntry.verbosity
-      ) {
-        const lower = String(activeEntry.verbosity).toLowerCase();
-        if (lower === "low" || lower === "medium" || lower === "high") {
-          options.verbosity = lower as CliOptions["verbosity"];
-        }
-      }
-    }
-
-    if (!options.taskModeExplicit) {
-      const historyMode = activeEntry.task?.mode;
-      if (historyMode && historyMode !== "d2") {
-        console.error("[gpt-5-cli-d2] warn: 選択した履歴は d2 モードではありません (新規開始)");
-      }
-      options.taskMode = "d2";
-    }
-
-    if (!options.d2FileExplicit) {
-      const historyFile = activeEntry.task?.d2?.file_path;
-      options.d2FilePath = historyFile ?? options.d2FilePath;
-    }
-
-    resumeMode = activeEntry.resume?.mode ?? "";
-    resumePrev = activeEntry.resume?.previous_response_id ?? "";
-    resumeSummaryText = activeEntry.resume?.summary?.text ?? undefined;
-    resumeSummaryCreatedAt = activeEntry.resume?.summary?.created_at ?? undefined;
-
-    if (resumeSummaryText) {
-      resumeBaseMessages.push({
-        role: "system",
-        content: [{ type: "input_text", text: resumeSummaryText }],
-      });
-    }
-
-    if (resumePrev) {
-      previousResponseId = resumePrev;
-    }
-
-    if (!previousTitle && activeEntry.title) {
-      previousTitle = activeEntry.title;
-    }
-
-    if (resumeMode === "new_request") {
-      previousResponseId = undefined;
-    }
-  }
-
-  let isNewConversation = true;
-  if (options.continueConversation) {
-    if (previousResponseId) {
-      isNewConversation = false;
-    } else if (activeEntry && resumeMode === "new_request") {
-      isNewConversation = false;
-    }
-  }
-
-  const titleCandidate = inputText.replace(/\s+/g, " ").slice(0, 50);
-  let titleToUse = titleCandidate;
-  if (isNewConversation) {
-    if (options.continueConversation && previousTitle) {
-      titleToUse = previousTitle;
-    }
-  } else {
-    titleToUse = previousTitle ?? "";
-  }
-
-  return {
-    isNewConversation,
-    previousResponseId,
-    previousTitle,
-    titleToUse,
-    resumeBaseMessages,
-    resumeSummaryText,
-    resumeSummaryCreatedAt,
-    activeEntry,
-    activeLastResponseId: activeEntry?.last_response_id ?? undefined,
-  };
-}
-
-/**
- * 画像パスからOpenAI API向けのデータURLを生成する。
- *
- * @param imagePath 添付対象の画像パス。
- * @returns データURLやMIMEタイプなどの情報。
- */
-function prepareImageData(imagePath?: string): {
-  dataUrl?: string;
-  mime?: string;
-  resolvedPath?: string;
-} {
-  if (!imagePath) {
-    return {};
-  }
-  const resolved = resolveImagePath(imagePath);
-  const mime = detectImageMime(resolved);
-  const data = fs.readFileSync(resolved);
-  const base64 = data.toString("base64");
-  if (!base64) {
-    throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
-  }
-  const dataUrl = `data:${mime};base64,${base64}`;
-  console.log(`[gpt-5-cli-d2] image_attached: ${resolved} (${mime})`);
-  return { dataUrl, mime, resolvedPath: resolved };
-}
-
-/**
- * レスポンス内で要求されたツール呼び出しを抽出する。
- *
- * @param response OpenAI Responses APIのレスポンス。
- * @returns 関数ツール呼び出し情報の配列。
- */
-function collectFunctionToolCalls(response: Response): ResponseFunctionToolCall[] {
-  const calls: ResponseFunctionToolCall[] = [];
-  if (!Array.isArray(response.output)) {
-    return calls;
-  }
-  for (const item of response.output) {
-    if (item?.type === "function_call") {
-      calls.push(item as ResponseFunctionToolCall);
-    }
-  }
-  return calls;
-}
-
-/**
- * OpenAI Responses APIによる推論とツール呼び出しのループを実行する。
- *
- * @param client OpenAIクライアント。
- * @param initialRequest 初回リクエスト。
- * @param options CLIオプション（ツール反復制限を含む）。
- * @returns 最終的なレスポンス。
- */
-async function executeWithTools(
-  client: OpenAI,
-  initialRequest: ResponseCreateParamsNonStreaming,
-  options: CliOptions,
-): Promise<Response> {
-  let response = await client.responses.create(initialRequest);
-  let iteration = 0;
-  const defaultMaxIterations = 8;
-  const maxIterations = options.taskMode === "d2" ? options.d2MaxIterations : defaultMaxIterations;
-
-  while (true) {
-    const toolCalls = collectFunctionToolCalls(response);
-    if (toolCalls.length === 0) {
-      return response;
-    }
-    if (iteration >= maxIterations) {
-      throw new Error("Error: Tool call iteration limit exceeded");
-    }
-
-    const toolOutputs = await Promise.all(
-      toolCalls.map(async (call) => {
-        const callId = call.call_id ?? call.id ?? "";
-        console.log(`[gpt-5-cli-d2] tool handling ${call.name} (${callId})`);
-        const output = await executeFunctionToolCall(call, {
-          cwd: process.cwd(),
-          log: console.error,
-        });
-        return {
-          type: "function_call_output" as const,
-          call_id: call.call_id,
-          output,
-        };
-      }),
-    );
-
-    const followupRequest: ResponseCreateParamsNonStreaming = {
-      model: initialRequest.model,
-      reasoning: initialRequest.reasoning,
-      text: initialRequest.text,
-      tools: initialRequest.tools,
-      input: toolOutputs,
-      previous_response_id: response.id,
-    };
-    response = await client.responses.create(followupRequest);
-    iteration += 1;
-  }
-}
-
-/**
  * d2モードで使用するファイルパスを検証し、コンテキスト情報を構築する。
  *
  * @param options CLIオプション。
@@ -845,232 +436,6 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
 }
 
 /**
- * OpenAI Responses APIへ送信するリクエストを作成する。
- *
- * @param options CLIオプション。
- * @param context 対話コンテキスト。
- * @param inputText ユーザー入力本文。
- * @param systemPrompt システムプロンプト（任意）。
- * @param imageDataUrl 添付画像のデータURL。
- * @param defaults 既定値セット。
- * @param d2Context d2モード時のファイル情報。
- * @returns Responses APIリクエスト。
- */
-export function buildRequest(
-  options: CliOptions,
-  context: ConversationContext,
-  inputText: string,
-  systemPrompt?: string,
-  imageDataUrl?: string,
-  defaults?: CliDefaults,
-  d2Context?: D2ContextInfo,
-): ResponseCreateParamsNonStreaming {
-  const modelLog = formatModelValue(
-    options.model,
-    defaults?.modelMain ?? "",
-    defaults?.modelMini ?? "",
-    defaults?.modelNano ?? "",
-  );
-  const effortLog = formatScaleValue(options.effort);
-  const verbosityLog = formatScaleValue(options.verbosity);
-
-  console.log(
-    `[gpt-5-cli-d2] model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
-  );
-  console.log(
-    `[gpt-5-cli-d2] resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
-      options.deleteIndex ?? ""
-    }`,
-  );
-
-  const inputMessages: OpenAIInputMessage[] = [];
-
-  if (context.isNewConversation && systemPrompt) {
-    inputMessages.push({
-      role: "system",
-      content: [{ type: "input_text", text: systemPrompt }],
-    });
-  }
-
-  if (options.taskMode === "d2" && d2Context) {
-    inputMessages.push(...buildD2InstructionMessages(d2Context));
-  }
-
-  if (context.resumeBaseMessages.length > 0) {
-    inputMessages.push(...context.resumeBaseMessages);
-  }
-
-  const userContent: OpenAIInputMessage["content"] = [{ type: "input_text", text: inputText }];
-  if (imageDataUrl) {
-    userContent.push({
-      type: "input_image",
-      image_url: imageDataUrl,
-      detail: "auto",
-    });
-  }
-
-  inputMessages.push({ role: "user", content: userContent });
-
-  const textConfig: ResponseTextConfigWithVerbosity = {
-    verbosity: options.verbosity,
-  };
-  const inputForRequest = inputMessages as ResponseCreateParamsNonStreaming["input"];
-
-  const request: ResponseCreateParamsNonStreaming = {
-    model: options.model,
-    reasoning: { effort: options.effort },
-    text: textConfig,
-    tools: buildCliToolList(),
-    input: inputForRequest,
-  };
-
-  if (options.continueConversation && context.previousResponseId) {
-    request.previous_response_id = context.previousResponseId;
-  } else if (
-    options.continueConversation &&
-    !context.previousResponseId &&
-    !context.resumeSummaryText
-  ) {
-    console.error(
-      "[gpt-5-cli-d2] warn: 直前の response.id が見つからないため、新規会話として開始します",
-    );
-  }
-
-  return request;
-}
-
-/**
- * Responses APIの結果からアシスタント本文を抽出する。
- *
- * @param response APIレスポンス。
- * @returns アシスタントメッセージ本文。取得できない場合はnull。
- */
-function extractResponseText(response: any): string | null {
-  const anyResponse = response as any;
-  const outputText = anyResponse.output_text;
-  if (Array.isArray(outputText) && outputText.length > 0) {
-    return outputText.join("");
-  }
-  if (typeof outputText === "string" && outputText.trim().length > 0) {
-    return outputText;
-  }
-  if (Array.isArray(anyResponse.output)) {
-    for (const item of anyResponse.output) {
-      if (item?.type === "message" && Array.isArray(item.content)) {
-        for (const content of item.content) {
-          if (content?.type === "output_text" && content.text) {
-            return content.text;
-          }
-          if (content?.type === "text" && content.text) {
-            return content.text;
-          }
-        }
-      }
-    }
-  }
-  const outputMessage = anyResponse.output_message;
-  if (outputMessage?.content) {
-    for (const content of outputMessage.content) {
-      if (content?.type === "output_text" && content.text) {
-        return content.text;
-      }
-      if (content?.type === "text" && content.text) {
-        return content.text;
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * 履歴要約モードを実行し、選択した対話の概要を生成・保存する。
- *
- * @param options CLIオプション。
- * @param defaults 既定値セット。
- * @param historyStore 履歴ストア。
- * @param client OpenAIクライアント。
- */
-async function performCompact(
-  options: CliOptions,
-  defaults: CliDefaults,
-  historyStore: HistoryStore<CliHistoryTask>,
-  client: OpenAI,
-): Promise<void> {
-  if (typeof options.compactIndex !== "number") {
-    throw new Error("Error: --compact の履歴番号は正の整数で指定してください");
-  }
-  const entry = historyStore.selectByNumber(options.compactIndex);
-  const turns = entry.turns ?? [];
-  if (turns.length === 0) {
-    throw new Error("Error: この履歴には要約対象のメッセージがありません");
-  }
-  const conversationText = formatTurnsForSummary(turns);
-  if (!conversationText) {
-    throw new Error("Error: 要約対象のメッセージがありません");
-  }
-
-  const instruction =
-    "あなたは会話ログを要約するアシスタントです。論点を漏らさず日本語で簡潔にまとめてください。";
-  const header = "以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。";
-  const userPrompt = `${header}\n---\n${conversationText}\n---\n\n出力条件:\n- 内容をシンプルに要約する\n- 箇条書きでも短い段落でもよい`;
-
-  const compactTextConfig: ResponseTextConfigWithVerbosity = {
-    verbosity: "medium",
-  };
-  const request: ResponseCreateParamsNonStreaming = {
-    model: defaults.modelMini,
-    reasoning: { effort: "medium" },
-    text: compactTextConfig,
-    input: [
-      { role: "system", content: [{ type: "input_text", text: instruction }] },
-      { role: "user", content: [{ type: "input_text", text: userPrompt }] },
-    ],
-  };
-
-  const response = await client.responses.create(request);
-  const summaryText = extractResponseText(response);
-  if (!summaryText) {
-    throw new Error("Error: 要約の生成に失敗しました");
-  }
-
-  const tsNow = new Date().toISOString();
-  const summaryTurn = {
-    role: "system",
-    kind: "summary",
-    text: summaryText,
-    at: tsNow,
-  };
-  const resume = {
-    mode: "new_request",
-    previous_response_id: "",
-    summary: { text: summaryText, created_at: tsNow },
-  };
-
-  const targetId = entry.last_response_id;
-  if (!targetId) {
-    throw new Error("Error: 選択した履歴の last_response_id が無効です。");
-  }
-
-  const entries = historyStore.loadEntries();
-  const nextEntries = entries.map((item) => {
-    if ((item.last_response_id ?? "") === targetId) {
-      return {
-        ...item,
-        updated_at: tsNow,
-        resume,
-        turns: [summaryTurn],
-      };
-    }
-    return item;
-  });
-  historyStore.saveEntries(nextEntries);
-  console.log(
-    `[gpt-5-cli-d2] compact: history=${options.compactIndex}, summarized=${turns.length}`,
-  );
-  process.stdout.write(`${summaryText}\n`);
-}
-
-/**
  * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
  */
 export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<void> {
@@ -1100,11 +465,13 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
     });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client);
+      await performCompact(options, defaults, historyStore, client, "[gpt-5-cli-d2]");
       return;
     }
 
-    const determine = await determineInput(options, historyStore, defaults);
+    const determine = await determineInput(options, historyStore, defaults, {
+      printHelp,
+    });
     if (determine.kind === "exit") {
       process.exit(determine.code);
       return;
@@ -1117,21 +484,40 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       determine.activeEntry,
       determine.previousResponseId,
       determine.previousTitle,
+      {
+        logLabel: "[gpt-5-cli-d2]",
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry, logWarning }) => {
+          if (!nextOptions.taskModeExplicit) {
+            const historyMode = activeEntry.task?.mode;
+            if (historyMode && historyMode !== "d2") {
+              logWarning("warn: 選択した履歴は d2 モードではありません (新規開始)");
+            }
+            nextOptions.taskMode = "d2";
+          }
+
+          if (!nextOptions.d2FileExplicit) {
+            const historyFile = activeEntry.task?.d2?.file_path;
+            nextOptions.d2FilePath = historyFile ?? nextOptions.d2FilePath;
+          }
+        },
+      },
     );
 
     const d2Context = ensureD2Context(options);
 
-    const imageInfo = prepareImageData(options.imagePath);
-    const request = buildRequest(
+    const imageInfo = prepareImageData(options.imagePath, "[gpt-5-cli-d2]");
+    const request = buildRequest({
       options,
       context,
-      determine.inputText,
+      inputText: determine.inputText,
       systemPrompt,
-      imageInfo.dataUrl,
+      imageDataUrl: imageInfo.dataUrl,
       defaults,
-      d2Context,
-    );
-    const response = await executeWithTools(client, request, options);
+      logLabel: "[gpt-5-cli-d2]",
+      additionalSystemMessages:
+        options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
+    });
+    const response = await executeWithTools(client, request, options, "[gpt-5-cli-d2]");
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");

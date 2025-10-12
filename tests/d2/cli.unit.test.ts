@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput, parseArgs } from "./cli.js";
-import type { CliDefaults, CliOptions } from "../default/types.js";
-import type { HistoryEntry, HistoryStore } from "../../core/history.js";
-import type { CliHistoryTask } from "../history/taskAdapter.js";
+import { determineInput } from "../../src/cli/shared/input.js";
+import { parseArgs } from "../../src/cli/d2/cli.js";
+import type { CliDefaults, CliOptions } from "../../src/cli/default/types.js";
+import type { HistoryEntry, HistoryStore } from "../../src/core/history.js";
+import type { CliHistoryTask } from "../../src/cli/history/taskAdapter.js";
+
+const noopDeps = { printHelp: () => {} };
 
 function createDefaults(): CliDefaults {
   return {
@@ -130,7 +133,12 @@ describe("d2 determineInput", () => {
       args: ["続けよう"],
     });
 
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      noopDeps,
+    );
     expect(store.selected).toBe(1);
     expect(result.kind).toBe("input");
     if (result.kind === "input") {
@@ -144,11 +152,23 @@ describe("d2 determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions();
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
+    let helpCalled = false;
+    const deps = {
+      printHelp: () => {
+        helpCalled = true;
+      },
+    };
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      deps,
+    );
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
       expect(result.code).toBe(1);
     }
     expect(store.listed).toBe(false);
+    expect(helpCalled).toBe(true);
   });
 });
