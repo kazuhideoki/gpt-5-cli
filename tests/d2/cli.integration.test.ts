@@ -38,6 +38,71 @@ describe("d2 CLI integration", () => {
     cleanupHistory();
   });
 
+  test("正常系: 単純な問い合わせが履歴に保存される", async () => {
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        const body = { id: "resp-d2", output_text: ["D2 OK"] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const result = await runD2Cli(["シンプルな図"], env);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[gpt-5-cli-d2]");
+    expect(extractUserLines(result.stdout).at(-1)).toBe("D2 OK");
+
+    expect(fs.existsSync(historyPath)).toBe(true);
+    const historyRaw = fs.readFileSync(historyPath, "utf8");
+    const historyData = JSON.parse(historyRaw) as Array<{
+      last_response_id?: string;
+      turns?: Array<{ role?: string; text?: string }>;
+      task?: { mode?: string; d2?: { file_path?: string } };
+      request_count?: number;
+    }>;
+    expect(historyData.length).toBe(1);
+    const [entry] = historyData;
+    expect(entry.last_response_id).toBe("resp-d2");
+    expect(entry.task?.mode).toBe("d2");
+    expect(entry.request_count).toBe(1);
+    expect(entry.turns?.length).toBe(2);
+    expect(entry.turns?.[0]?.role).toBe("user");
+    expect(entry.turns?.[0]?.text).toBe("シンプルな図");
+    expect(entry.turns?.[1]?.role).toBe("assistant");
+    expect(entry.turns?.[1]?.text).toBe("D2 OK");
+  });
+
+  test("異常系: OpenAI エラー時に非ゼロ終了し履歴を残さない", async () => {
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        const body = { error: { message: "mock failure" } };
+        return new Response(JSON.stringify(body), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const result = await runD2Cli(["失敗テスト"], env);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("[gpt-5-cli-d2]");
+    expect(extractUserLines(result.stdout)).toHaveLength(0);
+    expect(result.stderr).toContain("mock failure");
+    expect(fs.existsSync(historyPath)).toBe(false);
+  });
+
   test("d2 モード: 履歴に絶対パスを保持し継続時も固定される", async () => {
     const responses = [
       { id: "resp-d2-1", text: "D2 OK (1)" },
