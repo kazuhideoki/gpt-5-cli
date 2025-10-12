@@ -47,6 +47,27 @@ async function runCli(args: string[], env: Record<string, string>): Promise<CliR
   return { stdout, stderr, exitCode };
 }
 
+async function runD2Cli(args: string[], env: Record<string, string>): Promise<CliResult> {
+  const proc = Bun.spawn(["bun", "run", "src/d2/cli.ts", ...args], {
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      ...env,
+      NO_COLOR: "1",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  return { stdout, stderr, exitCode };
+}
+
 function createBaseEnv(port: number, historyPath: string): Record<string, string> {
   return {
     OPENAI_API_KEY: "test-key",
@@ -59,7 +80,10 @@ function extractUserLines(output: string): string[] {
   return output
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0 && !line.startsWith("[gpt-5-cli]"));
+    .filter(
+      (line) =>
+        line.length > 0 && !line.startsWith("[gpt-5-cli]") && !line.startsWith("[gpt-5-cli-d2]"),
+    );
 }
 
 describe("CLI integration", () => {
@@ -156,6 +180,7 @@ describe("CLI integration", () => {
     const responses = [
       { id: "resp-d2-1", text: "D2 OK (1)" },
       { id: "resp-d2-2", text: "D2 OK (2)" },
+      { id: "resp-d2-3", text: "D2 OK (3)" },
     ];
     let callIndex = 0;
 
@@ -182,7 +207,7 @@ describe("CLI integration", () => {
 
     const first = await runCli(["-D", "-F", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
-    expect(first.stdout).toContain("[gpt-5-cli]");
+    expect(first.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
 
     expect(fs.existsSync(historyPath)).toBe(true);
@@ -194,7 +219,7 @@ describe("CLI integration", () => {
 
     const second = await runCli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
-    expect(second.stdout).toContain("[gpt-5-cli]");
+    expect(second.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(second.stdout).at(-1)).toBe("D2 OK (2)");
 
     const historyAfterSecond = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
@@ -202,6 +227,16 @@ describe("CLI integration", () => {
     const secondEntry = historyAfterSecond[0];
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
+    const third = await runD2Cli(["-c", "3回目"], env);
+    expect(third.exitCode).toBe(0);
+    expect(third.stdout).toContain("[gpt-5-cli-d2]");
+    expect(extractUserLines(third.stdout).at(-1)).toBe("D2 OK (3)");
+
+    const historyAfterThird = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
+    expect(historyAfterThird.length).toBe(1);
+    const thirdEntry = historyAfterThird[0];
+    expect(thirdEntry.request_count).toBe(3);
+    expect(thirdEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(callIndex).toBe(responses.length);
   });
 

@@ -105,31 +105,11 @@ describe("parseArgs", () => {
     expect(options.compactIndex).toBe(3);
   });
 
-  it("-D フラグで d2 モードになる", () => {
+  it("d2関連フラグは parseArgs で拒否される", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["-D", "ダイアグラム"], defaults);
-    expect(options.taskMode).toBe("d2");
-    expect(options.taskModeExplicit).toBe(true);
-  });
-
-  it("d2 モードで --d2-iterations を指定できる", () => {
-    const defaults = createDefaults();
-    const options = parseArgs(["-D", "--d2-iterations", "5", "図"], defaults);
-    expect(options.d2MaxIterations).toBe(5);
-    expect(options.d2MaxIterationsExplicit).toBe(true);
-  });
-
-  it("d2 モード以外で --d2-iterations を指定するとエラーになる", () => {
-    const defaults = createDefaults();
-    expect(() => parseArgs(["--d2-iterations", "4", "テスト"], defaults)).toThrow(
-      "Error: --d2-iterations は d2モードと併用してください",
-    );
-  });
-
-  it("--d2-file 単体ではエラーになる", () => {
-    const defaults = createDefaults();
+    expect(() => parseArgs(["-D", "ダイアグラム"], defaults)).toThrow("error: unknown option '-D'");
     expect(() => parseArgs(["--d2-file", "out.d2", "テスト"], defaults)).toThrow(
-      "Error: --d2-file は d2モードと併用してください",
+      "error: unknown option '--d2-file'",
     );
   });
 
