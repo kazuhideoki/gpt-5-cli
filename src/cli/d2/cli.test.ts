@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { determineInput, parseArgs } from "./cli.js";
-import type { CliDefaults, CliOptions } from "../cli/default/types.js";
-import type { HistoryEntry, HistoryStore } from "../core/history.js";
-import type { CliHistoryTask } from "../cli/history/taskAdapter.js";
+import type { CliDefaults, CliOptions } from "../default/types.js";
+import type { HistoryEntry, HistoryStore } from "../../core/history.js";
+import type { CliHistoryTask } from "../history/taskAdapter.js";
 
 function createDefaults(): CliDefaults {
   return {

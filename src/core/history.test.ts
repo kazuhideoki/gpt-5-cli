@@ -48,9 +48,7 @@ describe("HistoryStore", () => {
   it("loadEntries は不正な JSON でエラーを投げる", () => {
     store.ensureInitialized();
     fs.writeFileSync(historyPath, "{", "utf8");
-    expect(() => store.loadEntries()).toThrow(
-      "[gpt-5-cli] failed to parse history index",
-    );
+    expect(() => store.loadEntries()).toThrow("[gpt-5-cli] failed to parse history index");
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {
@@ -82,9 +80,7 @@ describe("HistoryStore", () => {
     store.saveEntries(entries);
     expect(store.selectByNumber(1).last_response_id).toBe("b");
     expect(store.selectByNumber(2).last_response_id).toBe("c");
-    expect(() => store.selectByNumber(4)).toThrow(
-      "[gpt-5-cli] 無効な履歴番号です",
-    );
+    expect(() => store.selectByNumber(4)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
 
   it("deleteByNumber は対象を削除する", () => {
@@ -109,13 +105,9 @@ describe("HistoryStore", () => {
     const result = store.deleteByNumber(2);
     expect(result.removedId).toBe("c");
     expect(result.removedTitle).toBe("mid");
-    const remaining = store
-      .loadEntries()
-      .map((entry) => entry.last_response_id);
+    const remaining = store.loadEntries().map((entry) => entry.last_response_id);
     expect(remaining).toEqual(["a", "b"]);
-    expect(() => store.deleteByNumber(3)).toThrow(
-      "[gpt-5-cli] 無効な履歴番号です",
-    );
+    expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
 
   it("upsertConversation が新規エントリを追加する", () => {
@@ -176,10 +168,7 @@ describe("HistoryStore", () => {
     const [updated] = store.loadEntries();
     expect(updated.last_response_id).toBe("resp-new");
     expect(updated.request_count).toBe(3);
-    expect(updated.turns?.slice(-2).map((turn) => turn.text)).toEqual([
-      "question",
-      "answer",
-    ]);
+    expect(updated.turns?.slice(-2).map((turn) => turn.text)).toEqual(["question", "answer"]);
     expect(updated.resume?.previous_response_id).toBe("resp-new");
     expect(updated.resume?.summary?.text).toBe("まとめ");
   });

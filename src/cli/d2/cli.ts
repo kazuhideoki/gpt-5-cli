@@ -17,18 +17,18 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../cli/default/types.js";
-import type { HistoryEntry } from "../core/history.js";
-import { formatModelValue, formatScaleValue } from "../cli/default/utils.js";
-import { ensureApiKey, loadDefaults, loadEnvironment } from "../core/config.js";
-import { formatTurnsForSummary, HistoryStore } from "../core/history.js";
-import { FUNCTION_TOOLS, executeFunctionToolCall } from "../cli/default/tools.js";
-import { loadPrompt, resolvePromptPath } from "../core/prompts.js";
+} from "../default/types.js";
+import type { HistoryEntry } from "../../core/history.js";
+import { formatModelValue, formatScaleValue } from "../default/utils.js";
+import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
+import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
+import { FUNCTION_TOOLS, executeFunctionToolCall } from "../default/tools.js";
+import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
 import {
   buildCliHistoryTask,
   cliHistoryTaskSchema,
   type CliHistoryTask,
-} from "../cli/history/taskAdapter.js";
+} from "../history/taskAdapter.js";
 
 type CliHistoryEntry = HistoryEntry<CliHistoryTask>;
 

@@ -1132,7 +1132,7 @@ async function main(): Promise<void> {
     });
 
     if (hasD2Indicator) {
-      const { runD2Cli } = await import("../../d2/cli.js");
+      const { runD2Cli } = await import("../d2/cli.js");
       await runD2Cli(argv);
       return;
     }
@@ -1159,7 +1159,7 @@ async function main(): Promise<void> {
       taskSchema: cliHistoryTaskSchema,
     });
     if (shouldDelegateToD2(options, historyStore)) {
-      const { runD2Cli } = await import("../../d2/cli.js");
+      const { runD2Cli } = await import("../d2/cli.js");
       await runD2Cli(argv);
       return;
     }
