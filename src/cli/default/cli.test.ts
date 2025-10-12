@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest, determineInput, parseArgs } from "./cli.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
-import type { HistoryEntry, HistoryStore } from "./history.js";
+import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 
 function createDefaults(): CliDefaults {
   return {

@@ -1,3 +1,4 @@
+// TODO default と d2 部分など共通部分以外は多相性を持たせるように再設計する
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
@@ -167,7 +168,9 @@ export class HistoryStore {
   selectByNumber(index: number): HistoryEntry {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(
+        `[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`,
+      );
     }
     return entries[index - 1];
   }
@@ -181,16 +184,25 @@ export class HistoryStore {
   deleteByNumber(index: number): { removedTitle: string; removedId: string } {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(
+        `[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`,
+      );
     }
     const entry = entries[index - 1];
     const lastId = entry.last_response_id;
     if (!lastId) {
-      throw new Error("[gpt-5-cli] 選択した履歴の last_response_id が無効です。");
+      throw new Error(
+        "[gpt-5-cli] 選択した履歴の last_response_id が無効です。",
+      );
     }
-    const filtered = this.loadEntries().filter((item) => item.last_response_id !== lastId);
+    const filtered = this.loadEntries().filter(
+      (item) => item.last_response_id !== lastId,
+    );
     this.saveEntries(filtered);
-    return { removedTitle: entry.title ?? "(タイトル未設定)", removedId: lastId };
+    return {
+      removedTitle: entry.title ?? "(タイトル未設定)",
+      removedId: lastId,
+    };
   }
 
   /**
@@ -202,7 +214,9 @@ export class HistoryStore {
   showByNumber(index: number, noColor: boolean): void {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+      throw new Error(
+        `[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`,
+      );
     }
     const entry = entries[index - 1];
     const title = entry.title ?? "(タイトル未設定)";
@@ -218,7 +232,8 @@ export class HistoryStore {
       return;
     }
 
-    const useColor = !noColor && Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+    const useColor =
+      !noColor && Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
     const colors = {
       user: useColor ? "\u001b[36m" : "",
       assistant: useColor ? "\u001b[34m" : "",
@@ -283,7 +298,10 @@ export class HistoryStore {
  * @param store 履歴ストア。
  * @param entries 保存する一覧。
  */
-export function updateHistoryEntries(store: HistoryStore, entries: HistoryEntry[]): void {
+export function updateHistoryEntries(
+  store: HistoryStore,
+  entries: HistoryEntry[],
+): void {
   store.saveEntries(entries);
 }
 

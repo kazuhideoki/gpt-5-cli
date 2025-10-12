@@ -1,5 +1,5 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
-import type { HistoryEntry } from "./history.js";
+import type { HistoryEntry } from "../../core/history.js";
 
 /** OpenAI Reasoning APIへ渡すeffortレベル。 */
 export type EffortLevel = "low" | "medium" | "high";

@@ -13,10 +13,10 @@ import type {
   ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
 import type { CliDefaults, CliOptions, ConversationContext, OpenAIInputMessage } from "./types.js";
-import type { HistoryEntry, HistoryTask } from "./history.js";
+import type { HistoryEntry, HistoryTask } from "../../core/history.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "./config.js";
-import { formatTurnsForSummary, HistoryStore } from "./history.js";
+import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
 import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";
 
