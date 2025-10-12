@@ -15,7 +15,7 @@ import type {
 import type { CliDefaults, CliOptions, ConversationContext, OpenAIInputMessage } from "./types.js";
 import type { HistoryEntry, HistoryTask } from "../../core/history.js";
 import { formatModelValue, formatScaleValue } from "./utils.js";
-import { ensureApiKey, loadDefaults, loadEnvironment } from "./config.js";
+import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
 import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
 import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";

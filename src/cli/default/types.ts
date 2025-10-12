@@ -1,24 +1,9 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
 import type { HistoryEntry } from "../../core/history.js";
+export type { CliDefaults, EffortLevel, VerbosityLevel } from "../../core/types.js";
 
-/** OpenAI Reasoning APIへ渡すeffortレベル。 */
-export type EffortLevel = "low" | "medium" | "high";
-/** アシスタント出力の詳細度レベル。 */
-export type VerbosityLevel = "low" | "medium" | "high";
 /** CLIがサポートするタスクモード。 */
 export type TaskMode = "default" | "d2";
-
-/** 環境から読み込んだCLI既定値。 */
-export interface CliDefaults {
-  modelMain: string;
-  modelMini: string;
-  modelNano: string;
-  effort: EffortLevel;
-  verbosity: VerbosityLevel;
-  historyIndexPath: string;
-  promptsDir: string;
-  d2MaxIterations: number;
-}
 
 /** ユーザー入力を解析して得たCLI実行時オプション。 */
 export interface CliOptions {
