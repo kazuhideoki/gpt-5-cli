@@ -1224,10 +1224,6 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       return;
     }
 
-    if (options.taskMode === "d2" && options.operation === "compact") {
-      throw new Error("Error: d2モードと --compact は併用できません");
-    }
-
     const apiKey = ensureApiKey();
     const client = new OpenAI({ apiKey });
     const historyStore = new HistoryStore(defaults.historyIndexPath);

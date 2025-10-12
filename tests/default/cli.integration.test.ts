@@ -240,6 +240,65 @@ describe("CLI integration", () => {
     expect(callIndex).toBe(responses.length);
   });
 
+  test("d2 履歴を --compact で要約できる", async () => {
+    const responses = [
+      { id: "resp-d2-1", text: "D2 OK (1)" },
+      { id: "resp-d2-2", text: "D2 OK (2)" },
+      { id: "resp-d2-3", text: "D2 OK (3)" },
+      { id: "resp-d2-summary", text: "D2 Summary" },
+    ];
+    let callIndex = 0;
+
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        if (callIndex >= responses.length) {
+          return new Response("unexpected request", { status: 500 });
+        }
+        const payload = responses[callIndex];
+        callIndex += 1;
+        return new Response(JSON.stringify({ id: payload.id, output_text: [payload.text] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const relativePath = path.join("diagrams", "sample.d2");
+    const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
+
+    const first = await runCli(["-D", "-F", relativePath, "初回D2"], env);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain("[gpt-5-cli-d2]");
+    expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
+
+    const second = await runCli(["-c", "2回目"], env);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toContain("[gpt-5-cli-d2]");
+
+    const third = await runD2Cli(["-c", "3回目"], env);
+    expect(third.exitCode).toBe(0);
+    expect(third.stdout).toContain("[gpt-5-cli-d2]");
+
+    const summary = await runCli(["--compact", "1"], env);
+    expect(summary.exitCode).toBe(0);
+    expect(summary.stdout).toContain("[gpt-5-cli-d2] compact: history=1");
+    expect(extractUserLines(summary.stdout).at(-1)).toBe("D2 Summary");
+
+    const historyAfterSummary = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
+    expect(historyAfterSummary.length).toBe(1);
+    const entry = historyAfterSummary[0];
+    expect(entry.task?.d2?.file_path).toBe(expectedAbsolutePath);
+    expect(entry.turns?.length).toBe(1);
+    expect(entry.turns?.[0]?.role).toBe("system");
+    expect(entry.turns?.[0]?.text).toBe("D2 Summary");
+    expect(entry.resume?.summary?.text).toBe("D2 Summary");
+    expect(callIndex).toBe(responses.length);
+  });
+
   test("--compact は他の履歴系フラグと併用できない", async () => {
     currentHandler = () =>
       new Response("unexpected request", {
