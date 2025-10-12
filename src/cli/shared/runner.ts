@@ -4,7 +4,7 @@ import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
 import type { CliDefaults, CliOptions } from "../types.js";
 import type { z } from "zod";
 
-export interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
+interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
   argv: string[];
   logLabel: string;
   parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
@@ -12,7 +12,7 @@ export interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
   historyTaskSchema: z.ZodType<THistoryTask>;
 }
 
-export interface CliBootstrapHelpResult<TOptions extends CliOptions> {
+interface CliBootstrapHelpResult<TOptions extends CliOptions> {
   status: "help";
   defaults: CliDefaults;
   options: TOptions;
@@ -20,7 +20,7 @@ export interface CliBootstrapHelpResult<TOptions extends CliOptions> {
   promptPath: string;
 }
 
-export interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryTask> {
+interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryTask> {
   status: "ready";
   defaults: CliDefaults;
   options: TOptions;
@@ -29,7 +29,7 @@ export interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryTa
   historyStore: HistoryStore<THistoryTask>;
 }
 
-export type CliBootstrapResult<TOptions extends CliOptions, THistoryTask> =
+type CliBootstrapResult<TOptions extends CliOptions, THistoryTask> =
   | CliBootstrapHelpResult<TOptions>
   | CliBootstrapReadyResult<TOptions, THistoryTask>;
 

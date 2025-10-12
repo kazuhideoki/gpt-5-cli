@@ -8,7 +8,7 @@ import type {
 } from "openai/resources/responses/responses";
 
 /** ツール実行時に利用する作業ディレクトリとロガーを保持する。 */
-export interface ToolExecutionContext {
+interface ToolExecutionContext {
   cwd: string;
   log: (message: string) => void;
 }
@@ -22,18 +22,18 @@ export interface ToolResult {
   [key: string]: unknown;
 }
 
-export interface ReadFileResult extends ToolResult {
+interface ReadFileResult extends ToolResult {
   path?: string;
   content?: string;
   encoding?: string;
 }
 
-export interface WriteFileResult extends ToolResult {
+interface WriteFileResult extends ToolResult {
   path?: string;
   bytes_written?: number;
 }
 
-export interface CommandResult extends ToolResult {
+interface CommandResult extends ToolResult {
   command: string;
   args: string[];
   exit_code: number;
@@ -41,7 +41,7 @@ export interface CommandResult extends ToolResult {
   stderr: string;
 }
 
-export type ToolHandler<
+type ToolHandler<
   TArgs = unknown,
   TResult extends ToolResult = ToolResult,
   TContext extends ToolExecutionContext = ToolExecutionContext,
@@ -56,7 +56,7 @@ export interface ToolRegistration<
   handler: ToolHandler<TArgs, TResult, TContext>;
 }
 
-export interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
+interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
   tools: FunctionTool[];
   execute(call: ResponseFunctionToolCall, context: TContext): Promise<string>;
 }
@@ -83,7 +83,7 @@ export function resolveWorkspacePath(rawPath: string, cwd: string): string {
   return candidate;
 }
 
-export interface ReadFileArgs {
+interface ReadFileArgs {
   path: string;
 }
 
@@ -102,7 +102,7 @@ async function readFileTool(
   };
 }
 
-export interface WriteFileArgs {
+interface WriteFileArgs {
   path: string;
   content: string;
 }
@@ -160,7 +160,7 @@ async function runCommand(
   });
 }
 
-export interface D2Args {
+interface D2Args {
   file_path: string;
 }
 
@@ -282,7 +282,7 @@ export function createCoreToolRuntime<TContext extends ToolExecutionContext = To
  * @param registrations ツール定義とハンドラの配列。
  * @returns ツール一覧と実行メソッド。
  */
-export function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
+function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
   registrations: Iterable<ToolRegistration<any, any, TContext>>,
 ): ToolRuntime<TContext> {
   const entries = Array.from(registrations);

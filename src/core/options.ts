@@ -3,16 +3,16 @@ import { z } from "zod";
 import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 /** CLI履歴番号フラグを数値に変換するスキーマ。 */
-export const historyIndexSchema = z
+const historyIndexSchema = z
   .string()
   .regex(/^\d+$/u, "Error: 履歴番号は正の整数で指定してください")
   .transform((value) => Number.parseInt(value, 10));
 
 /** 履歴系フラグの入力値（有効化 or 指定番号）を検証するスキーマ。 */
-export const historyFlagSchema = z.union([z.literal(true), historyIndexSchema]);
+const historyFlagSchema = z.union([z.literal(true), historyIndexSchema]);
 
 /** 履歴フラグ解析後の結果。 */
-export interface HistoryFlagParseResult {
+interface HistoryFlagParseResult {
   index?: number;
   listOnly: boolean;
 }

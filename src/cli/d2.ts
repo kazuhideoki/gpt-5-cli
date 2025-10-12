@@ -39,7 +39,7 @@ interface D2ContextInfo {
   exists: boolean;
 }
 
-export const d2CliHistoryTaskSchema = z.object({
+const d2CliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
   d2: z
     .object({

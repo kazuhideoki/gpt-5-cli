@@ -3,12 +3,12 @@ import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 
-export interface DetermineInputExit {
+interface DetermineInputExit {
   kind: "exit";
   code: number;
 }
 
-export interface DetermineInputResult<THistoryTask = unknown> {
+interface DetermineInputResult<THistoryTask = unknown> {
   kind: "input";
   inputText: string;
   activeEntry?: HistoryEntry<THistoryTask>;
@@ -16,11 +16,11 @@ export interface DetermineInputResult<THistoryTask = unknown> {
   previousTitle?: string;
 }
 
-export type DetermineResult<THistoryTask = unknown> =
+type DetermineResult<THistoryTask = unknown> =
   | DetermineInputExit
   | DetermineInputResult<THistoryTask>;
 
-export interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
+interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
   printHelp: (defaults: CliDefaults, options: TOptions) => void;
 }
 

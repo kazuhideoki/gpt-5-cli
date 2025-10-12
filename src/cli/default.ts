@@ -21,7 +21,7 @@ import {
 import { determineInput } from "./shared/input.js";
 import { bootstrapCli } from "./shared/runner.js";
 
-export const defaultCliHistoryTaskSchema = z.object({
+const defaultCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
 });
 

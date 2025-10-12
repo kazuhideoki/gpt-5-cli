@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { EffortLevel, VerbosityLevel } from "./types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
-export const historyTurnSchema = z.object({
+const historyTurnSchema = z.object({
   role: z.string(),
   text: z.string().optional(),
   at: z.string().optional(),
@@ -12,24 +12,20 @@ export const historyTurnSchema = z.object({
   kind: z.string().optional(),
 });
 
-export type HistoryTurn = z.infer<typeof historyTurnSchema>;
+type HistoryTurn = z.infer<typeof historyTurnSchema>;
 
 /** 要約エントリの構造を検証するスキーマ。 */
-export const historySummarySchema = z.object({
+const historySummarySchema = z.object({
   text: z.string().optional(),
   created_at: z.string().optional(),
 });
 
-export type HistorySummary = z.infer<typeof historySummarySchema>;
-
 /** 履歴の再開情報を検証するスキーマ。 */
-export const historyResumeSchema = z.object({
+const historyResumeSchema = z.object({
   mode: z.string().optional(),
   previous_response_id: z.string().optional(),
   summary: historySummarySchema.optional(),
 });
-
-export type HistoryResume = z.infer<typeof historyResumeSchema>;
 
 /** 履歴エントリ全体を検証するスキーマ。 */
 const baseHistoryEntrySchema = z.object({
@@ -84,13 +80,13 @@ function createHistoryEntriesSchema<TTask>(
   return z.array(createHistoryEntrySchema(taskSchema));
 }
 
-export interface HistoryEntryMetadata {
+interface HistoryEntryMetadata {
   model: string;
   effort: EffortLevel;
   verbosity: VerbosityLevel;
 }
 
-export interface HistoryUpsertContext<TTask> {
+interface HistoryUpsertContext<TTask> {
   isNewConversation: boolean;
   titleToUse: string;
   previousResponseId?: string;
@@ -100,7 +96,7 @@ export interface HistoryUpsertContext<TTask> {
   previousTask?: TTask;
 }
 
-export interface HistoryConversationUpsert<TTask> {
+interface HistoryConversationUpsert<TTask> {
   metadata: HistoryEntryMetadata;
   context: HistoryUpsertContext<TTask>;
   responseId: string;
@@ -109,7 +105,7 @@ export interface HistoryConversationUpsert<TTask> {
   task?: TTask;
 }
 
-export interface HistoryStoreOptions<TTask> {
+interface HistoryStoreOptions<TTask> {
   taskSchema?: z.ZodType<TTask>;
 }
 
@@ -448,65 +444,6 @@ export class HistoryStore<TTask = unknown> {
     }
     this.saveEntries(entries);
   }
-}
-
-/**
- * 履歴エントリ一覧を置き換えて保存する。
- *
- * @param store 履歴ストア。
- * @param entries 保存する一覧。
- */
-export function updateHistoryEntries<TTask>(
-  store: HistoryStore<TTask>,
-  entries: HistoryEntry<TTask>[],
-): void {
-  store.saveEntries(entries);
-}
-
-/**
- * 履歴エントリを全件読み込むショートカット。
- *
- * @param store 履歴ストア。
- * @returns 履歴一覧。
- */
-export function loadAllEntries<TTask>(store: HistoryStore<TTask>): HistoryEntry<TTask>[] {
-  return store.loadEntries();
-}
-
-/**
- * 条件に一致する履歴エントリを更新し、存在しなければ新規作成する。
- *
- * @param store 履歴ストア。
- * @param predicate 更新対象かを判定する関数。
- * @param updater エントリ更新関数。
- * @param fallback 対象が無かった場合に作成するエントリ。
- * @returns 更新または新規作成したエントリ。
- */
-export function replaceEntry<TTask>(
-  store: HistoryStore<TTask>,
-  predicate: (entry: HistoryEntry<TTask>) => boolean,
-  updater: (entry: HistoryEntry<TTask>) => HistoryEntry<TTask>,
-  fallback: () => HistoryEntry<TTask>,
-): HistoryEntry<TTask> {
-  const entries = store.loadEntries();
-  let replaced: HistoryEntry<TTask> | null = null;
-  const nextEntries = entries.map((entry) => {
-    if (predicate(entry)) {
-      replaced = updater(entry);
-      return replaced;
-    }
-    return entry;
-  });
-
-  if (replaced) {
-    store.saveEntries(nextEntries);
-    return replaced;
-  }
-
-  const fallbackEntry = fallback();
-  nextEntries.push(fallbackEntry);
-  store.saveEntries(nextEntries);
-  return fallbackEntry;
 }
 
 /**

@@ -26,7 +26,7 @@ interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = u
   logWarning: (message: string) => void;
 }
 
-export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
+interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
   logLabel: string;
   synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
 }
@@ -198,7 +198,7 @@ function detectImageMime(filePath: string): string {
   }
 }
 
-export interface ImageInfo {
+interface ImageInfo {
   dataUrl?: string;
   mime?: string;
   resolvedPath?: string;
@@ -285,7 +285,7 @@ export async function executeWithTools(
   }
 }
 
-export interface BuildRequestParams {
+interface BuildRequestParams {
   options: CliOptions;
   context: ConversationContext;
   inputText: string;

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-export interface CreateOpenAIClientOptions {
+interface CreateOpenAIClientOptions {
   /**
    * 明示的に指定するAPIキー。省略時は環境変数から取得する。
    */
