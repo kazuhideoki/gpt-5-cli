@@ -19,6 +19,13 @@ import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.j
 import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
 import { FUNCTION_TOOLS, executeFunctionToolCall } from "./tools.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
+import {
+  buildCliHistoryTask,
+  cliHistoryTaskSchema,
+  type CliHistoryTask,
+} from "../history/taskAdapter.js";
+
+type CliHistoryEntry = HistoryEntry<CliHistoryTask>;
 
 /**
  * OpenAIレスポンス設定にCLI固有のverbosity指定を付加したラッパー型。
@@ -41,7 +48,7 @@ interface DetermineInputExit {
 interface DetermineInputResult {
   kind: "input";
   inputText: string;
-  activeEntry?: HistoryEntry;
+  activeEntry?: CliHistoryEntry;
   previousResponseId?: string;
   previousTitle?: string;
 }
@@ -160,7 +167,10 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
  * @param historyStore 履歴ストア。
  * @returns d2会話を扱う必要があればtrue。
  */
-function shouldDelegateToD2(options: CliOptions, historyStore: HistoryStore): boolean {
+function shouldDelegateToD2(
+  options: CliOptions,
+  historyStore: HistoryStore<CliHistoryTask>,
+): boolean {
   if (options.operation === "compact" && typeof options.compactIndex === "number") {
     const entry = historyStore.selectByNumber(options.compactIndex);
     return entry.task?.mode === "d2";
@@ -594,7 +604,7 @@ function detectImageMime(filePath: string): string {
  */
 export async function determineInput(
   options: CliOptions,
-  historyStore: HistoryStore,
+  historyStore: HistoryStore<CliHistoryTask>,
   defaults: CliDefaults,
 ): Promise<DetermineResult> {
   if (typeof options.deleteIndex === "number") {
@@ -662,9 +672,9 @@ async function promptForInput(): Promise<string> {
  */
 function computeContext(
   options: CliOptions,
-  historyStore: HistoryStore,
+  historyStore: HistoryStore<CliHistoryTask>,
   inputText: string,
-  initialActiveEntry?: HistoryEntry,
+  initialActiveEntry?: CliHistoryEntry,
   explicitPrevId?: string,
   explicitPrevTitle?: string,
 ): ConversationContext {
@@ -1016,7 +1026,7 @@ function extractResponseText(response: any): string | null {
 async function performCompact(
   options: CliOptions,
   defaults: CliDefaults,
-  historyStore: HistoryStore,
+  historyStore: HistoryStore<CliHistoryTask>,
   client: OpenAI,
 ): Promise<void> {
   if (typeof options.compactIndex !== "number") {
@@ -1145,7 +1155,9 @@ async function main(): Promise<void> {
       return;
     }
 
-    const historyStore = new HistoryStore(defaults.historyIndexPath);
+    const historyStore = new HistoryStore<CliHistoryTask>(defaults.historyIndexPath, {
+      taskSchema: cliHistoryTaskSchema,
+    });
     if (shouldDelegateToD2(options, historyStore)) {
       const { runD2Cli } = await import("../../d2/cli.js");
       await runD2Cli(argv);
@@ -1191,15 +1203,21 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      historyStore.upsertConversation({
-        options: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
+      const previousTask = context.activeEntry?.task as CliHistoryTask | undefined;
+      const historyTask = buildCliHistoryTask(
+        {
           taskMode: options.taskMode,
           taskModeExplicit: options.taskModeExplicit,
           d2FilePath: options.d2FilePath,
           d2FileExplicit: options.d2FileExplicit,
+        },
+        previousTask,
+      );
+      historyStore.upsertConversation({
+        metadata: {
+          model: options.model,
+          effort: options.effort,
+          verbosity: options.verbosity,
         },
         context: {
           isNewConversation: context.isNewConversation,
@@ -1208,12 +1226,12 @@ async function main(): Promise<void> {
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousTask: context.activeEntry?.task,
+          previousTask,
         },
         responseId: response.id,
         userText: determine.inputText,
         assistantText: content,
-        d2Context: undefined,
+        task: historyTask,
       });
     }
 

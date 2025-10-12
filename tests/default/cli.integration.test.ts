@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 
-import { createBaseEnv, createTempHistoryPath, extractUserLines, runDefaultCli } from "../helpers/cli";
+import {
+  createBaseEnv,
+  createTempHistoryPath,
+  extractUserLines,
+  runDefaultCli,
+} from "../helpers/cli";
 
 describe("CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;

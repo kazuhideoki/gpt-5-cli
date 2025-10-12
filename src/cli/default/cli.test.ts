@@ -2,6 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { buildRequest, determineInput, parseArgs } from "./cli.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
+import type { CliHistoryTask } from "../history/taskAdapter.js";
+
+type TestHistoryEntry = HistoryEntry<CliHistoryTask>;
+type HistoryStoreLike = HistoryStore<CliHistoryTask>;
 
 function createDefaults(): CliDefaults {
   return {
@@ -46,7 +50,7 @@ class StubHistoryStore {
   listCalled = false;
   selectedIndex: number | null = null;
 
-  constructor(private readonly entry: HistoryEntry | null = null) {}
+  constructor(private readonly entry: TestHistoryEntry | null = null) {}
 
   deleteByNumber(index: number) {
     this.deletedIndex = index;
@@ -192,7 +196,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
     expect(store.deletedIndex).toBe(2);
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
@@ -204,7 +208,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ showIndex: 5 });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
     expect(store.shownIndex).toBe(5);
     expect(result.kind).toBe("exit");
   });
@@ -213,14 +217,14 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ resumeListOnly: true });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
     expect(store.listCalled).toBe(true);
     expect(result.kind).toBe("exit");
   });
 
   it("履歴番号指定で入力テキストを返す", async () => {
     const defaults = createDefaults();
-    const entry: HistoryEntry = {
+    const entry: TestHistoryEntry = {
       last_response_id: "resp-123",
       title: "前回の対話",
     };
@@ -231,7 +235,7 @@ describe("determineInput", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
     expect(store.selectedIndex).toBe(1);
     expect(result.kind).toBe("input");
     if (result.kind === "input") {
@@ -245,7 +249,7 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions();
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults);
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
       expect(result.code).toBe(1);

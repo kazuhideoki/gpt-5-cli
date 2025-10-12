@@ -4,15 +4,32 @@ import os from "node:os";
 import path from "node:path";
 import { HistoryStore, formatTurnsForSummary } from "./history.js";
 import type { HistoryEntry } from "./history.js";
+import { z } from "zod";
+
+type TestTask = {
+  mode?: string;
+  d2?: {
+    file_path?: string;
+  };
+};
+
+const testTaskSchema = z.object({
+  mode: z.string().optional(),
+  d2: z
+    .object({
+      file_path: z.string().optional(),
+    })
+    .optional(),
+});
 
 let tempDir: string;
 let historyPath: string;
-let store: HistoryStore;
+let store: HistoryStore<TestTask>;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-test-"));
   historyPath = path.join(tempDir, "history.json");
-  store = new HistoryStore(historyPath);
+  store = new HistoryStore<TestTask>(historyPath, { taskSchema: testTaskSchema });
 });
 
 afterEach(() => {
@@ -33,7 +50,7 @@ describe("HistoryStore", () => {
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {
-    const entries: HistoryEntry[] = [
+    const entries: HistoryEntry<TestTask>[] = [
       { last_response_id: "1", title: "first" },
       { last_response_id: "2", title: "second" },
     ];
@@ -42,7 +59,7 @@ describe("HistoryStore", () => {
   });
 
   it("task メタデータも保存・復元できる", () => {
-    const entries: HistoryEntry[] = [
+    const entries: HistoryEntry<TestTask>[] = [
       {
         last_response_id: "d2-1",
         task: { mode: "d2", d2: { file_path: "/tmp/out.d2" } },
@@ -53,7 +70,7 @@ describe("HistoryStore", () => {
   });
 
   it("selectByNumber は更新日時でソートする", () => {
-    const entries: HistoryEntry[] = [
+    const entries: HistoryEntry<TestTask>[] = [
       { last_response_id: "a", updated_at: "2024-06-01T00:00:00Z" },
       { last_response_id: "b", updated_at: "2024-06-03T00:00:00Z" },
       { last_response_id: "c", updated_at: "2024-06-02T00:00:00Z" },
@@ -65,7 +82,7 @@ describe("HistoryStore", () => {
   });
 
   it("deleteByNumber は対象を削除する", () => {
-    const entries: HistoryEntry[] = [
+    const entries: HistoryEntry<TestTask>[] = [
       { last_response_id: "a", updated_at: "2024-06-01T00:00:00Z", title: "old" },
       { last_response_id: "b", updated_at: "2024-06-03T00:00:00Z", title: "latest" },
       { last_response_id: "c", updated_at: "2024-06-02T00:00:00Z", title: "mid" },
@@ -81,13 +98,10 @@ describe("HistoryStore", () => {
 
   it("upsertConversation が新規エントリを追加する", () => {
     store.upsertConversation({
-      options: {
+      metadata: {
         model: "gpt-5-nano",
         effort: "low",
         verbosity: "low",
-        taskMode: "default",
-        taskModeExplicit: false,
-        d2FileExplicit: false,
       },
       context: {
         isNewConversation: true,
@@ -107,7 +121,7 @@ describe("HistoryStore", () => {
   });
 
   it("upsertConversation が既存エントリを更新し要約を維持する", () => {
-    const existing: HistoryEntry = {
+    const existing: HistoryEntry<TestTask> = {
       title: "existing",
       last_response_id: "resp-prev",
       request_count: 2,
@@ -120,19 +134,17 @@ describe("HistoryStore", () => {
     store.saveEntries([existing]);
 
     store.upsertConversation({
-      options: {
+      metadata: {
         model: "gpt-5-mini",
         effort: "medium",
         verbosity: "high",
-        taskMode: "default",
-        taskModeExplicit: false,
-        d2FileExplicit: false,
       },
       context: {
         isNewConversation: false,
         titleToUse: "existing",
         previousResponseId: "resp-prev",
         resumeSummaryText: "まとめ",
+        previousTask: existing.task,
       },
       responseId: "resp-new",
       userText: "question",
@@ -151,13 +163,10 @@ describe("HistoryStore", () => {
     const absPath = path.join(tempDir, "diagram.d2");
 
     store.upsertConversation({
-      options: {
+      metadata: {
         model: "gpt-5-nano",
         effort: "low",
         verbosity: "low",
-        taskMode: "d2",
-        taskModeExplicit: false,
-        d2FileExplicit: false,
       },
       context: {
         isNewConversation: true,
@@ -166,7 +175,7 @@ describe("HistoryStore", () => {
       responseId: "resp-d2",
       userText: "draw",
       assistantText: "done",
-      d2Context: { absolutePath: absPath },
+      task: { mode: "d2", d2: { file_path: absPath } },
     });
 
     const entry = store.loadEntries()[0];

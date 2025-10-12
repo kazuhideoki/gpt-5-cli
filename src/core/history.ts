@@ -1,8 +1,7 @@
-// TODO default と d2 部分など共通部分以外は多相性を持たせるように再設計する
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { EffortLevel, TaskMode, VerbosityLevel } from "./types.js";
+import type { EffortLevel, VerbosityLevel } from "./types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
 export const historyTurnSchema = z.object({
@@ -32,23 +31,8 @@ export const historyResumeSchema = z.object({
 
 export type HistoryResume = z.infer<typeof historyResumeSchema>;
 
-/** d2モードのタスク付随情報を検証するスキーマ。 */
-export const historyTaskD2Schema = z.object({
-  file_path: z.string().optional(),
-});
-
-export type HistoryTaskD2 = z.infer<typeof historyTaskD2Schema>;
-
-/** 履歴タスクメタデータ全体を検証するスキーマ。 */
-export const historyTaskSchema = z.object({
-  mode: z.string().optional(),
-  d2: historyTaskD2Schema.optional(),
-});
-
-export type HistoryTask = z.infer<typeof historyTaskSchema>;
-
 /** 履歴エントリ全体を検証するスキーマ。 */
-export const historyEntrySchema = z.object({
+const baseHistoryEntrySchema = z.object({
   title: z.string().optional(),
   model: z.string().optional(),
   effort: z.string().optional(),
@@ -74,18 +58,73 @@ export const historyEntrySchema = z.object({
     .optional(),
   resume: historyResumeSchema.optional(),
   turns: z.array(historyTurnSchema).optional(),
-  task: historyTaskSchema.optional(),
+  task: z.unknown().optional(),
 });
 
-export type HistoryEntry = z.infer<typeof historyEntrySchema>;
+type HistoryEntryBase = z.infer<typeof baseHistoryEntrySchema>;
 
-const historyEntriesSchema = z.array(historyEntrySchema);
+export type HistoryEntry<TTask = unknown> = Omit<HistoryEntryBase, "task"> & {
+  task?: TTask;
+};
+
+function createHistoryEntrySchema<TTask>(
+  taskSchema?: z.ZodType<TTask>,
+): z.ZodType<HistoryEntry<TTask>> {
+  if (taskSchema) {
+    return baseHistoryEntrySchema.extend({
+      task: taskSchema.optional(),
+    }) as z.ZodType<HistoryEntry<TTask>>;
+  }
+  return baseHistoryEntrySchema as unknown as z.ZodType<HistoryEntry<TTask>>;
+}
+
+function createHistoryEntriesSchema<TTask>(
+  taskSchema?: z.ZodType<TTask>,
+): z.ZodArray<z.ZodType<HistoryEntry<TTask>>> {
+  return z.array(createHistoryEntrySchema(taskSchema));
+}
+
+export interface HistoryEntryMetadata {
+  model: string;
+  effort: EffortLevel;
+  verbosity: VerbosityLevel;
+}
+
+export interface HistoryUpsertContext<TTask> {
+  isNewConversation: boolean;
+  titleToUse: string;
+  previousResponseId?: string;
+  activeLastResponseId?: string;
+  resumeSummaryText?: string;
+  resumeSummaryCreatedAt?: string;
+  previousTask?: TTask;
+}
+
+export interface HistoryConversationUpsert<TTask> {
+  metadata: HistoryEntryMetadata;
+  context: HistoryUpsertContext<TTask>;
+  responseId: string;
+  userText: string;
+  assistantText: string;
+  task?: TTask;
+}
+
+export interface HistoryStoreOptions<TTask> {
+  taskSchema?: z.ZodType<TTask>;
+}
 
 /**
  * 履歴インデックスファイルを管理するユーティリティ。
  */
-export class HistoryStore {
-  constructor(private readonly filePath: string) {}
+export class HistoryStore<TTask = unknown> {
+  private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TTask>>>;
+
+  constructor(
+    private readonly filePath: string,
+    options: HistoryStoreOptions<TTask> = {},
+  ) {
+    this.entriesSchema = createHistoryEntriesSchema(options.taskSchema);
+  }
 
   /**
    * 履歴ファイルとディレクトリを初期化する。
@@ -103,12 +142,12 @@ export class HistoryStore {
    *
    * @returns 検証済みの履歴一覧。
    */
-  loadEntries(): HistoryEntry[] {
+  loadEntries(): HistoryEntry<TTask>[] {
     this.ensureInitialized();
     try {
       const raw = fs.readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw);
-      return historyEntriesSchema.parse(parsed);
+      return this.entriesSchema.parse(parsed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`[gpt-5-cli] failed to parse history index: ${message}`);
@@ -120,14 +159,14 @@ export class HistoryStore {
    *
    * @param entries 保存対象の履歴一覧。
    */
-  saveEntries(entries: HistoryEntry[]): void {
+  saveEntries(entries: HistoryEntry<TTask>[]): void {
     this.ensureInitialized();
-    const normalized = historyEntriesSchema.parse(entries);
+    const normalized = this.entriesSchema.parse(entries);
     const json = JSON.stringify(normalized, null, 2);
     fs.writeFileSync(this.filePath, `${json}\n`, "utf8");
   }
 
-  private sortByUpdated(entries: HistoryEntry[]): HistoryEntry[] {
+  private sortByUpdated(entries: HistoryEntry<TTask>[]): HistoryEntry<TTask>[] {
     return [...entries].sort((a, b) => {
       const left = a.updated_at ?? "";
       const right = b.updated_at ?? "";
@@ -166,7 +205,7 @@ export class HistoryStore {
    * @param index 1始まりの履歴番号。
    * @returns 該当エントリ。
    */
-  selectByNumber(index: number): HistoryEntry {
+  selectByNumber(index: number): HistoryEntry<TTask> {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
@@ -201,8 +240,8 @@ export class HistoryStore {
   /**
    * 対話履歴へ新たなターンを保存する。該当会話が存在すれば更新、無ければ新規作成する。
    */
-  upsertConversation(params: HistoryConversationUpsert): void {
-    const { options, context, responseId, userText, assistantText, d2Context } = params;
+  upsertConversation(params: HistoryConversationUpsert<TTask>): void {
+    const { metadata, context, responseId, userText, assistantText, task } = params;
     const entries = this.loadEntries();
     const tsNow = new Date().toISOString();
     let targetLastId = context.previousResponseId;
@@ -238,15 +277,15 @@ export class HistoryStore {
       response_id: responseId,
     };
 
-    const taskBuilder = (previousTask?: HistoryTask) =>
-      buildTaskMetadata(options, previousTask, d2Context);
+    const resolveTask = (previousTask?: TTask, existingTask?: TTask) =>
+      task ?? previousTask ?? existingTask;
 
     if (context.isNewConversation && !targetLastId) {
-      const newEntry: HistoryEntry = {
+      const newEntry: HistoryEntry<TTask> = {
         title: context.titleToUse,
-        model: options.model,
-        effort: options.effort,
-        verbosity: options.verbosity,
+        model: metadata.model,
+        effort: metadata.effort,
+        verbosity: metadata.verbosity,
         created_at: tsNow,
         updated_at: tsNow,
         first_response_id: responseId,
@@ -254,7 +293,7 @@ export class HistoryStore {
         request_count: 1,
         resume,
         turns: [userTurn, assistantTurn],
-        task: taskBuilder(context.previousTask),
+        task: resolveTask(context.previousTask),
       };
       entries.push(newEntry);
       this.saveEntries(entries);
@@ -292,13 +331,13 @@ export class HistoryStore {
           ...entry,
           updated_at: tsNow,
           last_response_id: responseId,
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
+          model: metadata.model,
+          effort: metadata.effort,
+          verbosity: metadata.verbosity,
           request_count: (entry.request_count ?? 0) + 1,
           turns,
           resume: nextResume,
-          task: taskBuilder(entry.task),
+          task: resolveTask(context.previousTask, entry.task),
         };
       }
       return entry;
@@ -309,11 +348,11 @@ export class HistoryStore {
       return;
     }
 
-    const fallbackEntry: HistoryEntry = {
+    const fallbackEntry: HistoryEntry<TTask> = {
       title: context.titleToUse,
-      model: options.model,
-      effort: options.effort,
-      verbosity: options.verbosity,
+      model: metadata.model,
+      effort: metadata.effort,
+      verbosity: metadata.verbosity,
       created_at: tsNow,
       updated_at: tsNow,
       first_response_id: responseId,
@@ -321,7 +360,7 @@ export class HistoryStore {
       request_count: 1,
       resume,
       turns: [userTurn, assistantTurn],
-      task: taskBuilder(context.previousTask),
+      task: resolveTask(context.previousTask),
     };
     nextEntries.push(fallbackEntry);
     this.saveEntries(nextEntries);
@@ -386,7 +425,7 @@ export class HistoryStore {
    *
    * @returns 最新エントリ。存在しない場合はundefined。
    */
-  findLatest(): HistoryEntry | undefined {
+  findLatest(): HistoryEntry<TTask> | undefined {
     const entries = this.loadEntries();
     if (entries.length === 0) return undefined;
     return this.sortByUpdated(entries)[0];
@@ -397,7 +436,7 @@ export class HistoryStore {
    *
    * @param entry 保存対象エントリ。
    */
-  upsertEntry(entry: HistoryEntry): void {
+  upsertEntry(entry: HistoryEntry<TTask>): void {
     const entries = this.loadEntries();
     const existingIndex = entries.findIndex(
       (item) => item.last_response_id === entry.last_response_id,
@@ -411,81 +450,16 @@ export class HistoryStore {
   }
 }
 
-/** d2タスクに関連するファイル情報。 */
-export interface HistoryD2Context {
-  absolutePath?: string;
-}
-
-/** 履歴へ保存するタスク情報の構築に必要なオプション。 */
-export interface HistoryTaskOptions {
-  model: string;
-  effort: EffortLevel;
-  verbosity: VerbosityLevel;
-  taskMode: TaskMode;
-  taskModeExplicit: boolean;
-  d2FilePath?: string;
-  d2FileExplicit: boolean;
-}
-
-/** 履歴更新時に参照する既存コンテキスト。 */
-export interface HistoryUpsertContext {
-  isNewConversation: boolean;
-  titleToUse: string;
-  previousResponseId?: string;
-  activeLastResponseId?: string;
-  resumeSummaryText?: string;
-  resumeSummaryCreatedAt?: string;
-  previousTask?: HistoryTask;
-}
-
-/** 履歴更新に必要な情報セット。 */
-export interface HistoryConversationUpsert {
-  options: HistoryTaskOptions;
-  context: HistoryUpsertContext;
-  responseId: string;
-  userText: string;
-  assistantText: string;
-  d2Context?: HistoryD2Context;
-}
-
-function buildTaskMetadata(
-  options: HistoryTaskOptions,
-  previousTask?: HistoryTask,
-  d2Context?: HistoryD2Context,
-): HistoryTask | undefined {
-  if (options.taskMode === "d2") {
-    const task: HistoryTask = { mode: "d2" };
-    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-    const contextPath = d2Context?.absolutePath;
-    let filePath = contextPath ?? options.d2FilePath;
-    if (!filePath && !options.d2FileExplicit) {
-      filePath = d2Meta?.file_path;
-    }
-    if (contextPath) {
-      d2Meta = { ...d2Meta, file_path: contextPath };
-    } else if (filePath) {
-      d2Meta = { ...d2Meta, file_path: filePath };
-    }
-    if (d2Meta && Object.keys(d2Meta).length > 0) {
-      task.d2 = d2Meta;
-    }
-    return task;
-  }
-
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
-  }
-
-  return previousTask;
-}
-
 /**
  * 履歴エントリ一覧を置き換えて保存する。
  *
  * @param store 履歴ストア。
  * @param entries 保存する一覧。
  */
-export function updateHistoryEntries(store: HistoryStore, entries: HistoryEntry[]): void {
+export function updateHistoryEntries<TTask>(
+  store: HistoryStore<TTask>,
+  entries: HistoryEntry<TTask>[],
+): void {
   store.saveEntries(entries);
 }
 
@@ -495,7 +469,7 @@ export function updateHistoryEntries(store: HistoryStore, entries: HistoryEntry[
  * @param store 履歴ストア。
  * @returns 履歴一覧。
  */
-export function loadAllEntries(store: HistoryStore): HistoryEntry[] {
+export function loadAllEntries<TTask>(store: HistoryStore<TTask>): HistoryEntry<TTask>[] {
   return store.loadEntries();
 }
 
@@ -508,14 +482,14 @@ export function loadAllEntries(store: HistoryStore): HistoryEntry[] {
  * @param fallback 対象が無かった場合に作成するエントリ。
  * @returns 更新または新規作成したエントリ。
  */
-export function replaceEntry(
-  store: HistoryStore,
-  predicate: (entry: HistoryEntry) => boolean,
-  updater: (entry: HistoryEntry) => HistoryEntry,
-  fallback: () => HistoryEntry,
-): HistoryEntry {
+export function replaceEntry<TTask>(
+  store: HistoryStore<TTask>,
+  predicate: (entry: HistoryEntry<TTask>) => boolean,
+  updater: (entry: HistoryEntry<TTask>) => HistoryEntry<TTask>,
+  fallback: () => HistoryEntry<TTask>,
+): HistoryEntry<TTask> {
   const entries = store.loadEntries();
-  let replaced: HistoryEntry | null = null;
+  let replaced: HistoryEntry<TTask> | null = null;
   const nextEntries = entries.map((entry) => {
     if (predicate(entry)) {
       replaced = updater(entry);
