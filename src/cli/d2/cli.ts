@@ -22,7 +22,7 @@ import type { HistoryEntry } from "../../core/history.js";
 import { formatModelValue, formatScaleValue } from "../default/utils.js";
 import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
 import { formatTurnsForSummary, HistoryStore } from "../../core/history.js";
-import { FUNCTION_TOOLS, executeFunctionToolCall } from "../default/tools.js";
+import { createCoreToolRuntime } from "../../core/tools.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
 import {
   buildCliHistoryTask,
@@ -186,6 +186,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
  *
  * @returns CLIが利用可能な関数ツールとプレビュー検索の配列。
  */
+const { tools: FUNCTION_TOOLS, execute: executeFunctionToolCall } = createCoreToolRuntime();
+
 function buildToolList(): ResponseCreateParamsNonStreaming["tools"] {
   return [...FUNCTION_TOOLS, { type: "web_search_preview" as const }];
 }

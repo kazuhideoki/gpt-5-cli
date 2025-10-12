@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { executeFunctionToolCall, FUNCTION_TOOLS, resolveWorkspacePath } from "./tools.js";
+import {
+  createCoreToolRuntime,
+  resolveWorkspacePath,
+  type ToolRegistration,
+  type ToolResult,
+} from "../../core/tools.js";
 import type { ResponseFunctionToolCall } from "openai/resources/responses/responses";
 
 function createCall(name: string, args: Record<string, unknown>): ResponseFunctionToolCall {
@@ -14,6 +19,8 @@ function createCall(name: string, args: Record<string, unknown>): ResponseFuncti
     arguments: JSON.stringify(args),
   };
 }
+
+const { tools: FUNCTION_TOOLS, execute: executeFunctionToolCall } = createCoreToolRuntime();
 
 describe("FUNCTION_TOOLS", () => {
   it("含まれるツール名が期待通り", () => {
@@ -107,5 +114,45 @@ describe("executeFunctionToolCall", () => {
     );
     expect(result.success).toBe(false);
     expect(result.message).toContain("Unknown tool");
+  });
+
+  it("CLI固有のツールを差し込める", async () => {
+    const extraTool: ToolRegistration = {
+      definition: {
+        type: "function",
+        strict: true,
+        name: "custom_echo",
+        description: "Echo back the provided message.",
+        parameters: {
+          type: "object",
+          properties: {
+            message: {
+              type: "string",
+              description: "Message to echo.",
+            },
+          },
+          required: ["message"],
+          additionalProperties: false,
+        },
+      },
+      handler: async (args: any): Promise<ToolResult> => ({
+        success: true,
+        message: String(args?.message ?? ""),
+      }),
+    };
+
+    const { tools, execute } = createCoreToolRuntime([extraTool]);
+    expect(tools.map((tool) => tool.name)).toContain("custom_echo");
+
+    const call = createCall("custom_echo", { message: "hello" });
+    const result = JSON.parse(
+      await execute(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.message).toBe("hello");
   });
 });
