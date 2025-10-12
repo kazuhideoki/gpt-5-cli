@@ -1,19 +1,12 @@
 #!/usr/bin/env bun
 import fs from "node:fs";
 import path from "node:path";
-import OpenAI from "openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../default/types.js";
-import { ensureApiKey, loadDefaults, loadEnvironment } from "../../core/config.js";
-import { HistoryStore } from "../../core/history.js";
-import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
+import { createOpenAIClient } from "../../core/openai.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "../../core/cli/options.js";
-import {
-  buildCliHistoryTask,
-  cliHistoryTaskSchema,
-  type CliHistoryTask,
-} from "../history/taskAdapter.js";
+import { buildCliHistoryTask, type CliHistoryTask } from "../history/taskAdapter.js";
 import {
   buildRequest,
   computeContext,
@@ -23,6 +16,7 @@ import {
   prepareImageData,
 } from "../../commands/conversation.js";
 import { determineInput } from "../shared/input.js";
+import { bootstrapCli } from "../shared/runner.js";
 
 /**
  * d2ダイアグラム生成時に利用するファイル参照情報。
@@ -440,29 +434,19 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
  */
 export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<void> {
   try {
-    loadEnvironment();
-    const defaults = loadDefaults();
-    console.log(`[gpt-5-cli-d2] history_index: ${defaults.historyIndexPath}`);
+    const bootstrap = bootstrapCli({
+      argv,
+      logLabel: "[gpt-5-cli-d2]",
+      parseArgs,
+      printHelp,
+    });
 
-    const options = parseArgs(argv, defaults);
-    const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
-    const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
-    if (systemPrompt) {
-      const bytes = Buffer.byteLength(systemPrompt, "utf8");
-      console.log(`[gpt-5-cli-d2] system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
-    } else {
-      console.error(`[gpt-5-cli-d2] system_prompt: not found or empty path=${promptPath}`);
-    }
-    if (options.helpRequested) {
-      printHelp(defaults, options);
+    if (bootstrap.status === "help") {
       return;
     }
 
-    const apiKey = ensureApiKey();
-    const client = new OpenAI({ apiKey });
-    const historyStore = new HistoryStore<CliHistoryTask>(defaults.historyIndexPath, {
-      taskSchema: cliHistoryTaskSchema,
-    });
+    const { defaults, options, historyStore, systemPrompt } = bootstrap;
+    const client = createOpenAIClient();
 
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client, "[gpt-5-cli-d2]");
