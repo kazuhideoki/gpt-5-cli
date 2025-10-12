@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { CORE_FUNCTION_TOOLS } from "../../../src/core/tools";
+import { CORE_FUNCTION_TOOLS } from "../tools.js";
 import {
   buildCliToolList,
   expandLegacyShortFlags,
   parseHistoryFlag,
-} from "../../../src/core/cli/options";
+} from "./options.js";
 
 describe("parseHistoryFlag", () => {
   test("未指定の場合は一覧フラグなしで返す", () => {

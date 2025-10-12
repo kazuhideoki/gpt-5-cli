@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "../../src/cli/shared/input.js";
-import { parseArgs } from "../../src/cli/d2.js";
-import type { CliDefaults, CliOptions } from "../../src/cli/default-types.js";
-import type { HistoryEntry, HistoryStore } from "../../src/core/history.js";
-import type { D2CliHistoryTask } from "../../src/cli/d2.js";
+import { determineInput } from "./shared/input.js";
+import { parseArgs } from "./d2.js";
+import type { CliDefaults, CliOptions } from "./default-types.js";
+import type { HistoryEntry, HistoryStore } from "../core/history.js";
+import type { D2CliHistoryTask } from "./d2.js";
 
 type HistoryStoreLike = HistoryStore<D2CliHistoryTask>;
 type D2HistoryEntry = HistoryEntry<D2CliHistoryTask>;

@@ -2,13 +2,27 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { bootstrapCli } from "../../../src/cli/shared/runner.js";
-import type { CliDefaults, CliOptions } from "../../../src/cli/default-types.js";
-import { createTempHistoryPath } from "../../helpers/cli.ts";
+import { bootstrapCli } from "./runner.js";
+import type { CliDefaults, CliOptions } from "../default-types.js";
 
 interface TempResources {
   historyCleanup: () => void;
   promptsDir: string;
+}
+
+function createTempHistoryPath(): { historyPath: string; cleanup: () => void } {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt5-cli-runner-test-"));
+  const historyPath = path.join(tempDir, "history_index.json");
+  return {
+    historyPath,
+    cleanup: () => {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup errors
+      }
+    },
+  };
 }
 
 function createOptions(defaults: CliDefaults, overrides: Partial<CliOptions> = {}): CliOptions {
