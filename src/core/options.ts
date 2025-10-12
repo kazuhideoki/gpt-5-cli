@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import { CORE_FUNCTION_TOOLS } from "../tools.js";
+import { CORE_FUNCTION_TOOLS } from "./tools.js";
 
 /** CLI履歴番号フラグを数値に変換するスキーマ。 */
 export const historyIndexSchema = z

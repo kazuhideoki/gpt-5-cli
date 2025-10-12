@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { CORE_FUNCTION_TOOLS } from "../tools.js";
+import { CORE_FUNCTION_TOOLS } from "./tools.js";
 import { buildCliToolList, expandLegacyShortFlags, parseHistoryFlag } from "./options.js";
 
 describe("parseHistoryFlag", () => {
