@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import type { EffortLevel, TaskMode, VerbosityLevel } from "./types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
 export const historyTurnSchema = z.object({
@@ -198,6 +199,135 @@ export class HistoryStore {
   }
 
   /**
+   * 対話履歴へ新たなターンを保存する。該当会話が存在すれば更新、無ければ新規作成する。
+   */
+  upsertConversation(params: HistoryConversationUpsert): void {
+    const { options, context, responseId, userText, assistantText, d2Context } = params;
+    const entries = this.loadEntries();
+    const tsNow = new Date().toISOString();
+    let targetLastId = context.previousResponseId;
+    if (!targetLastId && context.activeLastResponseId) {
+      targetLastId = context.activeLastResponseId;
+    }
+
+    const resumeSummaryText = context.resumeSummaryText ?? "";
+    let resumeSummaryCreated = context.resumeSummaryCreatedAt ?? "";
+    if (resumeSummaryText && !resumeSummaryCreated) {
+      resumeSummaryCreated = tsNow;
+    }
+
+    const resume = resumeSummaryText
+      ? {
+          mode: "response_id" as const,
+          previous_response_id: responseId,
+          summary: {
+            text: resumeSummaryText,
+            created_at: resumeSummaryCreated,
+          },
+        }
+      : {
+          mode: "response_id" as const,
+          previous_response_id: responseId,
+        };
+
+    const userTurn = { role: "user", text: userText, at: tsNow };
+    const assistantTurn = {
+      role: "assistant",
+      text: assistantText,
+      at: tsNow,
+      response_id: responseId,
+    };
+
+    const taskBuilder = (previousTask?: HistoryTask) =>
+      buildTaskMetadata(options, previousTask, d2Context);
+
+    if (context.isNewConversation && !targetLastId) {
+      const newEntry: HistoryEntry = {
+        title: context.titleToUse,
+        model: options.model,
+        effort: options.effort,
+        verbosity: options.verbosity,
+        created_at: tsNow,
+        updated_at: tsNow,
+        first_response_id: responseId,
+        last_response_id: responseId,
+        request_count: 1,
+        resume,
+        turns: [userTurn, assistantTurn],
+        task: taskBuilder(context.previousTask),
+      };
+      entries.push(newEntry);
+      this.saveEntries(entries);
+      return;
+    }
+
+    let updated = false;
+    const nextEntries = entries.map((entry) => {
+      if ((entry.last_response_id ?? "") === (targetLastId ?? "")) {
+        updated = true;
+        const turns = [...(entry.turns ?? []), userTurn, assistantTurn];
+        const nextResume = resumeSummaryText
+          ? {
+              ...(entry.resume ?? {}),
+              mode: "response_id" as const,
+              previous_response_id: responseId,
+              summary: {
+                text: resumeSummaryText,
+                created_at:
+                  resumeSummaryCreated ||
+                  entry.resume?.summary?.created_at ||
+                  entry.created_at ||
+                  tsNow,
+              },
+            }
+          : {
+              ...(entry.resume ?? {}),
+              mode: "response_id" as const,
+              previous_response_id: responseId,
+            };
+        if (!resumeSummaryText && nextResume.summary) {
+          delete nextResume.summary;
+        }
+        return {
+          ...entry,
+          updated_at: tsNow,
+          last_response_id: responseId,
+          model: options.model,
+          effort: options.effort,
+          verbosity: options.verbosity,
+          request_count: (entry.request_count ?? 0) + 1,
+          turns,
+          resume: nextResume,
+          task: taskBuilder(entry.task),
+        };
+      }
+      return entry;
+    });
+
+    if (updated) {
+      this.saveEntries(nextEntries);
+      return;
+    }
+
+    const fallbackEntry: HistoryEntry = {
+      title: context.titleToUse,
+      model: options.model,
+      effort: options.effort,
+      verbosity: options.verbosity,
+      created_at: tsNow,
+      updated_at: tsNow,
+      first_response_id: responseId,
+      last_response_id: responseId,
+      request_count: 1,
+      resume,
+      turns: [userTurn, assistantTurn],
+      task: taskBuilder(context.previousTask),
+    };
+    nextEntries.push(fallbackEntry);
+    this.saveEntries(nextEntries);
+  }
+
+  /**
    * 指定番号の履歴詳細を標準出力へ表示する。
    *
    * @param index 1始まりの履歴番号。
@@ -279,6 +409,74 @@ export class HistoryStore {
     }
     this.saveEntries(entries);
   }
+}
+
+/** d2タスクに関連するファイル情報。 */
+export interface HistoryD2Context {
+  absolutePath?: string;
+}
+
+/** 履歴へ保存するタスク情報の構築に必要なオプション。 */
+export interface HistoryTaskOptions {
+  model: string;
+  effort: EffortLevel;
+  verbosity: VerbosityLevel;
+  taskMode: TaskMode;
+  taskModeExplicit: boolean;
+  d2FilePath?: string;
+  d2FileExplicit: boolean;
+}
+
+/** 履歴更新時に参照する既存コンテキスト。 */
+export interface HistoryUpsertContext {
+  isNewConversation: boolean;
+  titleToUse: string;
+  previousResponseId?: string;
+  activeLastResponseId?: string;
+  resumeSummaryText?: string;
+  resumeSummaryCreatedAt?: string;
+  previousTask?: HistoryTask;
+}
+
+/** 履歴更新に必要な情報セット。 */
+export interface HistoryConversationUpsert {
+  options: HistoryTaskOptions;
+  context: HistoryUpsertContext;
+  responseId: string;
+  userText: string;
+  assistantText: string;
+  d2Context?: HistoryD2Context;
+}
+
+function buildTaskMetadata(
+  options: HistoryTaskOptions,
+  previousTask?: HistoryTask,
+  d2Context?: HistoryD2Context,
+): HistoryTask | undefined {
+  if (options.taskMode === "d2") {
+    const task: HistoryTask = { mode: "d2" };
+    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+    const contextPath = d2Context?.absolutePath;
+    let filePath = contextPath ?? options.d2FilePath;
+    if (!filePath && !options.d2FileExplicit) {
+      filePath = d2Meta?.file_path;
+    }
+    if (contextPath) {
+      d2Meta = { ...d2Meta, file_path: contextPath };
+    } else if (filePath) {
+      d2Meta = { ...d2Meta, file_path: filePath };
+    }
+    if (d2Meta && Object.keys(d2Meta).length > 0) {
+      task.d2 = d2Meta;
+    }
+    return task;
+  }
+
+  if (options.taskModeExplicit) {
+    return { mode: options.taskMode };
+  }
+
+  return previousTask;
 }
 
 /**
