@@ -16,6 +16,14 @@ import {
 } from "../commands/conversation.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
+  READ_FILE_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FORMAT_TOOL,
+  buildCliToolList,
+  createToolRuntime,
+} from "../core/tools.js";
+import {
   expandLegacyShortFlags,
   parseEffortFlag,
   parseHistoryFlag,
@@ -27,6 +35,13 @@ import { determineInput } from "./shared/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
+const SQL_TOOL_REGISTRATIONS = [
+  READ_FILE_TOOL,
+  SQL_FETCH_SCHEMA_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FORMAT_TOOL,
+] as const;
+const SQL_TOOL_RUNTIME = createToolRuntime(SQL_TOOL_REGISTRATIONS);
 
 interface SqlConnectionMetadata {
   host?: string;
@@ -558,9 +573,10 @@ async function runSqlCli(): Promise<void> {
         dsnHash: sqlEnv.hash,
         maxIterations: options.sqlMaxIterations,
       }),
+      tools: buildCliToolList(SQL_TOOL_REGISTRATIONS),
     });
 
-    const response = await executeWithTools(client, request, options, LOG_LABEL);
+    const response = await executeWithTools(client, request, options, LOG_LABEL, SQL_TOOL_RUNTIME);
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");

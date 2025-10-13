@@ -3,7 +3,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  createCoreToolRuntime,
+  D2_CHECK_TOOL,
+  D2_FMT_TOOL,
+  READ_FILE_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FORMAT_TOOL,
+  WRITE_FILE_TOOL,
+  createToolRuntime,
   resolveWorkspacePath,
   type ToolRegistration,
   type ToolResult,
@@ -20,7 +27,19 @@ function createCall(name: string, args: Record<string, unknown>): ResponseFuncti
   };
 }
 
-const { tools: FUNCTION_TOOLS, execute: executeFunctionToolCall } = createCoreToolRuntime();
+const MINIMAL_TOOLSET = [READ_FILE_TOOL] as const;
+const WORKSPACE_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL] as const;
+const SQL_TOOLSET = [
+  READ_FILE_TOOL,
+  SQL_FETCH_SCHEMA_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FORMAT_TOOL,
+] as const;
+
+const { tools: MINIMAL_FUNCTION_TOOLS } = createToolRuntime(MINIMAL_TOOLSET);
+const { tools: WORKSPACE_FUNCTION_TOOLS, execute: executeWorkspaceToolCall } =
+  createToolRuntime(WORKSPACE_TOOLSET);
+const { tools: SQL_FUNCTION_TOOLS, execute: executeSqlToolCall } = createToolRuntime(SQL_TOOLSET);
 
 const ORIGINAL_POSTGRES_DSN = process.env.POSTGRES_DSN;
 const ORIGINAL_SQRUFF_BIN = process.env.SQRUFF_BIN;
@@ -39,18 +58,27 @@ afterEach(() => {
   }
 });
 
-describe("FUNCTION_TOOLS", () => {
-  it("含まれるツール名が期待通り", () => {
-    const toolNames = FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).toEqual([
-      "read_file",
-      "write_file",
-      "d2_check",
-      "d2_fmt",
-      "sql_fetch_schema",
-      "sql_dry_run",
-      "sql_format",
-    ]);
+describe("tool registration lists", () => {
+  it("最小構成は read_file のみを公開する", () => {
+    const toolNames = MINIMAL_FUNCTION_TOOLS.map((tool) => tool.name);
+    expect(toolNames).toEqual(["read_file"]);
+  });
+
+  it("最小構成には SQL 系ツールが含まれない", () => {
+    const toolNames = MINIMAL_FUNCTION_TOOLS.map((tool) => tool.name);
+    expect(toolNames).not.toContain("sql_fetch_schema");
+    expect(toolNames).not.toContain("sql_dry_run");
+    expect(toolNames).not.toContain("sql_format");
+  });
+
+  it("SQL 向け拡張セットを構築できる", () => {
+    const toolNames = SQL_FUNCTION_TOOLS.map((tool) => tool.name);
+    expect(toolNames).toEqual(["read_file", "sql_fetch_schema", "sql_dry_run", "sql_format"]);
+  });
+
+  it("ワークスペース操作向け拡張セットを構築できる", () => {
+    const toolNames = WORKSPACE_FUNCTION_TOOLS.map((tool) => tool.name);
+    expect(toolNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
   });
 });
 
@@ -92,7 +120,7 @@ describe("executeFunctionToolCall", () => {
       content: "a -> b",
     });
     const writeResult = JSON.parse(
-      await executeFunctionToolCall(writeCall, {
+      await executeWorkspaceToolCall(writeCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -102,7 +130,7 @@ describe("executeFunctionToolCall", () => {
 
     const readCall = createCall("read_file", { path: "diagram.d2" });
     const readResult = JSON.parse(
-      await executeFunctionToolCall(readCall, {
+      await executeWorkspaceToolCall(readCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -114,7 +142,7 @@ describe("executeFunctionToolCall", () => {
   it("ワークスペース外のパスは拒否される", async () => {
     const readCall = createCall("read_file", { path: "../secret.txt" });
     const result = JSON.parse(
-      await executeFunctionToolCall(readCall, {
+      await executeWorkspaceToolCall(readCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -132,7 +160,7 @@ describe("executeFunctionToolCall", () => {
       arguments: "{}",
     };
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeWorkspaceToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -166,7 +194,7 @@ describe("executeFunctionToolCall", () => {
       }),
     };
 
-    const { tools, execute } = createCoreToolRuntime([extraTool]);
+    const { tools, execute } = createToolRuntime([...WORKSPACE_TOOLSET, extraTool]);
     expect(tools.map((tool) => tool.name)).toContain("custom_echo");
 
     const call = createCall("custom_echo", { message: "hello" });
@@ -184,7 +212,7 @@ describe("executeFunctionToolCall", () => {
   it("sql_dry_run は非SELECT文を拒否する", async () => {
     const call = createCall("sql_dry_run", { query: "INSERT INTO users VALUES (1)" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -197,7 +225,7 @@ describe("executeFunctionToolCall", () => {
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -209,7 +237,7 @@ describe("executeFunctionToolCall", () => {
   it("sql_dry_run は複数ステートメントを拒否する", async () => {
     const call = createCall("sql_dry_run", { query: "SELECT 1; DELETE FROM users" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -221,7 +249,7 @@ describe("executeFunctionToolCall", () => {
   it("sql_dry_run は E 文字列を含む複数ステートメントを拒否する", async () => {
     const call = createCall("sql_dry_run", { query: "SELECT E'foo\\''; DELETE FROM users" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -234,7 +262,7 @@ describe("executeFunctionToolCall", () => {
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1; -- ok" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -247,7 +275,7 @@ describe("executeFunctionToolCall", () => {
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1; /* trailing */" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -260,7 +288,7 @@ describe("executeFunctionToolCall", () => {
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_fetch_schema", {});
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -286,7 +314,7 @@ describe("executeFunctionToolCall", () => {
 
     const call = createCall("sql_format", { query: "select 1;\n" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -304,7 +332,7 @@ describe("executeFunctionToolCall", () => {
 
     const call = createCall("sql_format", { query: "SELECT 'value;test';" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -330,7 +358,7 @@ describe("executeFunctionToolCall", () => {
 
     const call = createCall("sql_format", { query: "SELECT 2; -- trailing" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -342,7 +370,7 @@ describe("executeFunctionToolCall", () => {
   it("sql_format は E 文字列を含む複数ステートメントを拒否する", async () => {
     const call = createCall("sql_format", { query: "SELECT E'foo\\''; DELETE FROM users" });
     const result = JSON.parse(
-      await executeFunctionToolCall(call, {
+      await executeSqlToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),

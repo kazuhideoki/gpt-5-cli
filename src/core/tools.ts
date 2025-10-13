@@ -58,7 +58,7 @@ export interface ToolRegistration<
   handler: ToolHandler<TArgs, TResult, TContext>;
 }
 
-interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
+export interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
   tools: FunctionTool[];
   execute(call: ResponseFunctionToolCall, context: TContext): Promise<string>;
 }
@@ -542,160 +542,152 @@ async function d2FmtTool(args: D2Args, context: ToolExecutionContext): Promise<C
   return runCommand("d2", ["fmt", resolvedPath], cwd);
 }
 
-const CORE_TOOL_REGISTRATIONS = [
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "read_file",
-      description: "Read a UTF-8 text file from the local workspace.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "File path relative to the workspace root.",
-          },
+export const READ_FILE_TOOL: ToolRegistration<ReadFileArgs, ReadFileResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "read_file",
+    description: "Read a UTF-8 text file from the local workspace.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "File path relative to the workspace root.",
         },
-        required: ["path"],
-        additionalProperties: false,
       },
+      required: ["path"],
+      additionalProperties: false,
     },
-    handler: readFileTool,
-  } satisfies ToolRegistration<ReadFileArgs, ReadFileResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "write_file",
-      description:
-        "Overwrite a text file in the local workspace using UTF-8. Creates the file if it does not exist.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Target file path relative to the workspace root.",
-          },
-          content: {
-            type: "string",
-            description: "Text content to write into the file.",
-          },
-        },
-        required: ["path", "content"],
-        additionalProperties: false,
-      },
-    },
-    handler: writeFileTool,
-  } satisfies ToolRegistration<WriteFileArgs, WriteFileResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "d2_check",
-      description: "Run `d2` to validate a diagram file without modifying it.",
-      parameters: {
-        type: "object",
-        properties: {
-          file_path: {
-            type: "string",
-            description: "Path to the D2 file relative to the workspace root.",
-          },
-        },
-        required: ["file_path"],
-        additionalProperties: false,
-      },
-    },
-    handler: d2CheckTool,
-  } satisfies ToolRegistration<D2Args, CommandResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "d2_fmt",
-      description: "Run `d2 fmt` to format a diagram file in-place.",
-      parameters: {
-        type: "object",
-        properties: {
-          file_path: {
-            type: "string",
-            description: "Path to the D2 file relative to the workspace root.",
-          },
-        },
-        required: ["file_path"],
-        additionalProperties: false,
-      },
-    },
-    handler: d2FmtTool,
-  } satisfies ToolRegistration<D2Args, CommandResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "sql_fetch_schema",
-      description: "Load table and column metadata from PostgreSQL using information_schema.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-    },
-    handler: sqlFetchSchemaTool,
-  } satisfies ToolRegistration<Record<string, never>, ToolResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "sql_dry_run",
-      description: "Validate a SELECT statement via PostgreSQL PREPARE and EXPLAIN (FORMAT JSON).",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "SQL text to validate. Only SELECT/WITH ... SELECT is supported.",
-          },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      },
-    },
-    handler: sqlDryRunTool,
-  } satisfies ToolRegistration<SqlDryRunArgs, SqlDryRunResult>,
-  {
-    definition: {
-      type: "function",
-      strict: true,
-      name: "sql_format",
-      description: "Format SQL using sqruff in fix mode and return the formatted text.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "SQL text to format.",
-          },
-        },
-        required: ["query"],
-        additionalProperties: false,
-      },
-    },
-    handler: sqlFormatTool,
-  } satisfies ToolRegistration<SqlFormatArgs, SqlFormatResult>,
-] as ToolRegistration<any, ToolResult>[];
+  },
+  handler: readFileTool,
+};
 
-/**
- * CLI共通の関数ツール実行基盤を生成する。追加ツールを差し込むこともできる。
- *
- * @param extraTools CLI固有に追加するツール定義。
- * @returns 関数ツールの一覧と実行メソッド。
- */
-export function createCoreToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
-  extraTools: Iterable<ToolRegistration<any, any, TContext>> = [],
-): ToolRuntime<TContext> {
-  return createToolRuntime<TContext>([...CORE_TOOL_REGISTRATIONS, ...extraTools]);
-}
+export const WRITE_FILE_TOOL: ToolRegistration<WriteFileArgs, WriteFileResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "write_file",
+    description:
+      "Overwrite a text file in the local workspace using UTF-8. Creates the file if it does not exist.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Target file path relative to the workspace root.",
+        },
+        content: {
+          type: "string",
+          description: "Text content to write into the file.",
+        },
+      },
+      required: ["path", "content"],
+      additionalProperties: false,
+    },
+  },
+  handler: writeFileTool,
+};
+
+export const D2_CHECK_TOOL: ToolRegistration<D2Args, CommandResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "d2_check",
+    description: "Run `d2` to validate a diagram file without modifying it.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the D2 file relative to the workspace root.",
+        },
+      },
+      required: ["file_path"],
+      additionalProperties: false,
+    },
+  },
+  handler: d2CheckTool,
+};
+
+export const D2_FMT_TOOL: ToolRegistration<D2Args, CommandResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "d2_fmt",
+    description: "Run `d2 fmt` to format a diagram file in-place.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the D2 file relative to the workspace root.",
+        },
+      },
+      required: ["file_path"],
+      additionalProperties: false,
+    },
+  },
+  handler: d2FmtTool,
+};
+
+export const SQL_FETCH_SCHEMA_TOOL: ToolRegistration<Record<string, never>, ToolResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "sql_fetch_schema",
+    description: "Load table and column metadata from PostgreSQL using information_schema.",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlFetchSchemaTool,
+};
+
+export const SQL_DRY_RUN_TOOL: ToolRegistration<SqlDryRunArgs, SqlDryRunResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "sql_dry_run",
+    description: "Validate a SELECT statement via PostgreSQL PREPARE and EXPLAIN (FORMAT JSON).",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "SQL text to validate. Only SELECT/WITH ... SELECT is supported.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlDryRunTool,
+};
+
+export const SQL_FORMAT_TOOL: ToolRegistration<SqlFormatArgs, SqlFormatResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "sql_format",
+    description: "Format SQL using sqruff in fix mode and return the formatted text.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "SQL text to format.",
+        },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlFormatTool,
+};
 
 /**
  * 任意のツール定義集合から実行ランタイムを構築する。
@@ -703,7 +695,7 @@ export function createCoreToolRuntime<TContext extends ToolExecutionContext = To
  * @param registrations ツール定義とハンドラの配列。
  * @returns ツール一覧と実行メソッド。
  */
-function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
+export function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
   registrations: Iterable<ToolRegistration<any, any, TContext>>,
 ): ToolRuntime<TContext> {
   const entries = Array.from(registrations);
@@ -755,13 +747,23 @@ function createToolRuntime<TContext extends ToolExecutionContext = ToolExecution
   };
 }
 
-export const CORE_FUNCTION_TOOLS = CORE_TOOL_REGISTRATIONS.map((entry) => entry.definition);
+export function buildCliToolList(
+  registrations: Iterable<ToolRegistration<any, any>>,
+): ResponseCreateParamsNonStreaming["tools"] {
+  const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
+  const seen = new Set<string>();
 
-/**
- * OpenAI Responses API へ渡すツール設定を構築する。
- *
- * @returns CLI が利用可能な関数ツールとプレビュー検索の配列。
- */
-export function buildCliToolList(): ResponseCreateParamsNonStreaming["tools"] {
-  return [...CORE_FUNCTION_TOOLS, { type: "web_search_preview" as const }];
+  for (const registration of registrations) {
+    const { definition } = registration;
+    if (definition.type !== "function") {
+      continue;
+    }
+    if (seen.has(definition.name)) {
+      continue;
+    }
+    functionTools.push(definition);
+    seen.add(definition.name);
+  }
+
+  return [...functionTools, { type: "web_search_preview" as const }];
 }

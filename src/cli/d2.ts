@@ -13,6 +13,14 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import {
+  D2_CHECK_TOOL,
+  D2_FMT_TOOL,
+  READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  buildCliToolList,
+  createToolRuntime,
+} from "../core/tools.js";
+import {
   buildRequest,
   computeContext,
   executeWithTools,
@@ -38,6 +46,15 @@ interface D2ContextInfo {
   absolutePath: string;
   exists: boolean;
 }
+
+const D2_TOOL_REGISTRATIONS = [
+  READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  D2_CHECK_TOOL,
+  D2_FMT_TOOL,
+] as const;
+const D2_TOOL_RUNTIME = createToolRuntime(D2_TOOL_REGISTRATIONS);
+const D2_FUNCTION_TOOLS = buildCliToolList(D2_TOOL_REGISTRATIONS);
 
 const d2CliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -538,8 +555,15 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages:
         options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
+      tools: D2_FUNCTION_TOOLS,
     });
-    const response = await executeWithTools(client, request, options, "[gpt-5-cli-d2]");
+    const response = await executeWithTools(
+      client,
+      request,
+      options,
+      "[gpt-5-cli-d2]",
+      D2_TOOL_RUNTIME,
+    );
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");

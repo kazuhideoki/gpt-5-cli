@@ -10,15 +10,14 @@ import type {
 import { formatModelValue, formatScaleValue } from "../core/formatting.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import { formatTurnsForSummary } from "../core/history.js";
-import { buildCliToolList, createCoreToolRuntime } from "../core/tools.js";
+import type { ToolRuntime } from "../core/tools.js";
+import { buildCliToolList } from "../core/tools.js";
 import type {
   CliDefaults,
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
 } from "../cli/types.js";
-
-const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
   options: TOptions;
@@ -238,7 +237,9 @@ export async function executeWithTools(
   initialRequest: ResponseCreateParamsNonStreaming,
   options: CliOptions,
   logLabel: string,
+  toolRuntime: ToolRuntime,
 ): Promise<Response> {
+  const executeFunctionToolCall = toolRuntime.execute;
   const debugLog = options.debug
     ? (message: string) => {
         console.error(`${logLabel} debug: ${message}`);
@@ -366,6 +367,7 @@ interface BuildRequestParams {
   defaults?: CliDefaults;
   logLabel: string;
   additionalSystemMessages?: OpenAIInputMessage[];
+  tools?: ResponseCreateParamsNonStreaming["tools"];
 }
 
 export function buildRequest({
@@ -377,6 +379,7 @@ export function buildRequest({
   defaults,
   logLabel,
   additionalSystemMessages,
+  tools,
 }: BuildRequestParams): ResponseCreateParamsNonStreaming {
   const modelLog = formatModelValue(
     options.model,
@@ -433,7 +436,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: buildCliToolList(),
+    tools: tools ?? buildCliToolList([]),
     input: inputForRequest,
   };
 

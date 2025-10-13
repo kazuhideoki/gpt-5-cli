@@ -10,6 +10,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
+import { READ_FILE_TOOL, buildCliToolList, createToolRuntime } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
@@ -31,6 +32,10 @@ interface DefaultCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
   taskModeExplicit: boolean;
 }
+
+const DEFAULT_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+const DEFAULT_TOOL_RUNTIME = createToolRuntime(DEFAULT_TOOL_REGISTRATIONS);
+const DEFAULT_FUNCTION_TOOLS = buildCliToolList(DEFAULT_TOOL_REGISTRATIONS);
 
 function buildDefaultCliHistoryTask(
   options: DefaultCliHistoryTaskOptions,
@@ -381,8 +386,15 @@ async function main(): Promise<void> {
       imageDataUrl: imageInfo.dataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
+      tools: DEFAULT_FUNCTION_TOOLS,
     });
-    const response = await executeWithTools(client, request, options, "[gpt-5-cli]");
+    const response = await executeWithTools(
+      client,
+      request,
+      options,
+      "[gpt-5-cli]",
+      DEFAULT_TOOL_RUNTIME,
+    );
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");

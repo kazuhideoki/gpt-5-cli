@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { CORE_FUNCTION_TOOLS, buildCliToolList } from "./tools.js";
+import {
+  D2_CHECK_TOOL,
+  D2_FMT_TOOL,
+  READ_FILE_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FORMAT_TOOL,
+  WRITE_FILE_TOOL,
+  buildCliToolList,
+} from "./tools.js";
 import { expandLegacyShortFlags, parseHistoryFlag } from "./options.js";
 
 describe("parseHistoryFlag", () => {
@@ -42,8 +51,42 @@ describe("expandLegacyShortFlags", () => {
 });
 
 describe("buildCliToolList", () => {
+  const MINIMAL_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+
+  const WORKSPACE_TOOL_REGISTRATIONS = [
+    READ_FILE_TOOL,
+    WRITE_FILE_TOOL,
+    D2_CHECK_TOOL,
+    D2_FMT_TOOL,
+  ] as const;
+
+  const SQL_TOOL_REGISTRATIONS = [
+    READ_FILE_TOOL,
+    SQL_FETCH_SCHEMA_TOOL,
+    SQL_DRY_RUN_TOOL,
+    SQL_FORMAT_TOOL,
+  ] as const;
+
   test("コアツールとプレビュー検索を含む", () => {
-    const tools = buildCliToolList();
-    expect(tools).toEqual([...CORE_FUNCTION_TOOLS, { type: "web_search_preview" as const }]);
+    const tools = buildCliToolList(MINIMAL_TOOL_REGISTRATIONS);
+    expect(tools).toEqual([
+      MINIMAL_TOOL_REGISTRATIONS[0].definition,
+      { type: "web_search_preview" as const },
+    ]);
+  });
+
+  test("追加ツール登録を引数で拡張できる", () => {
+    const tools = buildCliToolList([...WORKSPACE_TOOL_REGISTRATIONS, ...SQL_TOOL_REGISTRATIONS]);
+    const functionNames = tools.filter((tool) => tool.type === "function").map((tool) => tool.name);
+    expect(functionNames).toEqual([
+      "read_file",
+      "write_file",
+      "d2_check",
+      "d2_fmt",
+      "sql_fetch_schema",
+      "sql_dry_run",
+      "sql_format",
+    ]);
+    expect(tools.at(-1)).toEqual({ type: "web_search_preview" as const });
   });
 });
