@@ -1,11 +1,11 @@
 # 推奨コマンド
 - `bun install` — 依存関係のインストール。
 - `bun run build` — TypeScript をコンパイルして `dist/` を更新。
-- `bun run dev` / `bun run dev:d2` — default / d2 CLI をホットリロード付きで起動。
-- `bun run start -- --help` / `bun run start:d2 -- --help` — ビルド済み CLI のヘルプを確認。
+- `bun run dev` / `bun run dev:d2` / `bun run dev:sql` — 各 CLI をホットリロード付きで起動。
+- `bun run start -- --help` / `bun run start:d2 -- --help` / `bun run start:sql -- --help` — ビルド済み CLI のヘルプを確認。
 - `bun run lint` — Biome による静的解析。
 - `bun run format:check` — Biome によるフォーマッタ検証。
 - `bun run test` — Bun テストランナーでユニット/統合テスト実行。
 - `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r` — 履歴一覧出力の安定性チェック。
 - `jq . history_index.json` — 履歴 JSON の整合性確認。
-- `gpt-5-cli -- --help` / `gpt-5-cli-d2 -- --help` — グローバルインストール済み CLI ヘルプ確認。
+- `gpt-5-cli -- --help` / `gpt-5-cli-d2 -- --help` / `gpt-5-cli-sql -- --help` — グローバルインストール済み CLI ヘルプ確認。

@@ -30,6 +30,7 @@ const defaults: CliDefaults = {
   historyIndexPath: "/tmp/history.json",
   promptsDir: "/tmp/prompts",
   d2MaxIterations: 3,
+  sqlMaxIterations: 6,
 };
 
 type HistoryStoreMethods = Pick<
@@ -43,6 +44,7 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     effort: defaults.effort,
     verbosity: defaults.verbosity,
     continueConversation: false,
+    debug: false,
     taskMode: "default",
     resumeIndex: undefined,
     resumeListOnly: false,

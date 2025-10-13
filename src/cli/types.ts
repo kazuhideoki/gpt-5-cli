@@ -9,6 +9,7 @@ export interface CliOptions {
   effort: EffortLevel;
   verbosity: VerbosityLevel;
   continueConversation: boolean;
+  debug: boolean;
   taskMode: TaskMode;
   resumeIndex?: number;
   resumeListOnly: boolean;

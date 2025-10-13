@@ -10,15 +10,14 @@ import type {
 import { formatModelValue, formatScaleValue } from "../core/formatting.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import { formatTurnsForSummary } from "../core/history.js";
-import { buildCliToolList, createCoreToolRuntime } from "../core/tools.js";
+import type { ToolRuntime } from "../core/tools.js";
+import { buildCliToolList } from "../core/tools.js";
 import type {
   CliDefaults,
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
 } from "../cli/types.js";
-
-const { execute: executeFunctionToolCall } = createCoreToolRuntime();
 
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
   options: TOptions;
@@ -238,18 +237,74 @@ export async function executeWithTools(
   initialRequest: ResponseCreateParamsNonStreaming,
   options: CliOptions,
   logLabel: string,
+  toolRuntime: ToolRuntime,
 ): Promise<Response> {
+  const executeFunctionToolCall = toolRuntime.execute;
+  const debugLog = options.debug
+    ? (message: string) => {
+        console.error(`${logLabel} debug: ${message}`);
+      }
+    : undefined;
+
+  const formatJsonSnippet = (raw: string, limit = 600): string => {
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) {
+      return "";
+    }
+    try {
+      const pretty = JSON.stringify(JSON.parse(trimmed), null, 2);
+      if (pretty.length <= limit) {
+        return pretty;
+      }
+      return `${pretty.slice(0, limit)}…(+${pretty.length - limit} chars)`;
+    } catch {
+      if (trimmed.length <= limit) {
+        return trimmed;
+      }
+      return `${trimmed.slice(0, limit)}…(+${trimmed.length - limit} chars)`;
+    }
+  };
+
+  const formatPlainSnippet = (raw: string, limit = 600): string => {
+    const text = raw.trim();
+    if (text.length === 0) {
+      return "";
+    }
+    if (text.length <= limit) {
+      return text;
+    }
+    return `${text.slice(0, limit)}…(+${text.length - limit} chars)`;
+  };
+
   let response = await client.responses.create(initialRequest);
+  if (debugLog) {
+    debugLog(`initial response_id=${response.id ?? "unknown"}`);
+  }
+
   let iteration = 0;
   const defaultMaxIterations = 8;
-  const maxIterations =
-    options.taskMode === "d2" && "d2MaxIterations" in options
-      ? (options as { d2MaxIterations: number }).d2MaxIterations
-      : defaultMaxIterations;
+  const maxIterations = (() => {
+    if (options.taskMode === "d2" && "d2MaxIterations" in options) {
+      return (options as { d2MaxIterations: number }).d2MaxIterations;
+    }
+    if (options.taskMode === "sql" && "sqlMaxIterations" in options) {
+      return (options as { sqlMaxIterations: number }).sqlMaxIterations;
+    }
+    return defaultMaxIterations;
+  })();
 
   while (true) {
     const toolCalls = collectFunctionToolCalls(response);
+    const cycle = iteration + 1;
+    if (debugLog) {
+      debugLog(
+        `cycle=${cycle} response_id=${response.id ?? "unknown"} tool_calls=${toolCalls.length}`,
+      );
+    }
     if (toolCalls.length === 0) {
+      if (debugLog) {
+        debugLog(`cycle=${cycle} no tool calls found; returning response`);
+      }
       return response;
     }
     if (iteration >= maxIterations) {
@@ -260,10 +315,20 @@ export async function executeWithTools(
       toolCalls.map(async (call) => {
         const callId = call.call_id ?? call.id ?? "";
         console.log(`${logLabel} tool handling ${call.name} (${callId})`);
+        if (debugLog) {
+          const argsSnippet = formatJsonSnippet(call.arguments);
+          const argsMessage = argsSnippet.length > 0 ? `\n${argsSnippet}` : " <empty>";
+          debugLog(`cycle=${cycle} tool_call ${call.name} (${callId}) arguments:${argsMessage}`);
+        }
         const output = await executeFunctionToolCall(call, {
           cwd: process.cwd(),
           log: console.error,
         });
+        if (debugLog) {
+          const outputSnippet = formatPlainSnippet(output);
+          const outputMessage = outputSnippet.length > 0 ? `\n${outputSnippet}` : " <empty>";
+          debugLog(`cycle=${cycle} tool_call ${call.name} (${callId}) output:${outputMessage}`);
+        }
         return {
           type: "function_call_output" as const,
           call_id: call.call_id,
@@ -280,7 +345,15 @@ export async function executeWithTools(
       input: toolOutputs,
       previous_response_id: response.id,
     };
+    if (debugLog) {
+      debugLog(
+        `cycle=${cycle} submitting follow-up request with ${toolOutputs.length} tool output(s)`,
+      );
+    }
     response = await client.responses.create(followupRequest);
+    if (debugLog) {
+      debugLog(`cycle=${cycle} follow-up response_id=${response.id ?? "unknown"}`);
+    }
     iteration += 1;
   }
 }
@@ -294,6 +367,7 @@ interface BuildRequestParams {
   defaults?: CliDefaults;
   logLabel: string;
   additionalSystemMessages?: OpenAIInputMessage[];
+  tools?: ResponseCreateParamsNonStreaming["tools"];
 }
 
 export function buildRequest({
@@ -305,6 +379,7 @@ export function buildRequest({
   defaults,
   logLabel,
   additionalSystemMessages,
+  tools,
 }: BuildRequestParams): ResponseCreateParamsNonStreaming {
   const modelLog = formatModelValue(
     options.model,
@@ -361,7 +436,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: buildCliToolList(),
+    tools: tools ?? buildCliToolList([]),
     input: inputForRequest,
   };
 

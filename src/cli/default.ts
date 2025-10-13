@@ -10,6 +10,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
+import { READ_FILE_TOOL, buildCliToolList, createToolRuntime } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
@@ -31,6 +32,10 @@ interface DefaultCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
   taskModeExplicit: boolean;
 }
+
+const DEFAULT_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+const DEFAULT_TOOL_RUNTIME = createToolRuntime(DEFAULT_TOOL_REGISTRATIONS);
+const DEFAULT_FUNCTION_TOOLS = buildCliToolList(DEFAULT_TOOL_REGISTRATIONS);
 
 function buildDefaultCliHistoryTask(
   options: DefaultCliHistoryTaskOptions,
@@ -64,6 +69,7 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
   console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）");
+  console.log("  --debug     : デバッグログを有効化");
   console.log("");
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
@@ -104,6 +110,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     deleteIndex: z.number().optional(),
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
+    debug: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     args: z.array(z.string()),
@@ -182,6 +189,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     .option("-r, --resume [index]", "指定した番号の履歴から継続します")
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
+    .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 
@@ -207,6 +215,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     resume?: string | boolean;
     delete?: string | boolean;
     show?: string | boolean;
+    debug?: boolean;
     image?: string;
     compact?: number;
   }>();
@@ -216,6 +225,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const model = opts.model ?? defaults.modelNano;
   const effort = opts.effort ?? defaults.effort;
   const verbosity = opts.verbosity ?? defaults.verbosity;
+  const debug = Boolean(opts.debug);
   let continueConversation = Boolean(opts.continueConversation);
   let resumeIndex: number | undefined;
   let resumeListOnly = false;
@@ -275,6 +285,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       deleteIndex,
       showIndex,
       imagePath,
+      debug,
       operation,
       compactIndex,
       taskMode,
@@ -375,8 +386,15 @@ async function main(): Promise<void> {
       imageDataUrl: imageInfo.dataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
+      tools: DEFAULT_FUNCTION_TOOLS,
     });
-    const response = await executeWithTools(client, request, options, "[gpt-5-cli]");
+    const response = await executeWithTools(
+      client,
+      request,
+      options,
+      "[gpt-5-cli]",
+      DEFAULT_TOOL_RUNTIME,
+    );
     const content = extractResponseText(response);
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");

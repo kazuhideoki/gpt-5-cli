@@ -21,6 +21,7 @@ function createDefaults(): CliDefaults {
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
     d2MaxIterations: 8,
+    sqlMaxIterations: 8,
   };
 }
 
@@ -30,6 +31,7 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     effort: "low",
     verbosity: "low",
     continueConversation: false,
+    debug: false,
     taskMode: "default",
     resumeListOnly: false,
     operation: "ask",
@@ -107,6 +109,12 @@ describe("parseArgs", () => {
     const options = parseArgs(["--compact", "3"], defaults);
     expect(options.operation).toBe("compact");
     expect(options.compactIndex).toBe(3);
+  });
+
+  it("--debug でデバッグログを有効化する", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["--debug", "確認"], defaults);
+    expect(options.debug).toBe(true);
   });
 
   it("d2関連フラグは parseArgs で拒否される", () => {
