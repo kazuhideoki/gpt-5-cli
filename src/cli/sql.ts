@@ -89,6 +89,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     deleteIndex: z.number().optional(),
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
+    debug: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     args: z.array(z.string()),
@@ -173,6 +174,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     .option("-r, --resume [index]", "指定した番号の履歴から継続します")
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
+    .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
     .option(
       "-I, --sql-iterations <count>",
@@ -209,6 +211,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     resume?: string | boolean;
     delete?: string | boolean;
     show?: string | boolean;
+    debug?: boolean;
     image?: string;
     sqlIterations?: number;
     compact?: number;
@@ -219,6 +222,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const model = opts.model ?? defaults.modelNano;
   const effort = opts.effort ?? defaults.effort;
   const verbosity = opts.verbosity ?? defaults.verbosity;
+  const debug = Boolean(opts.debug);
   let continueConversation = Boolean(opts.continueConversation);
   let resumeIndex: number | undefined;
   let resumeListOnly = false;
@@ -282,6 +286,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       deleteIndex,
       showIndex,
       imagePath,
+      debug,
       operation,
       compactIndex,
       args,
@@ -324,6 +329,7 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
   console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
+  console.log("  --debug     : デバッグログを有効化");
   console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
   console.log("  -i <path>   : 入力に画像を添付");
   console.log("");

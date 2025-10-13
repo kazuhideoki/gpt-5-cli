@@ -31,6 +31,7 @@ function createOptions(defaults: CliDefaults, overrides: Partial<CliOptions> = {
     effort: defaults.effort,
     verbosity: defaults.verbosity,
     continueConversation: false,
+    debug: false,
     taskMode: "default",
     resumeListOnly: false,
     operation: "ask",

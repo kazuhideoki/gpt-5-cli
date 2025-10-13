@@ -34,6 +34,11 @@ describe("parseArgs", () => {
   it("--sql-iterations へ不正な値を渡すとエラー", () => {
     expect(() => parseArgs(["--sql-iterations", "0", "prompt"], defaults)).toThrow("1 以上");
   });
+
+  it("--debug でデバッグログを有効化する", () => {
+    const options = parseArgs(["--debug", "SELECT"], defaults);
+    expect(options.debug).toBe(true);
+  });
 });
 
 describe("buildSqlInstructionMessages", () => {

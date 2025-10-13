@@ -44,6 +44,7 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     effort: defaults.effort,
     verbosity: defaults.verbosity,
     continueConversation: false,
+    debug: false,
     taskMode: "default",
     resumeIndex: undefined,
     resumeListOnly: false,

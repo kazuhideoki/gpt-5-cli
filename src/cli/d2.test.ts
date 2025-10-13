@@ -31,6 +31,7 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     effort: "low",
     verbosity: "low",
     continueConversation: false,
+    debug: false,
     taskMode: "d2",
     resumeIndex: undefined,
     resumeListOnly: false,
@@ -89,6 +90,12 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["--d2-file", "diagram.d2", "生成"], defaults);
     expect(options.d2FilePath).toBe("diagram.d2");
     expect(options.d2FileExplicit).toBe(true);
+  });
+
+  it("--debug でデバッグログを有効化する", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["--debug", "図"], defaults);
+    expect(options.debug).toBe(true);
   });
 });
 
