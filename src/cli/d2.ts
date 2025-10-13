@@ -34,8 +34,8 @@ import { bootstrapCli } from "./runtime/runner.js";
 export interface D2CliOptions extends CliOptions {
   d2FilePath?: string;
   d2FileExplicit: boolean;
-  d2MaxIterations: number;
-  d2MaxIterationsExplicit: boolean;
+  maxIterations: number;
+  maxIterationsExplicit: boolean;
 }
 
 /**
@@ -147,7 +147,7 @@ function printHelp(defaults: CliDefaults, options: D2CliOptions): void {
     "  GPT_5_CLI_PROMPTS_DIR        : systemプロンプトテンプレートの配置ディレクトリ（例: ~/Library/Application Support/gpt-5-cli/prompts）",
   );
   console.log(
-    `  GPT_5_CLI_D2_MAX_ITERATIONS  : d2モードのツール呼び出し上限（正の整数、既定: ${defaults.d2MaxIterations})`,
+    `  GPT_5_CLI_MAX_ITERATIONS     : エージェントのツール呼び出し上限（正の整数、既定: ${defaults.maxIterations})`,
   );
   console.log("");
   console.log(
@@ -182,8 +182,8 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     d2FilePath: z.string().min(1).optional(),
-    d2MaxIterations: z.number(),
-    d2MaxIterationsExplicit: z.boolean(),
+    maxIterations: z.number(),
+    maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -280,7 +280,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       "-I, --d2-iterations <count>",
       "d2モード時のツール呼び出し上限を指定します",
       parseD2Iterations,
-      defaults.d2MaxIterations,
+      defaults.maxIterations,
     )
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 
@@ -332,8 +332,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const taskMode: D2CliOptions["taskMode"] = "d2";
   const d2FilePath =
     typeof opts.d2File === "string" && opts.d2File.length > 0 ? opts.d2File : undefined;
-  const d2MaxIterations =
-    typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.d2MaxIterations;
+  const maxIterations =
+    typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.maxIterations;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -371,7 +371,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const taskModeExplicit = program.getOptionValueSource("d2Mode") === "cli";
   const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
-  const d2MaxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
+  const maxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -396,8 +396,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       verbosityExplicit,
       taskModeExplicit,
       d2FileExplicit,
-      d2MaxIterations,
-      d2MaxIterationsExplicit,
+      maxIterations,
+      maxIterationsExplicit,
       hasExplicitHistory,
       helpRequested,
     });

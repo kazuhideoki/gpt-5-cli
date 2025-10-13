@@ -13,8 +13,7 @@ const defaults: CliDefaults = {
   verbosity: "low",
   historyIndexPath: "/tmp/history.json",
   promptsDir: "/tmp/prompts",
-  d2MaxIterations: 8,
-  sqlMaxIterations: 6,
+  maxIterations: 6,
 };
 
 describe("parseArgs", () => {
@@ -22,13 +21,13 @@ describe("parseArgs", () => {
     const options = parseArgs(["SELECT"], defaults);
     expect(options.taskMode).toBe("sql");
     expect(options.args).toEqual(["SELECT"]);
-    expect(options.sqlMaxIterations).toBe(defaults.sqlMaxIterations);
+    expect(options.maxIterations).toBe(defaults.maxIterations);
   });
 
   it("--sql-iterations を検証する", () => {
     const options = parseArgs(["--sql-iterations", "5", "query"], defaults);
-    expect(options.sqlMaxIterations).toBe(5);
-    expect(options.sqlMaxIterationsExplicit).toBe(true);
+    expect(options.maxIterations).toBe(5);
+    expect(options.maxIterationsExplicit).toBe(true);
   });
 
   it("--sql-iterations へ不正な値を渡すとエラー", () => {
