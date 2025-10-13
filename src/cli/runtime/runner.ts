@@ -1,3 +1,4 @@
+// runner.ts: 各 CLI エントリーポイントで共通となる初期化と履歴ストア準備をまとめたユーティリティ。
 import { HistoryStore } from "../../core/history.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";

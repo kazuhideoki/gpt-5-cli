@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../commands/conversation.js";
-import { determineInput } from "./shared/input.js";
+import { determineInput } from "./runtime/input.js";
 import { parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";

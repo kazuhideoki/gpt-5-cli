@@ -20,8 +20,8 @@ import {
   performCompact,
   prepareImageData,
 } from "../commands/conversation.js";
-import { determineInput } from "./shared/input.js";
-import { bootstrapCli } from "./shared/runner.js";
+import { determineInput } from "./runtime/input.js";
+import { bootstrapCli } from "./runtime/runner.js";
 
 const askCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),

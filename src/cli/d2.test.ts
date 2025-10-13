@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "./shared/input.js";
+import { determineInput } from "./runtime/input.js";
 import { parseArgs } from "./d2.js";
 import type { CliDefaults } from "./types.js";
 import type { D2CliOptions } from "./d2.js";

@@ -30,8 +30,8 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import { bootstrapCli } from "./shared/runner.js";
-import { determineInput } from "./shared/input.js";
+import { bootstrapCli } from "./runtime/runner.js";
+import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
