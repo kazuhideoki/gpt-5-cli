@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../commands/conversation.js";
 import { determineInput } from "./shared/input.js";
-import { parseArgs } from "./default.js";
+import { parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
-import type { DefaultCliHistoryTask } from "./default.js";
+import type { AskCliHistoryTask } from "./ask.js";
 
-type TestHistoryEntry = HistoryEntry<DefaultCliHistoryTask>;
-type HistoryStoreLike = HistoryStore<DefaultCliHistoryTask>;
+type TestHistoryEntry = HistoryEntry<AskCliHistoryTask>;
+type HistoryStoreLike = HistoryStore<AskCliHistoryTask>;
 
 const noopDeps = { printHelp: () => {} };
 
@@ -32,7 +32,7 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     verbosity: "low",
     continueConversation: false,
     debug: false,
-    taskMode: "default",
+    taskMode: "ask",
     resumeListOnly: false,
     operation: "ask",
     args: [],

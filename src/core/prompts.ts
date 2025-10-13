@@ -6,7 +6,7 @@ import type { TaskMode } from "./types.js";
 const PROMPT_EXTENSION = ".md";
 
 /**
- * モード文字列を正規化し、未指定時は`default`を返す。
+ * モード文字列を正規化し、未指定時は`ask`を返す。
  *
  * @param mode CLIオプションで指定されたモード。
  * @returns 正規化されたモード名。
@@ -14,12 +14,12 @@ const PROMPT_EXTENSION = ".md";
 function normalizeMode(mode?: string | TaskMode): string {
   if (typeof mode === "string") {
     const trimmed = mode.trim();
-    return trimmed.length > 0 ? trimmed : "default";
+    return trimmed.length > 0 ? trimmed : "ask";
   }
   if (mode) {
     return mode;
   }
-  return "default";
+  return "ask";
 }
 
 /**

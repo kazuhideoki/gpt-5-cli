@@ -211,7 +211,7 @@ describe("HistoryStore", () => {
     const existing: HistoryEntry<TestTask> = {
       title: "diagram",
       last_response_id: "resp-prev",
-      task: { mode: "default" },
+      task: { mode: "ask" },
     };
     store.saveEntries([existing]);
 

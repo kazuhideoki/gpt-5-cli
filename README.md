@@ -2,7 +2,7 @@
 
 OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継続、履歴管理、モデル/推論強度/冗長度の切替、画像入力、会話ログの要約 (`--compact`) をサポートします。
 
-本リポジトリは **default** と **d2** の 2 系統の CLI を提供します。`gpt-5-cli` コマンドが default CLI、`gpt-5-cli-d2` コマンドが d2 CLI です。どちらも同じ履歴ストアと共通ロジックを利用しつつ、モードごとのフラグ・振る舞いを最適化しています。
+本リポジトリは **ask** と **d2** の 2 系統の CLI を提供します。`gpt-5-cli` コマンドが ask CLI、`gpt-5-cli-d2` コマンドが d2 CLI です。どちらも同じ履歴ストアと共通ロジックを利用しつつ、モードごとのフラグ・振る舞いを最適化しています。
 
 ## セットアップ
 
@@ -22,7 +22,7 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    ```bash
    bun run build
    ```
-   - 開発中は default CLI を `bun run dev`、d2 CLI を `bun run dev:d2` で TypeScript ソースから直接実行できます。
+   - 開発中は ask CLI を `bun run dev`、d2 CLI を `bun run dev:d2` で TypeScript ソースから直接実行できます。
 5. 任意の既定値（例）
    ```env
    OPENAI_MODEL_MAIN=gpt-5
@@ -36,13 +36,13 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    - `GPT_5_CLI_HISTORY_INDEX_FILE` を設定する場合は空文字不可・`~` を含む場合は `HOME` が必須です。
    - System プロンプトのテンプレート配置先を変えたい場合は `GPT_5_CLI_PROMPTS_DIR` を設定します（空文字不可・`~` 展開対応）。
    - 画像添付（`-i`）機能を使う際も `HOME` が未設定だとエラーになります。
-6. 任意: `prompts/default.md` や `prompts/d2.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。対応するモードでのみ適用されます（存在しない／空ファイルは無視）。
+6. 任意: `prompts/ask.md` や `prompts/d2.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。対応するモードでのみ適用されます（存在しない／空ファイルは無視）。
 
 ## CLI の使い方
 
-### default CLI
+### ask CLI
 
-ビルド後は下記のいずれかで default CLI を起動します。
+ビルド後は下記のいずれかで ask CLI を起動します。
 
 ```bash
 gpt-5-cli -- --help     # グローバルインストール済みの場合
@@ -63,7 +63,7 @@ bun run start -- --help  # リポジトリ直下で Bun から実行
 - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
 - 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
 
-#### default CLI の実行例
+#### ask CLI の実行例
 
 ```bash
 gpt-5-cli -- 明日の予定を整理して
@@ -82,7 +82,7 @@ gpt-5-cli-d2 -- --help
 bun run start:d2 -- --help
 ```
 
-d2 モード固有のレンダリングやフラグ構成を持ちます。履歴ストアは default CLI と共有されるため、`task.mode` によりどちらの CLI で作成した履歴か判別できます。
+d2 モード固有のレンダリングやフラグ構成を持ちます。履歴ストアは ask CLI と共有されるため、`task.mode` によりどちらの CLI で作成した履歴か判別できます。
 
 ## 依存関係
 
@@ -103,8 +103,8 @@ d2 モード固有のレンダリングやフラグ構成を持ちます。履�
 
 ## 開発コマンド
 
-- `bun run build`: TypeScript をコンパイルして `dist/cli/default.js` と `dist/cli/d2.js` を生成
-- `bun run dev`: Bun の TypeScript 実行機能で default CLI を実行
+- `bun run build`: TypeScript をコンパイルして `dist/cli/ask.js` と `dist/cli/d2.js` を生成
+- `bun run dev`: Bun の TypeScript 実行機能で ask CLI を実行
 - `bun run dev:d2`: Bun の TypeScript 実行機能で d2 CLI を実行
 - `bun run test`: Bun のテストランナーでユニットテスト・統合テストを実行
 - `bun run lint`: Biome による静的解析

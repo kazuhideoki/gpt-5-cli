@@ -32,7 +32,7 @@ function createOptions(defaults: CliDefaults, overrides: Partial<CliOptions> = {
     verbosity: defaults.verbosity,
     continueConversation: false,
     debug: false,
-    taskMode: "default",
+    taskMode: "ask",
     resumeListOnly: false,
     operation: "ask",
     args: [],
@@ -56,7 +56,7 @@ beforeEach(() => {
 
   const { historyPath, cleanup } = createTempHistoryPath();
   const promptsDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt5-cli-prompts-"));
-  fs.writeFileSync(path.join(promptsDir, "default.md"), "test system prompt", "utf8");
+  fs.writeFileSync(path.join(promptsDir, "ask.md"), "test system prompt", "utf8");
 
   process.env.GPT_5_CLI_HISTORY_INDEX_FILE = historyPath;
   process.env.GPT_5_CLI_PROMPTS_DIR = promptsDir;

@@ -45,7 +45,7 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     verbosity: defaults.verbosity,
     continueConversation: false,
     debug: false,
-    taskMode: "default",
+    taskMode: "ask",
     resumeIndex: undefined,
     resumeListOnly: false,
     deleteIndex: undefined,
