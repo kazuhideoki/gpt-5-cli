@@ -1,7 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { buildRequest, determineInput, parseArgs } from "./cli.js";
+import { buildRequest } from "../commands/conversation.js";
+import { determineInput } from "./shared/input.js";
+import { parseArgs } from "./default.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
-import type { HistoryEntry, HistoryStore } from "./history.js";
+import type { HistoryEntry, HistoryStore } from "../core/history.js";
+import type { DefaultCliHistoryTask } from "./default.js";
+
+type TestHistoryEntry = HistoryEntry<DefaultCliHistoryTask>;
+type HistoryStoreLike = HistoryStore<DefaultCliHistoryTask>;
+
+const noopDeps = { printHelp: () => {} };
 
 function createDefaults(): CliDefaults {
   return {
@@ -25,15 +33,11 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     taskMode: "default",
     resumeListOnly: false,
     operation: "ask",
-    d2FilePath: undefined,
     args: [],
     modelExplicit: false,
     effortExplicit: false,
     verbosityExplicit: false,
     taskModeExplicit: false,
-    d2FileExplicit: false,
-    d2MaxIterations: 8,
-    d2MaxIterationsExplicit: false,
     hasExplicitHistory: false,
     helpRequested: false,
     ...overrides,
@@ -46,7 +50,7 @@ class StubHistoryStore {
   listCalled = false;
   selectedIndex: number | null = null;
 
-  constructor(private readonly entry: HistoryEntry | null = null) {}
+  constructor(private readonly entry: TestHistoryEntry | null = null) {}
 
   deleteByNumber(index: number) {
     this.deletedIndex = index;
@@ -105,31 +109,11 @@ describe("parseArgs", () => {
     expect(options.compactIndex).toBe(3);
   });
 
-  it("-D フラグで d2 モードになる", () => {
+  it("d2関連フラグは parseArgs で拒否される", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["-D", "ダイアグラム"], defaults);
-    expect(options.taskMode).toBe("d2");
-    expect(options.taskModeExplicit).toBe(true);
-  });
-
-  it("d2 モードで --d2-iterations を指定できる", () => {
-    const defaults = createDefaults();
-    const options = parseArgs(["-D", "--d2-iterations", "5", "図"], defaults);
-    expect(options.d2MaxIterations).toBe(5);
-    expect(options.d2MaxIterationsExplicit).toBe(true);
-  });
-
-  it("d2 モード以外で --d2-iterations を指定するとエラーになる", () => {
-    const defaults = createDefaults();
-    expect(() => parseArgs(["--d2-iterations", "4", "テスト"], defaults)).toThrow(
-      "Error: --d2-iterations は d2モードと併用してください",
-    );
-  });
-
-  it("--d2-file 単体ではエラーになる", () => {
-    const defaults = createDefaults();
+    expect(() => parseArgs(["-D", "ダイアグラム"], defaults)).toThrow("error: unknown option '-D'");
     expect(() => parseArgs(["--d2-file", "out.d2", "テスト"], defaults)).toThrow(
-      "Error: --d2-file は d2モードと併用してください",
+      "error: unknown option '--d2-file'",
     );
   });
 
@@ -161,14 +145,14 @@ describe("buildRequest", () => {
     const defaults = createDefaults();
     const options = createOptions();
     const context = createContext();
-    const request = buildRequest(
+    const request = buildRequest({
       options,
       context,
-      "最初の質問",
-      "system message",
-      undefined,
+      inputText: "最初の質問",
+      systemPrompt: "system message",
       defaults,
-    );
+      logLabel: "[test-cli]",
+    });
     const input = request.input as any[];
     expect(input[0]).toEqual({
       role: "system",
@@ -189,14 +173,14 @@ describe("buildRequest", () => {
         },
       ],
     });
-    const request = buildRequest(
+    const request = buildRequest({
       options,
       context,
-      "続きの質問",
-      "system message",
-      undefined,
+      inputText: "続きの質問",
+      systemPrompt: "system message",
       defaults,
-    );
+      logLabel: "[test-cli]",
+    });
     const input = request.input as any[];
     const systemTexts = input
       .filter((msg) => msg.role === "system")
@@ -212,7 +196,12 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      noopDeps,
+    );
     expect(store.deletedIndex).toBe(2);
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
@@ -224,7 +213,12 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ showIndex: 5 });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      noopDeps,
+    );
     expect(store.shownIndex).toBe(5);
     expect(result.kind).toBe("exit");
   });
@@ -233,14 +227,19 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ resumeListOnly: true });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      noopDeps,
+    );
     expect(store.listCalled).toBe(true);
     expect(result.kind).toBe("exit");
   });
 
   it("履歴番号指定で入力テキストを返す", async () => {
     const defaults = createDefaults();
-    const entry: HistoryEntry = {
+    const entry: TestHistoryEntry = {
       last_response_id: "resp-123",
       title: "前回の対話",
     };
@@ -251,7 +250,12 @@ describe("determineInput", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      noopDeps,
+    );
     expect(store.selectedIndex).toBe(1);
     expect(result.kind).toBe("input");
     if (result.kind === "input") {
@@ -265,10 +269,22 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions();
-    const result = await determineInput(options, store as unknown as HistoryStore, defaults);
+    let helpCalled = false;
+    const deps = {
+      printHelp: () => {
+        helpCalled = true;
+      },
+    };
+    const result = await determineInput(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      deps,
+    );
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {
       expect(result.code).toBe(1);
     }
+    expect(helpCalled).toBe(true);
   });
 });

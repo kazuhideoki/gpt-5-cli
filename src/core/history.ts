@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import type { EffortLevel, VerbosityLevel } from "./types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
-export const historyTurnSchema = z.object({
+const historyTurnSchema = z.object({
   role: z.string(),
   text: z.string().optional(),
   at: z.string().optional(),
@@ -11,42 +12,23 @@ export const historyTurnSchema = z.object({
   kind: z.string().optional(),
 });
 
-export type HistoryTurn = z.infer<typeof historyTurnSchema>;
+type HistoryTurn = z.infer<typeof historyTurnSchema>;
 
 /** 要約エントリの構造を検証するスキーマ。 */
-export const historySummarySchema = z.object({
+const historySummarySchema = z.object({
   text: z.string().optional(),
   created_at: z.string().optional(),
 });
 
-export type HistorySummary = z.infer<typeof historySummarySchema>;
-
 /** 履歴の再開情報を検証するスキーマ。 */
-export const historyResumeSchema = z.object({
+const historyResumeSchema = z.object({
   mode: z.string().optional(),
   previous_response_id: z.string().optional(),
   summary: historySummarySchema.optional(),
 });
 
-export type HistoryResume = z.infer<typeof historyResumeSchema>;
-
-/** d2モードのタスク付随情報を検証するスキーマ。 */
-export const historyTaskD2Schema = z.object({
-  file_path: z.string().optional(),
-});
-
-export type HistoryTaskD2 = z.infer<typeof historyTaskD2Schema>;
-
-/** 履歴タスクメタデータ全体を検証するスキーマ。 */
-export const historyTaskSchema = z.object({
-  mode: z.string().optional(),
-  d2: historyTaskD2Schema.optional(),
-});
-
-export type HistoryTask = z.infer<typeof historyTaskSchema>;
-
 /** 履歴エントリ全体を検証するスキーマ。 */
-export const historyEntrySchema = z.object({
+const baseHistoryEntrySchema = z.object({
   title: z.string().optional(),
   model: z.string().optional(),
   effort: z.string().optional(),
@@ -72,18 +54,73 @@ export const historyEntrySchema = z.object({
     .optional(),
   resume: historyResumeSchema.optional(),
   turns: z.array(historyTurnSchema).optional(),
-  task: historyTaskSchema.optional(),
+  task: z.unknown().optional(),
 });
 
-export type HistoryEntry = z.infer<typeof historyEntrySchema>;
+type HistoryEntryBase = z.infer<typeof baseHistoryEntrySchema>;
 
-const historyEntriesSchema = z.array(historyEntrySchema);
+export type HistoryEntry<TTask = unknown> = Omit<HistoryEntryBase, "task"> & {
+  task?: TTask;
+};
+
+function createHistoryEntrySchema<TTask>(
+  taskSchema?: z.ZodType<TTask>,
+): z.ZodType<HistoryEntry<TTask>> {
+  if (taskSchema) {
+    return baseHistoryEntrySchema.extend({
+      task: taskSchema.optional(),
+    }) as z.ZodType<HistoryEntry<TTask>>;
+  }
+  return baseHistoryEntrySchema as unknown as z.ZodType<HistoryEntry<TTask>>;
+}
+
+function createHistoryEntriesSchema<TTask>(
+  taskSchema?: z.ZodType<TTask>,
+): z.ZodArray<z.ZodType<HistoryEntry<TTask>>> {
+  return z.array(createHistoryEntrySchema(taskSchema));
+}
+
+interface HistoryEntryMetadata {
+  model: string;
+  effort: EffortLevel;
+  verbosity: VerbosityLevel;
+}
+
+interface HistoryUpsertContext<TTask> {
+  isNewConversation: boolean;
+  titleToUse: string;
+  previousResponseId?: string;
+  activeLastResponseId?: string;
+  resumeSummaryText?: string;
+  resumeSummaryCreatedAt?: string;
+  previousTask?: TTask;
+}
+
+interface HistoryConversationUpsert<TTask> {
+  metadata: HistoryEntryMetadata;
+  context: HistoryUpsertContext<TTask>;
+  responseId: string;
+  userText: string;
+  assistantText: string;
+  task?: TTask;
+}
+
+interface HistoryStoreOptions<TTask> {
+  taskSchema?: z.ZodType<TTask>;
+}
 
 /**
  * 履歴インデックスファイルを管理するユーティリティ。
  */
-export class HistoryStore {
-  constructor(private readonly filePath: string) {}
+export class HistoryStore<TTask = unknown> {
+  private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TTask>>>;
+
+  constructor(
+    private readonly filePath: string,
+    options: HistoryStoreOptions<TTask> = {},
+  ) {
+    this.entriesSchema = createHistoryEntriesSchema(options.taskSchema);
+  }
 
   /**
    * 履歴ファイルとディレクトリを初期化する。
@@ -101,12 +138,12 @@ export class HistoryStore {
    *
    * @returns 検証済みの履歴一覧。
    */
-  loadEntries(): HistoryEntry[] {
+  loadEntries(): HistoryEntry<TTask>[] {
     this.ensureInitialized();
     try {
       const raw = fs.readFileSync(this.filePath, "utf8");
       const parsed = JSON.parse(raw);
-      return historyEntriesSchema.parse(parsed);
+      return this.entriesSchema.parse(parsed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`[gpt-5-cli] failed to parse history index: ${message}`);
@@ -118,14 +155,14 @@ export class HistoryStore {
    *
    * @param entries 保存対象の履歴一覧。
    */
-  saveEntries(entries: HistoryEntry[]): void {
+  saveEntries(entries: HistoryEntry<TTask>[]): void {
     this.ensureInitialized();
-    const normalized = historyEntriesSchema.parse(entries);
+    const normalized = this.entriesSchema.parse(entries);
     const json = JSON.stringify(normalized, null, 2);
     fs.writeFileSync(this.filePath, `${json}\n`, "utf8");
   }
 
-  private sortByUpdated(entries: HistoryEntry[]): HistoryEntry[] {
+  private sortByUpdated(entries: HistoryEntry<TTask>[]): HistoryEntry<TTask>[] {
     return [...entries].sort((a, b) => {
       const left = a.updated_at ?? "";
       const right = b.updated_at ?? "";
@@ -164,7 +201,7 @@ export class HistoryStore {
    * @param index 1始まりの履歴番号。
    * @returns 該当エントリ。
    */
-  selectByNumber(index: number): HistoryEntry {
+  selectByNumber(index: number): HistoryEntry<TTask> {
     const entries = this.sortByUpdated(this.loadEntries());
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
@@ -190,7 +227,139 @@ export class HistoryStore {
     }
     const filtered = this.loadEntries().filter((item) => item.last_response_id !== lastId);
     this.saveEntries(filtered);
-    return { removedTitle: entry.title ?? "(タイトル未設定)", removedId: lastId };
+    return {
+      removedTitle: entry.title ?? "(タイトル未設定)",
+      removedId: lastId,
+    };
+  }
+
+  /**
+   * 対話履歴へ新たなターンを保存する。該当会話が存在すれば更新、無ければ新規作成する。
+   */
+  upsertConversation(params: HistoryConversationUpsert<TTask>): void {
+    const { metadata, context, responseId, userText, assistantText, task } = params;
+    const entries = this.loadEntries();
+    const tsNow = new Date().toISOString();
+    let targetLastId = context.previousResponseId;
+    if (!targetLastId && context.activeLastResponseId) {
+      targetLastId = context.activeLastResponseId;
+    }
+
+    const resumeSummaryText = context.resumeSummaryText ?? "";
+    let resumeSummaryCreated = context.resumeSummaryCreatedAt ?? "";
+    if (resumeSummaryText && !resumeSummaryCreated) {
+      resumeSummaryCreated = tsNow;
+    }
+
+    const resume = resumeSummaryText
+      ? {
+          mode: "response_id" as const,
+          previous_response_id: responseId,
+          summary: {
+            text: resumeSummaryText,
+            created_at: resumeSummaryCreated,
+          },
+        }
+      : {
+          mode: "response_id" as const,
+          previous_response_id: responseId,
+        };
+
+    const userTurn = { role: "user", text: userText, at: tsNow };
+    const assistantTurn = {
+      role: "assistant",
+      text: assistantText,
+      at: tsNow,
+      response_id: responseId,
+    };
+
+    const resolveTask = (previousTask?: TTask, existingTask?: TTask) =>
+      task ?? previousTask ?? existingTask;
+
+    if (context.isNewConversation && !targetLastId) {
+      const newEntry: HistoryEntry<TTask> = {
+        title: context.titleToUse,
+        model: metadata.model,
+        effort: metadata.effort,
+        verbosity: metadata.verbosity,
+        created_at: tsNow,
+        updated_at: tsNow,
+        first_response_id: responseId,
+        last_response_id: responseId,
+        request_count: 1,
+        resume,
+        turns: [userTurn, assistantTurn],
+        task: resolveTask(context.previousTask),
+      };
+      entries.push(newEntry);
+      this.saveEntries(entries);
+      return;
+    }
+
+    let updated = false;
+    const nextEntries = entries.map((entry) => {
+      if ((entry.last_response_id ?? "") === (targetLastId ?? "")) {
+        updated = true;
+        const turns = [...(entry.turns ?? []), userTurn, assistantTurn];
+        const nextResume = resumeSummaryText
+          ? {
+              ...(entry.resume ?? {}),
+              mode: "response_id" as const,
+              previous_response_id: responseId,
+              summary: {
+                text: resumeSummaryText,
+                created_at:
+                  resumeSummaryCreated ||
+                  entry.resume?.summary?.created_at ||
+                  entry.created_at ||
+                  tsNow,
+              },
+            }
+          : {
+              ...(entry.resume ?? {}),
+              mode: "response_id" as const,
+              previous_response_id: responseId,
+            };
+        if (!resumeSummaryText && nextResume.summary) {
+          delete nextResume.summary;
+        }
+        return {
+          ...entry,
+          updated_at: tsNow,
+          last_response_id: responseId,
+          model: metadata.model,
+          effort: metadata.effort,
+          verbosity: metadata.verbosity,
+          request_count: (entry.request_count ?? 0) + 1,
+          turns,
+          resume: nextResume,
+          task: resolveTask(context.previousTask, entry.task),
+        };
+      }
+      return entry;
+    });
+
+    if (updated) {
+      this.saveEntries(nextEntries);
+      return;
+    }
+
+    const fallbackEntry: HistoryEntry<TTask> = {
+      title: context.titleToUse,
+      model: metadata.model,
+      effort: metadata.effort,
+      verbosity: metadata.verbosity,
+      created_at: tsNow,
+      updated_at: tsNow,
+      first_response_id: responseId,
+      last_response_id: responseId,
+      request_count: 1,
+      resume,
+      turns: [userTurn, assistantTurn],
+      task: resolveTask(context.previousTask),
+    };
+    nextEntries.push(fallbackEntry);
+    this.saveEntries(nextEntries);
   }
 
   /**
@@ -252,7 +421,7 @@ export class HistoryStore {
    *
    * @returns 最新エントリ。存在しない場合はundefined。
    */
-  findLatest(): HistoryEntry | undefined {
+  findLatest(): HistoryEntry<TTask> | undefined {
     const entries = this.loadEntries();
     if (entries.length === 0) return undefined;
     return this.sortByUpdated(entries)[0];
@@ -263,7 +432,7 @@ export class HistoryStore {
    *
    * @param entry 保存対象エントリ。
    */
-  upsertEntry(entry: HistoryEntry): void {
+  upsertEntry(entry: HistoryEntry<TTask>): void {
     const entries = this.loadEntries();
     const existingIndex = entries.findIndex(
       (item) => item.last_response_id === entry.last_response_id,
@@ -275,62 +444,6 @@ export class HistoryStore {
     }
     this.saveEntries(entries);
   }
-}
-
-/**
- * 履歴エントリ一覧を置き換えて保存する。
- *
- * @param store 履歴ストア。
- * @param entries 保存する一覧。
- */
-export function updateHistoryEntries(store: HistoryStore, entries: HistoryEntry[]): void {
-  store.saveEntries(entries);
-}
-
-/**
- * 履歴エントリを全件読み込むショートカット。
- *
- * @param store 履歴ストア。
- * @returns 履歴一覧。
- */
-export function loadAllEntries(store: HistoryStore): HistoryEntry[] {
-  return store.loadEntries();
-}
-
-/**
- * 条件に一致する履歴エントリを更新し、存在しなければ新規作成する。
- *
- * @param store 履歴ストア。
- * @param predicate 更新対象かを判定する関数。
- * @param updater エントリ更新関数。
- * @param fallback 対象が無かった場合に作成するエントリ。
- * @returns 更新または新規作成したエントリ。
- */
-export function replaceEntry(
-  store: HistoryStore,
-  predicate: (entry: HistoryEntry) => boolean,
-  updater: (entry: HistoryEntry) => HistoryEntry,
-  fallback: () => HistoryEntry,
-): HistoryEntry {
-  const entries = store.loadEntries();
-  let replaced: HistoryEntry | null = null;
-  const nextEntries = entries.map((entry) => {
-    if (predicate(entry)) {
-      replaced = updater(entry);
-      return replaced;
-    }
-    return entry;
-  });
-
-  if (replaced) {
-    store.saveEntries(nextEntries);
-    return replaced;
-  }
-
-  const fallbackEntry = fallback();
-  nextEntries.push(fallbackEntry);
-  store.saveEntries(nextEntries);
-  return fallbackEntry;
 }
 
 /**
