@@ -87,14 +87,17 @@ const envConfigSchema = z
 
 interface LoadEnvironmentOptions {
   envSuffix?: string;
+  baseDir?: string;
 }
 
 /**
  * リポジトリ直下の`.env`を読み込み、必要に応じて`.env.{suffix}`で上書きする。
  *
  * @param options.envSuffix CLIごとの追加環境ファイル接尾辞。
+ * @param options.baseDir   ルートディレクトリをテストなどで上書きする場合に指定。
  */
 export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
+  const baseDir = options.baseDir ?? ROOT_DIR;
   const appliedFromBase = new Set<string>();
   const applyEnvFile = (filePath: string, mode: "base" | "override") => {
     if (!fs.existsSync(filePath)) {
@@ -115,12 +118,12 @@ export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
     });
   };
 
-  const envPath = path.join(ROOT_DIR, ".env");
+  const envPath = path.join(baseDir, ".env");
   applyEnvFile(envPath, "base");
 
   const suffix = options.envSuffix?.trim();
   if (suffix && suffix.length > 0) {
-    applyEnvFile(path.join(ROOT_DIR, `.env.${suffix}`), "override");
+    applyEnvFile(path.join(baseDir, `.env.${suffix}`), "override");
   }
 }
 

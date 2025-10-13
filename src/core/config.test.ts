@@ -2,7 +2,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ROOT_DIR, loadDefaults, resolveHistoryPath, resolvePromptsDir } from "./config.js";
+import {
+  ROOT_DIR,
+  loadDefaults,
+  loadEnvironment,
+  resolveHistoryPath,
+  resolvePromptsDir,
+} from "./config.js";
 
 const envKeys = [
   "GPT_5_CLI_HISTORY_INDEX_FILE",
@@ -46,6 +52,50 @@ afterAll(() => {
   if (tempDir) {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+describe("loadEnvironment", () => {
+  const targetEnv = "OPENAI_DEFAULT_EFFORT";
+
+  afterEach(() => {
+    delete process.env[targetEnv];
+  });
+
+  it(".env の値が設定される", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      loadEnvironment({ baseDir: dir });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("medium");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it(".env.{suffix} が .env を上書きする", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
+      loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("既に環境変数が設定されていれば維持される", () => {
+    process.env.OPENAI_DEFAULT_EFFORT = "low";
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      fs.writeFileSync(path.join(dir, ".env.sql"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
+      loadEnvironment({ baseDir: dir, envSuffix: "sql" });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("low");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("resolveHistoryPath", () => {
