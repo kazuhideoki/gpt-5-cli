@@ -1,6 +1,6 @@
 # ディレクトリ構成メモ
-- `src/cli/` — default・d2・sql 各 CLI 用のエントリーポイントと共通ユーティリティ (`shared/`)。
-- `src/commands/` — CLI から呼び出すドメインサービス層。現在は会話処理ロジックを提供。
+- `src/cli/` — default・d2・sql 各 CLI 用のエントリーポイントと共通ランタイム (`runtime/`)。
+- `src/session/` — CLI から呼び出すチャットセッションサービス層。Responses API 実行と履歴同期を担う。
 - `src/core/` — 設定読込・OpenAI クライアント生成・history/formatting 等の基盤ユーティリティ群。
 - `dist/` — `bun run build` で生成されるバンドル済み CLI (`dist/cli/<mode>.js` など)。
 - `docs/`, `plan.md` — プロジェクト計画と補助ドキュメント。

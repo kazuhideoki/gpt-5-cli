@@ -1,3 +1,4 @@
+// input.ts: CLI がユーザー入力を受け取る際の履歴操作とフロー分岐を提供する共通ユーティリティ。
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions } from "../types.js";
@@ -16,11 +17,11 @@ interface DetermineInputResult<THistoryTask = unknown> {
   previousTitle?: string;
 }
 
-type DetermineResult<THistoryTask = unknown> =
+export type DetermineResult<THistoryTask = unknown> =
   | DetermineInputExit
   | DetermineInputResult<THistoryTask>;
 
-interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
+export interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
   printHelp: (defaults: CliDefaults, options: TOptions) => void;
 }
 
@@ -34,6 +35,15 @@ async function promptForInput(): Promise<string> {
   }
 }
 
+/**
+ * CLI のフラグと履歴ストアの状態から次の処理ステップを決定する。
+ *
+ * @param options 解析済み CLI オプション。
+ * @param historyStore 履歴エントリの参照・更新を担うストア。
+ * @param defaults 現在の CLI 既定値セット。
+ * @param deps ヘルプ出力など CLI 実装側が差し込む依存性。
+ * @throws {Error} 履歴再開時に取得した入力が空文字だった場合。
+ */
 export async function determineInput<TOptions extends CliOptions, THistoryTask = unknown>(
   options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
