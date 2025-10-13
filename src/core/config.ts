@@ -7,7 +7,7 @@ import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** プロジェクトのルートディレクトリ絶対パス。 */
-export const ROOT_DIR = path.resolve(__dirname, "..");
+export const ROOT_DIR = path.resolve(__dirname, "../../..");
 
 const effortLevelSchema = z
   .string()
@@ -164,18 +164,4 @@ export function loadDefaults(): CliDefaults {
     promptsDir,
     d2MaxIterations: envConfig.GPT_5_CLI_D2_MAX_ITERATIONS ?? 8,
   };
-}
-
-/**
- * `OPENAI_API_KEY`の存在を検証し、値を返す。
- *
- * @returns OpenAI APIキー。
- * @throws 設定されていない場合。
- */
-export function ensureApiKey(): string {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY not found. Please set it in .env");
-  }
-  return apiKey;
 }
