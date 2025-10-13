@@ -189,6 +189,153 @@ function ensureQueryString(raw: unknown): string {
   return raw;
 }
 
+/**
+ * 末尾の空白を除去した SELECT 文を返す。
+ * semicolon を削除せずに残し、後続処理で安全性チェックを行う。
+ */
+function normalizeSelectQuery(sql: string): string {
+  return sql.trim();
+}
+
+/**
+ * SQL テキストに複数ステートメントが含まれていないかを検査する。
+ * 文字列・識別子・コメントを考慮し、末尾以外の内容を伴う `;` を検出する。
+ */
+function hasDanglingStatementTerminator(sql: string): boolean {
+  let inSingle = false;
+  let inDouble = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let dollarTag: string | null = null;
+  let singleUsesBackslash = false;
+
+  for (let index = 0; index < sql.length; index += 1) {
+    const ch = sql[index] as string;
+    const next = sql[index + 1] as string | undefined;
+
+    if (inLineComment) {
+      if (ch === "\n" || ch === "\r") {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (dollarTag) {
+      if (sql.startsWith(dollarTag, index)) {
+        index += dollarTag.length - 1;
+        dollarTag = null;
+      }
+      continue;
+    }
+
+    if (inSingle) {
+      if (singleUsesBackslash && ch === "\\") {
+        index += 1;
+        continue;
+      }
+      if (ch === "'" && next === "'") {
+        index += 1;
+        continue;
+      }
+      if (ch === "'") {
+        inSingle = false;
+        singleUsesBackslash = false;
+      }
+      continue;
+    }
+
+    if (inDouble) {
+      if (ch === '"' && next === '"') {
+        index += 1;
+        continue;
+      }
+      if (ch === '"') {
+        inDouble = false;
+      }
+      continue;
+    }
+
+    if (ch === "-" && next === "-") {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+
+    if (ch === "'") {
+      inSingle = true;
+      const prevChar = index > 0 ? sql[index - 1] : "";
+      singleUsesBackslash = prevChar === "E" || prevChar === "e";
+      continue;
+    }
+
+    if (ch === '"') {
+      inDouble = true;
+      continue;
+    }
+
+    if (ch === "$") {
+      const match = sql.slice(index).match(/^\$[A-Za-z0-9_]*\$/);
+      if (match) {
+        dollarTag = match[0];
+        index += match[0].length - 1;
+        continue;
+      }
+    }
+
+    if (ch === ";") {
+      let lookahead = index + 1;
+      while (lookahead < sql.length) {
+        const lookChar = sql[lookahead] as string;
+        const lookNext = sql[lookahead + 1] as string | undefined;
+        if (/\s/u.test(lookChar)) {
+          lookahead += 1;
+          continue;
+        }
+        if (lookChar === "-" && lookNext === "-") {
+          lookahead += 2;
+          while (lookahead < sql.length) {
+            const commentChar = sql[lookahead] as string;
+            if (commentChar === "\n" || commentChar === "\r") {
+              break;
+            }
+            lookahead += 1;
+          }
+          continue;
+        }
+        if (lookChar === "/" && lookNext === "*") {
+          lookahead += 2;
+          while (lookahead < sql.length) {
+            if (sql[lookahead] === "*" && sql[lookahead + 1] === "/") {
+              lookahead += 2;
+              break;
+            }
+            lookahead += 1;
+          }
+          continue;
+        }
+        return true;
+      }
+      return false;
+    }
+  }
+
+  return false;
+}
+
 function isSelectOnlyQuery(sql: string): boolean {
   const noComments = sql
     .replace(/--.*$/gmu, "")
@@ -319,12 +466,23 @@ async function sqlFetchSchemaTool(
   }
 }
 
+/**
+ * SQL ドライランツール。SELECT 文のみを許容し、PREPARE/EXPLAIN で構文と型を検証する。
+ */
 async function sqlDryRunTool(
   args: SqlDryRunArgs,
   _context: ToolExecutionContext,
 ): Promise<SqlDryRunResult> {
   try {
-    const query = ensureQueryString(args?.query);
+    const rawQuery = ensureQueryString(args?.query);
+    const query = normalizeSelectQuery(rawQuery);
+    if (hasDanglingStatementTerminator(query)) {
+      return {
+        success: false,
+        message:
+          "sql_dry_run は 1 つの SELECT 文のみサポートします (追加のステートメントは無効です)。",
+      } satisfies SqlDryRunResult;
+    }
     if (!isSelectOnlyQuery(query)) {
       return {
         success: false,
@@ -342,12 +500,21 @@ async function sqlDryRunTool(
   }
 }
 
+/**
+ * sqruff を利用して SQL を整形し、結果テキストを返す。
+ */
 async function sqlFormatTool(
   args: SqlFormatArgs,
   context: ToolExecutionContext,
 ): Promise<SqlFormatResult> {
   try {
-    const query = ensureQueryString(args?.query);
+    const query = normalizeSelectQuery(ensureQueryString(args?.query));
+    if (hasDanglingStatementTerminator(query)) {
+      return {
+        success: false,
+        message: "sql_format は 1 つの SELECT 文のみを対象にしてください。",
+      } satisfies SqlFormatResult;
+    }
     const formatted = await formatSqlWithSqruff(query, context.cwd);
     return {
       success: true,

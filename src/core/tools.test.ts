@@ -206,6 +206,56 @@ describe("executeFunctionToolCall", () => {
     expect(String(result.message)).toContain("POSTGRES_DSN");
   });
 
+  it("sql_dry_run は複数ステートメントを拒否する", async () => {
+    const call = createCall("sql_dry_run", { query: "SELECT 1; DELETE FROM users" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+
+  it("sql_dry_run は E 文字列を含む複数ステートメントを拒否する", async () => {
+    const call = createCall("sql_dry_run", { query: "SELECT E'foo\\''; DELETE FROM users" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+
+  it("sql_dry_run は行末コメント付きの単一ステートメントを受け付ける", async () => {
+    delete process.env.POSTGRES_DSN;
+    const call = createCall("sql_dry_run", { query: "SELECT 1; -- ok" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("POSTGRES_DSN");
+  });
+
+  it("sql_dry_run はブロックコメントのみを後続に持つ入力を受け付ける", async () => {
+    delete process.env.POSTGRES_DSN;
+    const call = createCall("sql_dry_run", { query: "SELECT 1; /* trailing */" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("POSTGRES_DSN");
+  });
+
   it("sql_fetch_schema は DSN 未設定時にエラーを返す", async () => {
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_fetch_schema", {});
@@ -242,6 +292,62 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(true);
-    expect(result.formatted_sql).toBe("SELECT 1;\n");
+    expect(result.formatted_sql).toBe("SELECT 1;");
+  });
+
+  it("sql_format は文字列リテラル内のセミコロンを許容する", async () => {
+    const script = path.join(tempDir, "sqruff-string.sh");
+    const lines = ["#!/bin/sh", 'if [ "$1" != "fix" ]; then exit 1; fi', "exit 0"];
+    await fs.writeFile(script, `${lines.join("\n")}\n`, { mode: 0o755 });
+    await fs.chmod(script, 0o755);
+    process.env.SQRUFF_BIN = script;
+
+    const call = createCall("sql_format", { query: "SELECT 'value;test';" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.formatted_sql).toBe("SELECT 'value;test';");
+  });
+
+  it("sql_format は行末コメントを維持して整形する", async () => {
+    const script = path.join(tempDir, "sqruff-comment.sh");
+    const lines = [
+      "#!/bin/sh",
+      'if [ "$1" != "fix" ]; then exit 1; fi',
+      "input=$2",
+      'temp="$input.tmp"',
+      'cp "$input" "$temp"',
+      'mv "$temp" "$input"',
+      "exit 0",
+    ];
+    await fs.writeFile(script, `${lines.join("\n")}\n`, { mode: 0o755 });
+    await fs.chmod(script, 0o755);
+    process.env.SQRUFF_BIN = script;
+
+    const call = createCall("sql_format", { query: "SELECT 2; -- trailing" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.formatted_sql).toBe("SELECT 2; -- trailing");
+  });
+
+  it("sql_format は E 文字列を含む複数ステートメントを拒否する", async () => {
+    const call = createCall("sql_format", { query: "SELECT E'foo\\''; DELETE FROM users" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("SELECT 文のみ");
   });
 });
