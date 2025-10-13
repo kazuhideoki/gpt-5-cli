@@ -1,357 +1,149 @@
 #!/usr/bin/env bun
 /**
- * @file SQL モードの CLI エントリーポイント。PostgreSQL 接続を利用したスキーマ取得、
- * SELECT 文のドライラン検証、Sqruff による整形、LLM による修正ワークフローを提供する。
+ * @file SQL モードの CLI エントリーポイント。PostgreSQL と連携した SELECT クエリ編集を
+ * OpenAI Responses API のエージェントと SQL 専用ツールで実現する。
  */
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { Command, CommanderError } from "commander";
-import { Client } from "pg";
-import type { QueryResultRow } from "pg";
-import { loadEnvironment } from "../core/config.js";
+import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { z } from "zod";
+import {
+  buildRequest,
+  computeContext,
+  executeWithTools,
+  extractResponseText,
+  performCompact,
+  prepareImageData,
+} from "../commands/conversation.js";
+import { createOpenAIClient } from "../core/openai.js";
+import {
+  expandLegacyShortFlags,
+  parseEffortFlag,
+  parseHistoryFlag,
+  parseModelFlag,
+  parseVerbosityFlag,
+} from "../core/options.js";
+import { bootstrapCli } from "./shared/runner.js";
+import { determineInput } from "./shared/input.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
 
-export type Dialect = "postgres";
+const LOG_LABEL = "[gpt-5-cli-sql]";
 
-interface SchemaRow extends QueryResultRow {
-  table_schema: string;
-  table_name: string;
-  column_name: string;
-  data_type: string;
-  is_nullable: string;
-  column_default: string | null;
+interface SqlConnectionMetadata {
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
 }
 
-interface DryRunResult {
-  plan: unknown;
+interface SqlDsnSnapshot {
+  dsn: string;
+  hash: string;
+  connection: SqlConnectionMetadata;
 }
 
-interface ResponsesTextContent {
-  type: "text";
-  text: string;
+export interface SqlCliOptions extends CliOptions {
+  sqlMaxIterations: number;
+  sqlMaxIterationsExplicit: boolean;
 }
 
-interface ResponsesUserMessage {
-  role: "user";
-  content: ResponsesTextContent[];
-}
+const connectionSchema = z
+  .object({
+    host: z.string().optional(),
+    port: z.number().optional(),
+    database: z.string().optional(),
+    user: z.string().optional(),
+  })
+  .optional();
 
-interface ResponsesRequestBody {
-  model: string;
-  input: ResponsesUserMessage[];
-}
+const sqlContextSchema = z
+  .object({
+    type: z.literal("postgresql").optional(),
+    dsn_hash: z.string().optional(),
+    connection: connectionSchema,
+  })
+  .optional();
 
-interface ResponsesSuccessBody {
-  output_text?: string;
-}
+const sqlCliHistoryTaskSchema = z.object({
+  mode: z.string().optional(),
+  sql: sqlContextSchema,
+});
 
-interface ResponsesErrorBody {
-  error?: {
-    message?: string;
-  };
-}
+export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
 
-/** 必須の環境変数を取得する。 */
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`環境変数 ${name} が未設定です`);
-  }
-  return value;
-}
-
-/** 与えられた SQL が SELECT 系のみで構成されているかを判定する。 */
-export function isSelectOnly(sql: string): boolean {
-  const noComments = sql
-    .replace(/--.*$/gmu, "")
-    .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .trim();
-  return /^\s*(with\b[\s\S]*?\bselect\b|select\b)/iu.test(noComments);
-}
-
-/** 標準入力またはファイルから SQL テキストを読み込む。 */
-async function readStdinOrFile(maybePath?: string): Promise<string> {
-  if (maybePath) {
-    await stat(maybePath);
-    return readFile(maybePath, "utf8");
-  }
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    if (typeof chunk === "string") {
-      chunks.push(Buffer.from(chunk));
-    } else {
-      chunks.push(chunk);
-    }
-  }
-  return Buffer.concat(chunks).toString("utf8");
-}
-
-/** Sqruff を用いて SQL を整形する。 */
-export async function formatWithSqruff(sql: string): Promise<string> {
-  const bin = (process.env.SQRUFF_BIN ?? "sqruff").trim() || "sqruff";
-  const dir = await mkdtemp(path.join(tmpdir(), "sqruff-"));
-  const file = path.join(dir, "input.sql");
-  await writeFile(file, sql, "utf8");
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(bin, ["fix", file], { stdio: "inherit" });
-    child.once("error", (error) => {
-      reject(error);
-    });
-    child.once("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`sqruff failed with exit code ${code ?? 0}`));
-      }
-    });
-  });
-
-  return readFile(file, "utf8");
-}
-
-/** PostgreSQL クライアントを生成する。 */
-function createPgClient(): Client {
-  const dsn = requireEnv("POSTGRES_DSN");
-  return new Client({ connectionString: dsn });
-}
-
-/** PostgreSQL の information_schema からスキーマ情報を取得する。 */
-async function fetchSchema(): Promise<SchemaRow[]> {
-  const client = createPgClient();
-  await client.connect();
-  try {
-    const result = await client.query<SchemaRow>(
-      `
-        SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
-        FROM information_schema.columns
-        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-        ORDER BY table_schema, table_name, ordinal_position
-      `,
-    );
-    return result.rows;
-  } finally {
-    await client.end();
-  }
-}
-
-/** PostgreSQL エラーオブジェクトからメッセージを抽出する。 */
-function buildPgErrorMessage(error: unknown): string {
-  if (error && typeof error === "object") {
-    const maybeError = error as { message?: unknown; detail?: unknown; hint?: unknown };
-    const parts: string[] = [];
-    if (typeof maybeError.message === "string") {
-      parts.push(maybeError.message);
-    }
-    if (typeof maybeError.detail === "string") {
-      parts.push(maybeError.detail);
-    }
-    if (typeof maybeError.hint === "string") {
-      parts.push(`hint: ${maybeError.hint}`);
-    }
-    if (parts.length > 0) {
-      return parts.join(" ");
-    }
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-/** SELECT 文を PREPARE/EXPLAIN で検証し、実行計画を取得する。 */
-async function performDryRun(sql: string): Promise<DryRunResult> {
-  const client = createPgClient();
-  await client.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(`PREPARE __sqlcheck__ AS ${sql}`);
-    await client.query("DEALLOCATE __sqlcheck__");
-    const explain = await client.query(`EXPLAIN (VERBOSE, COSTS OFF, FORMAT JSON) ${sql}`);
-    await client.query("ROLLBACK");
-    const plan = explain.rows?.[0]?.["QUERY PLAN"];
-    return { plan };
-  } catch (error) {
-    try {
-      await client.query("ROLLBACK");
-    } catch {
-      // ignore rollback failures
-    }
-    throw new Error(buildPgErrorMessage(error));
-  } finally {
-    await client.end();
-  }
-}
-
-/** SELECT 文をドライランし、結果を JSON で出力する。 */
-async function cmdDryRun(filePath?: string): Promise<void> {
-  const sql = await readStdinOrFile(filePath);
-  if (!isSelectOnly(sql)) {
-    throw new Error("SQLモードは SELECT/WITH ... SELECT のみ対応です。");
-  }
-  const result = await performDryRun(sql);
-  const output = { ok: true, plan: result.plan };
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
-}
-
-/** Sqruff で整形した SQL を標準出力へ書き出す。 */
-async function cmdFormat(filePath?: string): Promise<void> {
-  const sql = await readStdinOrFile(filePath);
-  const formatted = await formatWithSqruff(sql);
-  process.stdout.write(formatted);
-}
-
-/** スキーマ情報を取得して JSON として出力する。 */
-async function cmdSchema(): Promise<void> {
-  const rows = await fetchSchema();
-  process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-}
-
-/** DSN 文字列のハッシュを生成する。 */
-function hashDsn(dsn: string): string {
-  const digest = createHash("sha256").update(dsn).digest("hex");
-  return `sha256:${digest}`;
-}
-
-interface RevisionParams {
-  original: string;
-  intent?: string;
-  schemaRows: SchemaRow[];
+interface SqlCliHistoryTaskOptions {
+  taskMode: SqlCliOptions["taskMode"];
+  taskModeExplicit: boolean;
   dsnHash: string;
-  dryRunError?: string;
+  connection: SqlConnectionMetadata;
 }
 
-/** LLM に提示するプロンプト文字列を構築する。 */
-function buildRevisionPrompt(params: RevisionParams): string {
-  const schemaJson = JSON.stringify(params.schemaRows);
-  const truncatedSchema = schemaJson.length > 48000 ? `${schemaJson.slice(0, 48000)}...` : schemaJson;
-  const segments: string[] = [
-    "次の条件で SELECT 文のみを1本だけ返してください。余計なCTEやコメントは不要です。",
-    "- 方言: PostgreSQL",
-    "- 構文/型エラーを避ける（必要なら明示キャスト）",
-    "- 返答はSQLテキストのみ",
-    "",
-    `意図: ${params.intent ?? "(なし)"}`,
-    `スキーマ(JSON 行数=${params.schemaRows.length} / dsn=${params.dsnHash}):`,
-    truncatedSchema,
-    "",
-    "元SQL:",
-    params.original,
-  ];
-  if (params.dryRunError) {
-    segments.push("", "直前の dry-run エラー:", params.dryRunError);
-  }
-  return segments.join("\n");
-}
-
-/** LLM へ修正 SQL を要求する。 */
-async function requestSqlRevision(params: RevisionParams): Promise<string> {
-  const apiKey = requireEnv("OPENAI_API_KEY");
-  const body: ResponsesRequestBody = {
-    model: "gpt-5-thinking",
-    input: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: buildRevisionPrompt(params),
-          },
-        ],
-      },
-    ],
-  };
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
+  .object({
+    model: z.string(),
+    effort: z.enum(["low", "medium", "high"]),
+    verbosity: z.enum(["low", "medium", "high"]),
+    continueConversation: z.boolean(),
+    taskMode: z.literal("sql"),
+    resumeIndex: z.number().optional(),
+    resumeListOnly: z.boolean(),
+    deleteIndex: z.number().optional(),
+    showIndex: z.number().optional(),
+    imagePath: z.string().optional(),
+    operation: z.union([z.literal("ask"), z.literal("compact")]),
+    compactIndex: z.number().optional(),
+    args: z.array(z.string()),
+    modelExplicit: z.boolean(),
+    effortExplicit: z.boolean(),
+    verbosityExplicit: z.boolean(),
+    taskModeExplicit: z.boolean(),
+    hasExplicitHistory: z.boolean(),
+    helpRequested: z.boolean(),
+    sqlMaxIterations: z.number().int().positive(),
+    sqlMaxIterationsExplicit: z.boolean(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.operation === "compact" &&
+      (value.continueConversation ||
+        value.resumeListOnly ||
+        typeof value.resumeIndex === "number" ||
+        typeof value.deleteIndex === "number" ||
+        typeof value.showIndex === "number" ||
+        value.args.length > 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Error: --compact と他のフラグは併用できません",
+        path: ["operation"],
+      });
+    }
   });
-  let data: ResponsesSuccessBody & ResponsesErrorBody;
-  try {
-    data = (await response.json()) as ResponsesSuccessBody & ResponsesErrorBody;
-  } catch (error) {
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: HTTP ${response.status}`);
-    }
-    throw new Error(`OpenAI API response parse error: ${toErrorMessage(error)}`);
+
+function parseSqlIterations(value: string): number {
+  if (!/^\d+$/u.test(value)) {
+    throw new InvalidArgumentError("Error: --sql-iterations の値は正の整数で指定してください");
   }
-  if (!response.ok) {
-    const message = data.error?.message ?? `HTTP ${response.status}`;
-    throw new Error(`OpenAI API error: ${message}`);
+  const parsed = Number.parseInt(value, 10);
+  if (parsed <= 0) {
+    throw new InvalidArgumentError("Error: --sql-iterations の値は 1 以上で指定してください");
   }
-  const text = typeof data.output_text === "string" ? data.output_text.trim() : "";
-  if (text.length === 0) {
-    throw new Error("OpenAI からの応答に SQL が含まれていません");
-  }
-  return text;
+  return parsed;
 }
 
-/** LLM を用いた SQL 修正ワークフローを実行する。 */
-async function cmdRevise(filePath?: string, intent?: string): Promise<void> {
-  const original = await readStdinOrFile(filePath);
-  if (!isSelectOnly(original)) {
-    throw new Error("SQLモードは SELECT/WITH ... SELECT のみ対応です。");
-  }
-  const schemaRows = await fetchSchema();
-  const dsnHash = hashDsn(requireEnv("POSTGRES_DSN"));
-
-  let dryRunError: string | undefined;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const candidate = await requestSqlRevision({
-      original,
-      intent,
-      schemaRows,
-      dsnHash,
-      dryRunError,
-    });
-    const formatted = await formatWithSqruff(candidate);
-    try {
-      await performDryRun(formatted);
-      const output = formatted.endsWith("\n") ? formatted : `${formatted}\n`;
-      process.stdout.write(output);
-      return;
-    } catch (error) {
-      dryRunError = buildPgErrorMessage(error);
-      if (attempt === 1) {
-        throw new Error(`dry-run failed after revision attempts: ${dryRunError}`);
-      }
-    }
-  }
-}
-
-/** 汎用的なエラーメッセージ整形。 */
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === "string") {
-    return error.message;
-  }
-  return String(error);
-}
-
-/** コマンド実行時の共通エラーハンドリング。 */
-async function runCommand(action: () => Promise<void>): Promise<void> {
-  try {
-    await action();
-  } catch (error) {
-    const message = toErrorMessage(error);
-    if (message.trim().length > 0) {
-      console.error(message);
-    }
-    process.exit(1);
-  }
-}
-
-/** SQL モード CLI 全体を実行する。 */
-async function runSqlCli(): Promise<void> {
-  loadEnvironment();
+/**
+ * SQL モード CLI の引数を解析し、正規化済みオプションを返す。
+ *
+ * @param argv process.argv から渡された引数（node, script を除外）。
+ * @param defaults 環境から取得した既定値。
+ * @returns SQL モード用 CLI オプション。
+ */
+export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions {
   const program = new Command();
+
   program
-    .name("gpt-5-cli-sql")
-    .description("SQL mode utilities for gpt-5-cli")
+    .exitOverride()
+    .allowUnknownOption(false)
+    .showSuggestionAfterError(false)
     .configureOutput({
       writeErr: (str) => {
         const trimmed = str.replace(/\s+$/u, "");
@@ -359,54 +151,456 @@ async function runSqlCli(): Promise<void> {
           console.error(trimmed);
         }
       },
-    })
-    .showSuggestionAfterError(false)
-    .exitOverride();
-
-  program
-    .command("schema")
-    .description("print schema as JSON")
-    .action(async () => {
-      await runCommand(cmdSchema);
     });
 
+  program.helpOption(false);
   program
-    .command("dry-run")
-    .argument("[file]", "path to SQL file")
-    .description("validate SELECT statements via PREPARE & EXPLAIN")
-    .action(async (file?: string) => {
-      await runCommand(() => cmdDryRun(file));
+    .option("-?, --help", "ヘルプを表示します")
+    .option(
+      "-m, --model <index>",
+      "モデルを選択 (0/1/2)",
+      (value) => parseModelFlag(value, defaults),
+      defaults.modelNano,
+    )
+    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortFlag, defaults.effort)
+    .option(
+      "-v, --verbosity <index>",
+      "verbosity を選択 (0/1/2)",
+      parseVerbosityFlag,
+      defaults.verbosity,
+    )
+    .option("-c, --continue-conversation", "直前の会話から継続します")
+    .option("-r, --resume [index]", "指定した番号の履歴から継続します")
+    .option("-d, --delete [index]", "指定した番号の履歴を削除します")
+    .option("-s, --show [index]", "指定した番号の履歴を表示します")
+    .option("-i, --image <path>", "画像ファイルを添付します")
+    .option(
+      "-I, --sql-iterations <count>",
+      "SQLモード時のツール呼び出し上限を指定します",
+      parseSqlIterations,
+      defaults.sqlMaxIterations,
+    )
+    .option("--compact <index>", "指定した履歴を要約します", (value: string) => {
+      if (!/^\d+$/u.test(value)) {
+        throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
+      }
+      return Number.parseInt(value, 10);
     });
 
-  program
-    .command("format")
-    .argument("[file]", "path to SQL file")
-    .description("format SQL using sqruff")
-    .action(async (file?: string) => {
-      await runCommand(() => cmdFormat(file));
-    });
+  program.argument("[input...]", "ユーザー入力");
 
-  program
-    .command("revise")
-    .argument("[file]", "path to SQL file")
-    .argument("[intent]", "intent description")
-    .description("revise SQL via LLM, format, and dry-run")
-    .action(async (file?: string, intentArg?: string) => {
-      await runCommand(() => cmdRevise(file, intentArg));
-    });
+  const normalizedArgv = expandLegacyShortFlags(argv);
 
   try {
-    await program.parseAsync(process.argv);
+    program.parse(normalizedArgv, { from: "user" });
   } catch (error) {
     if (error instanceof CommanderError) {
-      const message = error.message.trim();
-      if (message.length > 0) {
-        console.error(message);
-      }
-      process.exit(error.exitCode);
-      return;
+      throw new Error(error.message);
     }
     throw error;
+  }
+
+  const opts = program.opts<{
+    help?: boolean;
+    model?: string;
+    effort?: SqlCliOptions["effort"];
+    verbosity?: SqlCliOptions["verbosity"];
+    continueConversation?: boolean;
+    resume?: string | boolean;
+    delete?: string | boolean;
+    show?: string | boolean;
+    image?: string;
+    sqlIterations?: number;
+    compact?: number;
+  }>();
+
+  const args = program.args as string[];
+
+  const model = opts.model ?? defaults.modelNano;
+  const effort = opts.effort ?? defaults.effort;
+  const verbosity = opts.verbosity ?? defaults.verbosity;
+  let continueConversation = Boolean(opts.continueConversation);
+  let resumeIndex: number | undefined;
+  let resumeListOnly = false;
+  let deleteIndex: number | undefined;
+  let showIndex: number | undefined;
+  let hasExplicitHistory = false;
+  const imagePath = opts.image;
+  let operation: "ask" | "compact" = "ask";
+  let compactIndex: number | undefined;
+  const taskMode: SqlCliOptions["taskMode"] = "sql";
+  const sqlMaxIterations =
+    typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.sqlMaxIterations;
+
+  const parsedResume = parseHistoryFlag(opts.resume);
+  if (parsedResume.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedResume.index === "number") {
+    resumeIndex = parsedResume.index;
+    continueConversation = true;
+    hasExplicitHistory = true;
+  }
+
+  const parsedDelete = parseHistoryFlag(opts.delete);
+  if (parsedDelete.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedDelete.index === "number") {
+    deleteIndex = parsedDelete.index;
+  }
+
+  const parsedShow = parseHistoryFlag(opts.show);
+  if (parsedShow.listOnly) {
+    resumeListOnly = true;
+  }
+  if (typeof parsedShow.index === "number") {
+    showIndex = parsedShow.index;
+  }
+
+  if (typeof opts.compact === "number") {
+    operation = "compact";
+    compactIndex = opts.compact;
+  }
+
+  const modelExplicit = program.getOptionValueSource("model") === "cli";
+  const effortExplicit = program.getOptionValueSource("effort") === "cli";
+  const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
+  const sqlMaxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
+  const taskModeExplicit = false;
+  const helpRequested = Boolean(opts.help);
+
+  try {
+    return cliOptionsSchema.parse({
+      model,
+      effort,
+      verbosity,
+      continueConversation,
+      taskMode,
+      resumeIndex,
+      resumeListOnly,
+      deleteIndex,
+      showIndex,
+      imagePath,
+      operation,
+      compactIndex,
+      args,
+      modelExplicit,
+      effortExplicit,
+      verbosityExplicit,
+      taskModeExplicit,
+      hasExplicitHistory,
+      helpRequested,
+      sqlMaxIterations,
+      sqlMaxIterationsExplicit,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const firstIssue = error.issues[0];
+      throw new Error(firstIssue?.message ?? error.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * SQL CLI のヘルプを標準出力へ表示する。
+ *
+ * @param defaults 既定値。
+ * @param options 解析済み CLI オプション。
+ */
+function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
+  console.log("Usage:");
+  console.log("  gpt-5-cli-sql [flag] <input>");
+  console.log("  gpt-5-cli-sql --compact <num>");
+  console.log("");
+  console.log("flag（種類+数字／連結可／ハイフン必須）:");
+  console.log(
+    `  -m0/-m1/-m2 : model => nano/mini/main (${defaults.modelNano}/${defaults.modelMini}/${defaults.modelMain})`,
+  );
+  console.log(`  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`);
+  console.log(`  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`);
+  console.log("  -c          : continue（直前の会話から継続）");
+  console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
+  console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
+  console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
+  console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
+  console.log("  -i <path>   : 入力に画像を添付");
+  console.log("");
+  console.log("環境変数(.env):");
+  console.log(
+    "  POSTGRES_DSN            : PostgreSQL 接続文字列 (例: postgres://user:pass@host:5432/db)",
+  );
+  console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
+  console.log("  GPT_5_CLI_SQL_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数)");
+  console.log(
+    "  GPT_5_CLI_HISTORY_INDEX_FILE, GPT_5_CLI_PROMPTS_DIR : 共通設定 (default/d2 と同じ)",
+  );
+  console.log("");
+  console.log("例:");
+  console.log("  gpt-5-cli-sql 既存レポートの集計クエリを高速化したい");
+  console.log("  gpt-5-cli-sql -r2 テーブル定義を一覧して -> 履歴 2 を継続");
+  console.log("  gpt-5-cli-sql --compact 3 -> 履歴 3 を要約");
+}
+
+function hashDsn(dsn: string): string {
+  const digest = createHash("sha256").update(dsn).digest("hex");
+  return `sha256:${digest}`;
+}
+
+function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
+  try {
+    const url = new URL(dsn);
+    const database = url.pathname.replace(/^\//u, "");
+    const port = url.port ? Number.parseInt(url.port, 10) : undefined;
+    return {
+      host: url.hostname || undefined,
+      port: Number.isNaN(port) ? undefined : port,
+      database: database.length > 0 ? database : undefined,
+      user: url.username || undefined,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`POSTGRES_DSN の解析に失敗しました: ${message}`);
+  }
+}
+
+function ensureSqlEnvironment(): SqlDsnSnapshot {
+  const dsn = process.env.POSTGRES_DSN;
+  if (typeof dsn !== "string" || dsn.trim().length === 0) {
+    throw new Error("POSTGRES_DSN が未設定です");
+  }
+  const trimmed = dsn.trim();
+  return {
+    dsn: trimmed,
+    hash: hashDsn(trimmed),
+    connection: extractConnectionMetadata(trimmed),
+  };
+}
+
+function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
+  const parts: string[] = [];
+  if (connection.host) {
+    parts.push(`host=${connection.host}`);
+  }
+  if (typeof connection.port === "number") {
+    parts.push(`port=${connection.port}`);
+  }
+  if (connection.database) {
+    parts.push(`database=${connection.database}`);
+  }
+  if (connection.user) {
+    parts.push(`user=${connection.user}`);
+  }
+  return parts.length > 0 ? parts.join(", ") : "(接続情報なし)";
+}
+
+interface SqlInstructionParams {
+  connection: SqlConnectionMetadata;
+  dsnHash: string;
+  maxIterations: number;
+}
+
+/**
+ * SQL モードで追加するシステムメッセージを生成する。
+ *
+ * @param params 接続メタデータと設定値。
+ * @returns Responses API へ渡すシステムメッセージ配列。
+ */
+export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenAIInputMessage[] {
+  const connectionLine = formatConnectionDisplay(params.connection);
+  const toolSummary = [
+    "利用可能なツール:",
+    "- sql_fetch_schema: information_schema からテーブル/カラム情報を取得し JSON を返す",
+    "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
+    "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
+  ].join("\n");
+
+  const workflow = [
+    "作業手順:",
+    "1. 必要に応じて sql_fetch_schema でスキーマを把握する",
+    "2. 修正案の作成時は SELECT/WITH ... SELECT のみ扱う",
+    "3. 提案 SQL が用意できたら必ず sql_format で整形し、その直後に sql_dry_run を実行して成功するまで繰り返す（成功する前にユーザーへ最終回答しない）",
+    "4. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜3 を実施する",
+    "5. sql_dry_run が成功したら最終応答を行い、整形済み SQL を ```sql コードブロックで提示しつつ、dry run の結果や確認事項を日本語でまとめる",
+  ].join("\n");
+
+  const systemText = [
+    "あなたは PostgreSQL SELECT クエリの専門家です。",
+    "許可されたツール以外は利用せず、ローカルワークスペース外へアクセスしないでください。",
+    `接続情報: ${connectionLine} (dsn hash=${params.dsnHash})`,
+    `ツール呼び出し上限の目安: ${params.maxIterations} 回`,
+    toolSummary,
+    workflow,
+  ].join("\n\n");
+
+  return [
+    {
+      role: "system",
+      content: [{ type: "input_text", text: systemText }],
+    },
+  ];
+}
+
+/**
+ * 履歴へ保存する SQL メタデータを組み立てる。
+ *
+ * @param options 現在の CLI オプションと接続スナップショット。
+ * @param previousTask 既存の履歴タスク情報。
+ * @returns 更新後の履歴タスク。
+ */
+export function buildSqlCliHistoryTask(
+  options: SqlCliHistoryTaskOptions,
+  previousTask?: SqlCliHistoryTask,
+): SqlCliHistoryTask | undefined {
+  if (options.taskMode === "sql") {
+    const task: SqlCliHistoryTask = { mode: "sql" };
+    const normalizedConnection = Object.fromEntries(
+      Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
+    );
+    const sqlMeta = {
+      type: "postgresql" as const,
+      dsn_hash: options.dsnHash,
+      connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
+    };
+
+    if (previousTask?.sql) {
+      task.sql = {
+        ...previousTask.sql,
+        ...sqlMeta,
+      };
+    } else {
+      task.sql = sqlMeta;
+    }
+
+    return task;
+  }
+
+  if (options.taskModeExplicit) {
+    return { mode: options.taskMode };
+  }
+
+  return previousTask;
+}
+
+/**
+ * SQL モード CLI 全体を実行する。
+ */
+async function runSqlCli(): Promise<void> {
+  try {
+    const argv = process.argv.slice(2);
+    const bootstrap = bootstrapCli({
+      argv,
+      logLabel: LOG_LABEL,
+      parseArgs,
+      printHelp,
+      historyTaskSchema: sqlCliHistoryTaskSchema,
+    });
+
+    if (bootstrap.status === "help") {
+      return;
+    }
+
+    const { defaults, options, historyStore, systemPrompt } = bootstrap;
+    const client = createOpenAIClient();
+
+    if (options.operation === "compact") {
+      await performCompact(options, defaults, historyStore, client, LOG_LABEL);
+      return;
+    }
+
+    const determine = await determineInput(options, historyStore, defaults, { printHelp });
+    if (determine.kind === "exit") {
+      process.exit(determine.code);
+      return;
+    }
+
+    const context = computeContext(
+      options,
+      historyStore,
+      determine.inputText,
+      determine.activeEntry,
+      determine.previousResponseId,
+      determine.previousTitle,
+      {
+        logLabel: LOG_LABEL,
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry, logWarning }) => {
+          if (!nextOptions.taskModeExplicit) {
+            const historyMode = activeEntry.task?.mode;
+            if (historyMode && historyMode !== "sql") {
+              logWarning("warn: 選択した履歴は sql モードではありません (新規開始)");
+            }
+            nextOptions.taskMode = "sql";
+          }
+        },
+      },
+    );
+
+    const sqlEnv = ensureSqlEnvironment();
+
+    const imageInfo = prepareImageData(options.imagePath, LOG_LABEL);
+    const request = buildRequest({
+      options,
+      context,
+      inputText: determine.inputText,
+      systemPrompt,
+      imageDataUrl: imageInfo.dataUrl,
+      defaults,
+      logLabel: LOG_LABEL,
+      additionalSystemMessages: buildSqlInstructionMessages({
+        connection: sqlEnv.connection,
+        dsnHash: sqlEnv.hash,
+        maxIterations: options.sqlMaxIterations,
+      }),
+    });
+
+    const response = await executeWithTools(client, request, options, LOG_LABEL);
+    const content = extractResponseText(response);
+    if (!content) {
+      throw new Error("Error: Failed to parse response or empty content");
+    }
+
+    if (response.id) {
+      const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
+      const historyTask = buildSqlCliHistoryTask(
+        {
+          taskMode: options.taskMode,
+          taskModeExplicit: options.taskModeExplicit,
+          dsnHash: sqlEnv.hash,
+          connection: sqlEnv.connection,
+        },
+        previousTask,
+      );
+      historyStore.upsertConversation({
+        metadata: {
+          model: options.model,
+          effort: options.effort,
+          verbosity: options.verbosity,
+        },
+        context: {
+          isNewConversation: context.isNewConversation,
+          titleToUse: context.titleToUse,
+          previousResponseId: context.previousResponseId,
+          activeLastResponseId: context.activeLastResponseId,
+          resumeSummaryText: context.resumeSummaryText,
+          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
+          previousTask,
+        },
+        responseId: response.id,
+        userText: determine.inputText,
+        assistantText: content,
+        task: historyTask,
+      });
+    }
+
+    process.stdout.write(`${content}\n`);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(error.message);
+    } else {
+      console.error(String(error));
+    }
+    process.exit(1);
   }
 }
 

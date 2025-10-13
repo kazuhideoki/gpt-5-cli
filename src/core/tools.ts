@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { Client } from "pg";
 import type {
   FunctionTool,
   ResponseCreateParamsNonStreaming,
@@ -160,6 +162,203 @@ async function runCommand(
   });
 }
 
+interface SqlSchemaRow {
+  table_schema: string;
+  table_name: string;
+  column_name: string;
+  data_type: string;
+  is_nullable: string;
+  column_default: string | null;
+}
+
+function requireEnvValue(name: string): string {
+  const value = process.env[name];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Environment variable ${name} is required for SQL tools.`);
+  }
+  return value;
+}
+
+function ensureQueryString(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("query must be a non-empty string");
+  }
+  if (raw.trim().length === 0) {
+    throw new Error("query must be a non-empty string");
+  }
+  return raw;
+}
+
+function isSelectOnlyQuery(sql: string): boolean {
+  const noComments = sql
+    .replace(/--.*$/gmu, "")
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .trim();
+  return /^\s*(with\b[\s\S]*?\bselect\b|select\b)/iu.test(noComments);
+}
+
+function buildPgErrorMessage(error: unknown): string {
+  if (error && typeof error === "object") {
+    const maybeError = error as { message?: unknown; detail?: unknown; hint?: unknown };
+    const parts: string[] = [];
+    if (typeof maybeError.message === "string") {
+      parts.push(maybeError.message);
+    }
+    if (typeof maybeError.detail === "string") {
+      parts.push(maybeError.detail);
+    }
+    if (typeof maybeError.hint === "string") {
+      parts.push(`hint: ${maybeError.hint}`);
+    }
+    if (parts.length > 0) {
+      return parts.join(" ");
+    }
+  }
+  if (error instanceof Error && typeof error.message === "string") {
+    return error.message;
+  }
+  return String(error);
+}
+
+function createPgClient(): Client {
+  const dsn = requireEnvValue("POSTGRES_DSN");
+  return new Client({ connectionString: dsn });
+}
+
+async function fetchSqlSchemaRows(): Promise<SqlSchemaRow[]> {
+  const client = createPgClient();
+  await client.connect();
+  try {
+    const result = await client.query<SqlSchemaRow>(
+      `
+        SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+        ORDER BY table_schema, table_name, ordinal_position
+      `,
+    );
+    return result.rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function performSqlDryRun(query: string): Promise<{ plan: unknown }> {
+  const client = createPgClient();
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`PREPARE __sqlcheck__ AS ${query}`);
+    await client.query("DEALLOCATE __sqlcheck__");
+    const explain = await client.query(`EXPLAIN (VERBOSE, COSTS OFF, FORMAT JSON) ${query}`);
+    await client.query("ROLLBACK");
+    const plan = explain.rows?.[0]?.["QUERY PLAN"];
+    return { plan };
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ignore rollback failures
+    }
+    throw new Error(buildPgErrorMessage(error));
+  } finally {
+    await client.end();
+  }
+}
+
+async function formatSqlWithSqruff(query: string, cwd: string): Promise<string> {
+  const bin = (process.env.SQRUFF_BIN ?? "sqruff").trim() || "sqruff";
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-5-sql-fmt-"));
+  const inputFile = path.join(tempDir, "input.sql");
+  await fs.writeFile(inputFile, query, "utf8");
+
+  try {
+    const result = await runCommand(bin, ["fix", inputFile], cwd);
+    if (!result.success) {
+      const stderr = result.stderr.trim();
+      const stdout = result.stdout.trim();
+      const fallback = `sqruff failed with exit code ${result.exit_code}`;
+      throw new Error(stderr || stdout || fallback);
+    }
+    return await fs.readFile(inputFile, "utf8");
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+interface SqlDryRunArgs {
+  query: string;
+}
+
+interface SqlDryRunResult extends ToolResult {
+  plan?: unknown;
+}
+
+interface SqlFormatArgs {
+  query: string;
+}
+
+interface SqlFormatResult extends ToolResult {
+  formatted_sql?: string;
+}
+
+async function sqlFetchSchemaTool(
+  _args: Record<string, never>,
+  _context: ToolExecutionContext,
+): Promise<ToolResult> {
+  try {
+    const rows = await fetchSqlSchemaRows();
+    return {
+      success: true,
+      rows,
+      row_count: rows.length,
+    } satisfies ToolResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies ToolResult;
+  }
+}
+
+async function sqlDryRunTool(
+  args: SqlDryRunArgs,
+  _context: ToolExecutionContext,
+): Promise<SqlDryRunResult> {
+  try {
+    const query = ensureQueryString(args?.query);
+    if (!isSelectOnlyQuery(query)) {
+      return {
+        success: false,
+        message: "sql_dry_run tool only supports SELECT statements.",
+      } satisfies SqlDryRunResult;
+    }
+    const { plan } = await performSqlDryRun(query);
+    return {
+      success: true,
+      plan,
+    } satisfies SqlDryRunResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies SqlDryRunResult;
+  }
+}
+
+async function sqlFormatTool(
+  args: SqlFormatArgs,
+  context: ToolExecutionContext,
+): Promise<SqlFormatResult> {
+  try {
+    const query = ensureQueryString(args?.query);
+    const formatted = await formatSqlWithSqruff(query, context.cwd);
+    return {
+      success: true,
+      formatted_sql: formatted,
+    } satisfies SqlFormatResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies SqlFormatResult;
+  }
+}
+
 interface D2Args {
   file_path: string;
 }
@@ -262,6 +461,61 @@ const CORE_TOOL_REGISTRATIONS = [
     },
     handler: d2FmtTool,
   } satisfies ToolRegistration<D2Args, CommandResult>,
+  {
+    definition: {
+      type: "function",
+      strict: true,
+      name: "sql_fetch_schema",
+      description: "Load table and column metadata from PostgreSQL using information_schema.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+    handler: sqlFetchSchemaTool,
+  } satisfies ToolRegistration<Record<string, never>, ToolResult>,
+  {
+    definition: {
+      type: "function",
+      strict: true,
+      name: "sql_dry_run",
+      description: "Validate a SELECT statement via PostgreSQL PREPARE and EXPLAIN (FORMAT JSON).",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "SQL text to validate. Only SELECT/WITH ... SELECT is supported.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+    handler: sqlDryRunTool,
+  } satisfies ToolRegistration<SqlDryRunArgs, SqlDryRunResult>,
+  {
+    definition: {
+      type: "function",
+      strict: true,
+      name: "sql_format",
+      description: "Format SQL using sqruff in fix mode and return the formatted text.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "SQL text to format.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+    handler: sqlFormatTool,
+  } satisfies ToolRegistration<SqlFormatArgs, SqlFormatResult>,
 ] as ToolRegistration<any, ToolResult>[];
 
 /**

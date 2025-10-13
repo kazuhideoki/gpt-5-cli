@@ -30,6 +30,7 @@ const defaults: CliDefaults = {
   historyIndexPath: "/tmp/history.json",
   promptsDir: "/tmp/prompts",
   d2MaxIterations: 3,
+  sqlMaxIterations: 6,
 };
 
 type HistoryStoreMethods = Pick<

@@ -21,6 +21,7 @@ function createDefaults(): CliDefaults {
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
     d2MaxIterations: 8,
+    sqlMaxIterations: 8,
   };
 }
 

@@ -5,7 +5,7 @@ export type EffortLevel = "low" | "medium" | "high";
 export type VerbosityLevel = "low" | "medium" | "high";
 
 /** CLI が扱うタスクモード。 */
-export type TaskMode = "default" | "d2";
+export type TaskMode = "default" | "d2" | "sql";
 
 /** CLI が参照する共通既定値セット。 */
 export interface CliDefaults {
@@ -17,4 +17,5 @@ export interface CliDefaults {
   historyIndexPath: string;
   promptsDir: string;
   d2MaxIterations: number;
+  sqlMaxIterations: number;
 }

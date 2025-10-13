@@ -242,10 +242,15 @@ export async function executeWithTools(
   let response = await client.responses.create(initialRequest);
   let iteration = 0;
   const defaultMaxIterations = 8;
-  const maxIterations =
-    options.taskMode === "d2" && "d2MaxIterations" in options
-      ? (options as { d2MaxIterations: number }).d2MaxIterations
-      : defaultMaxIterations;
+  const maxIterations = (() => {
+    if (options.taskMode === "d2" && "d2MaxIterations" in options) {
+      return (options as { d2MaxIterations: number }).d2MaxIterations;
+    }
+    if (options.taskMode === "sql" && "sqlMaxIterations" in options) {
+      return (options as { sqlMaxIterations: number }).sqlMaxIterations;
+    }
+    return defaultMaxIterations;
+  })();
 
   while (true) {
     const toolCalls = collectFunctionToolCalls(response);

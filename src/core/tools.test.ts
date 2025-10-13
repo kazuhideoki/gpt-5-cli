@@ -22,10 +22,35 @@ function createCall(name: string, args: Record<string, unknown>): ResponseFuncti
 
 const { tools: FUNCTION_TOOLS, execute: executeFunctionToolCall } = createCoreToolRuntime();
 
+const ORIGINAL_POSTGRES_DSN = process.env.POSTGRES_DSN;
+const ORIGINAL_SQRUFF_BIN = process.env.SQRUFF_BIN;
+
+afterEach(() => {
+  if (ORIGINAL_POSTGRES_DSN === undefined) {
+    delete process.env.POSTGRES_DSN;
+  } else {
+    process.env.POSTGRES_DSN = ORIGINAL_POSTGRES_DSN;
+  }
+
+  if (ORIGINAL_SQRUFF_BIN === undefined) {
+    delete process.env.SQRUFF_BIN;
+  } else {
+    process.env.SQRUFF_BIN = ORIGINAL_SQRUFF_BIN;
+  }
+});
+
 describe("FUNCTION_TOOLS", () => {
   it("含まれるツール名が期待通り", () => {
     const toolNames = FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
+    expect(toolNames).toEqual([
+      "read_file",
+      "write_file",
+      "d2_check",
+      "d2_fmt",
+      "sql_fetch_schema",
+      "sql_dry_run",
+      "sql_format",
+    ]);
   });
 });
 
@@ -154,5 +179,69 @@ describe("executeFunctionToolCall", () => {
 
     expect(result.success).toBe(true);
     expect(result.message).toBe("hello");
+  });
+
+  it("sql_dry_run は非SELECT文を拒否する", async () => {
+    const call = createCall("sql_dry_run", { query: "INSERT INTO users VALUES (1)" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("SELECT");
+  });
+
+  it("sql_dry_run は DSN 未設定時にエラーを返す", async () => {
+    delete process.env.POSTGRES_DSN;
+    const call = createCall("sql_dry_run", { query: "SELECT 1" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("POSTGRES_DSN");
+  });
+
+  it("sql_fetch_schema は DSN 未設定時にエラーを返す", async () => {
+    delete process.env.POSTGRES_DSN;
+    const call = createCall("sql_fetch_schema", {});
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(String(result.message)).toContain("POSTGRES_DSN");
+  });
+
+  it("sql_format は指定バイナリで整形できる", async () => {
+    const script = path.join(tempDir, "sqruff.sh");
+    const lines = [
+      "#!/bin/sh",
+      'if [ "$1" != "fix" ]; then exit 1; fi',
+      "input=$2",
+      'tmp="$input.tmp"',
+      "tr '[:lower:]' '[:upper:]' < \"$input\" > \"$tmp\"",
+      'mv "$tmp" "$input"',
+      "exit 0",
+    ];
+    await fs.writeFile(script, `${lines.join("\n")}\n`, { mode: 0o755 });
+    await fs.chmod(script, 0o755);
+    process.env.SQRUFF_BIN = script;
+
+    const call = createCall("sql_format", { query: "select 1;\n" });
+    const result = JSON.parse(
+      await executeFunctionToolCall(call, {
+        cwd: tempDir,
+        log: () => {},
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.formatted_sql).toBe("SELECT 1;\n");
   });
 });
