@@ -340,6 +340,7 @@ async function main(): Promise<void> {
       parseArgs,
       printHelp,
       historyTaskSchema: askCliHistoryTaskSchema,
+      envFileSuffix: "ask",
     });
 
     if (bootstrap.status === "help") {

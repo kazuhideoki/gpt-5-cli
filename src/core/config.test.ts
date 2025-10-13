@@ -55,9 +55,10 @@ describe("resolveHistoryPath", () => {
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
   });
 
-  it("環境変数が未設定なら既定値を返す", () => {
-    const resolved = resolveHistoryPath("/default.json");
-    expect(resolved).toBe(path.resolve("/default.json"));
+  it("環境変数が未設定ならエラーになる", () => {
+    expect(() => resolveHistoryPath()).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
+    );
   });
 
   it("空文字列を設定するとエラーになる", () => {
@@ -105,14 +106,23 @@ describe("resolvePromptsDir", () => {
 });
 
 describe("loadDefaults", () => {
+  it("履歴パスが未設定ならエラーになる", () => {
+    expect(() => loadDefaults()).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
+    );
+  });
+
   it("既定値を返す", () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/default.json";
     const defaults = loadDefaults();
     expect(defaults.modelMain).toBe("gpt-5");
     expect(defaults.modelMini).toBe("gpt-5-mini");
     expect(defaults.modelNano).toBe("gpt-5-nano");
     expect(defaults.effort).toBe("low");
     expect(defaults.verbosity).toBe("low");
-    expect(defaults.historyIndexPath).toBe(path.join(ROOT_DIR, "history_index.json"));
+    expect(defaults.historyIndexPath).toBe(
+      path.resolve(path.join(process.env.HOME!, "history/default.json")),
+    );
     expect(defaults.promptsDir).toBe(path.join(ROOT_DIR, "prompts"));
     expect(defaults.d2MaxIterations).toBe(8);
     expect(defaults.sqlMaxIterations).toBe(8);

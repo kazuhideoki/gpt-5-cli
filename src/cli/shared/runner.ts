@@ -10,6 +10,7 @@ interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
   parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
   printHelp: (defaults: CliDefaults, options: TOptions) => void;
   historyTaskSchema: z.ZodType<THistoryTask>;
+  envFileSuffix?: string;
 }
 
 interface CliBootstrapHelpResult<TOptions extends CliOptions> {
@@ -39,7 +40,7 @@ type CliBootstrapResult<TOptions extends CliOptions, THistoryTask> =
 export function bootstrapCli<TOptions extends CliOptions, THistoryTask = unknown>(
   params: CliBootstrapParams<TOptions, THistoryTask>,
 ): CliBootstrapResult<TOptions, THistoryTask> {
-  loadEnvironment();
+  loadEnvironment({ envSuffix: params.envFileSuffix });
   const defaults = loadDefaults();
   console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
 

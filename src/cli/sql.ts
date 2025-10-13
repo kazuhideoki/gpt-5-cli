@@ -516,6 +516,7 @@ async function runSqlCli(): Promise<void> {
       parseArgs,
       printHelp,
       historyTaskSchema: sqlCliHistoryTaskSchema,
+      envFileSuffix: "sql",
     });
 
     if (bootstrap.status === "help") {
