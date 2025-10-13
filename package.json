@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "description": "Command line client for the OpenAI Responses API implemented in TypeScript",
   "type": "module",
-  "main": "dist/cli/default.js",
+  "main": "dist/cli/ask.js",
   "bin": {
-    "gpt-5-cli": "dist/cli/default.js",
+    "gpt-5-cli": "dist/cli/ask.js",
     "gpt-5-cli-d2": "dist/cli/d2.js",
     "gpt-5-cli-sql": "dist/cli/sql.js"
   },
   "packageManager": "bun@1.2.20",
   "scripts": {
     "build": "bunx tsc",
-    "start": "bun dist/cli/default.js",
+    "start": "bun dist/cli/ask.js",
     "start:d2": "bun dist/cli/d2.js",
     "start:sql": "bun dist/cli/sql.js",
-    "dev": "bun run src/cli/default.ts",
+    "dev": "bun run src/cli/ask.ts",
     "dev:d2": "bun run src/cli/d2.ts",
     "dev:sql": "bun run src/cli/sql.ts",
     "test": "bun test",

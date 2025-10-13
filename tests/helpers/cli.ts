@@ -25,11 +25,8 @@ export function createTempHistoryPath(): { historyPath: string; cleanup: () => v
   };
 }
 
-export async function runDefaultCli(
-  args: string[],
-  env: Record<string, string>,
-): Promise<CliResult> {
-  const proc = Bun.spawn(["bun", "run", "src/cli/default.ts", ...args], {
+export async function runAskCli(args: string[], env: Record<string, string>): Promise<CliResult> {
+  const proc = Bun.spawn(["bun", "run", "src/cli/ask.ts", ...args], {
     cwd: projectRoot,
     env: {
       ...process.env,

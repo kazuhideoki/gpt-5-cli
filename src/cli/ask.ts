@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// ask.ts: 一問一答型の標準チャット CLI エントリーポイント。
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions } from "./types.js";
@@ -22,25 +23,25 @@ import {
 import { determineInput } from "./shared/input.js";
 import { bootstrapCli } from "./shared/runner.js";
 
-const defaultCliHistoryTaskSchema = z.object({
+const askCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
 });
 
-export type DefaultCliHistoryTask = z.infer<typeof defaultCliHistoryTaskSchema>;
+export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
 
-interface DefaultCliHistoryTaskOptions {
+interface AskCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
   taskModeExplicit: boolean;
 }
 
-const DEFAULT_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
-const DEFAULT_TOOL_RUNTIME = createToolRuntime(DEFAULT_TOOL_REGISTRATIONS);
-const DEFAULT_FUNCTION_TOOLS = buildCliToolList(DEFAULT_TOOL_REGISTRATIONS);
+const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+const ASK_TOOL_RUNTIME = createToolRuntime(ASK_TOOL_REGISTRATIONS);
+const ASK_FUNCTION_TOOLS = buildCliToolList(ASK_TOOL_REGISTRATIONS);
 
-function buildDefaultCliHistoryTask(
-  options: DefaultCliHistoryTaskOptions,
-  previousTask?: DefaultCliHistoryTask,
-): DefaultCliHistoryTask | undefined {
+function buildAskCliHistoryTask(
+  options: AskCliHistoryTaskOptions,
+  previousTask?: AskCliHistoryTask,
+): AskCliHistoryTask | undefined {
   if (options.taskModeExplicit) {
     return { mode: options.taskMode };
   }
@@ -104,7 +105,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     effort: z.enum(["low", "medium", "high"]),
     verbosity: z.enum(["low", "medium", "high"]),
     continueConversation: z.boolean(),
-    taskMode: z.literal("default"),
+    taskMode: z.literal("ask"),
     resumeIndex: z.number().optional(),
     resumeListOnly: z.boolean(),
     deleteIndex: z.number().optional(),
@@ -235,7 +236,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const imagePath = opts.image;
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
-  const taskMode: CliOptions["taskMode"] = "default";
+  const taskMode: CliOptions["taskMode"] = "ask";
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -338,7 +339,7 @@ async function main(): Promise<void> {
       logLabel: "[gpt-5-cli]",
       parseArgs,
       printHelp,
-      historyTaskSchema: defaultCliHistoryTaskSchema,
+      historyTaskSchema: askCliHistoryTaskSchema,
     });
 
     if (bootstrap.status === "help") {
@@ -372,7 +373,7 @@ async function main(): Promise<void> {
       {
         logLabel: "[gpt-5-cli]",
         synchronizeWithHistory: ({ options: nextOptions }) => {
-          nextOptions.taskMode = "default";
+          nextOptions.taskMode = "ask";
         },
       },
     );
@@ -386,14 +387,14 @@ async function main(): Promise<void> {
       imageDataUrl: imageInfo.dataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
-      tools: DEFAULT_FUNCTION_TOOLS,
+      tools: ASK_FUNCTION_TOOLS,
     });
     const response = await executeWithTools(
       client,
       request,
       options,
       "[gpt-5-cli]",
-      DEFAULT_TOOL_RUNTIME,
+      ASK_TOOL_RUNTIME,
     );
     const content = extractResponseText(response);
     if (!content) {
@@ -401,8 +402,8 @@ async function main(): Promise<void> {
     }
 
     if (response.id) {
-      const previousTask = context.activeEntry?.task as DefaultCliHistoryTask | undefined;
-      const historyTask = buildDefaultCliHistoryTask(
+      const previousTask = context.activeEntry?.task as AskCliHistoryTask | undefined;
+      const historyTask = buildAskCliHistoryTask(
         {
           taskMode: options.taskMode,
           taskModeExplicit: options.taskModeExplicit,

@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 
-import {
-  createBaseEnv,
-  createTempHistoryPath,
-  extractUserLines,
-  runDefaultCli,
-} from "../helpers/cli";
+import { createBaseEnv, createTempHistoryPath, extractUserLines, runAskCli } from "../helpers/cli";
 
 describe("CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;
@@ -50,7 +45,7 @@ describe("CLI integration", () => {
     };
 
     const env = createBaseEnv(server.port, historyPath);
-    const result = await runDefaultCli(["正常テスト"], env);
+    const result = await runAskCli(["正常テスト"], env);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("[gpt-5-cli]");
@@ -89,7 +84,7 @@ describe("CLI integration", () => {
     };
 
     const env = createBaseEnv(server.port, historyPath);
-    const result = await runDefaultCli(["異常テスト"], env);
+    const result = await runAskCli(["異常テスト"], env);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("[gpt-5-cli]");
@@ -106,7 +101,7 @@ describe("CLI integration", () => {
       });
 
     const env = createBaseEnv(server.port, historyPath);
-    const result = await runDefaultCli(["--compact", "1", "-c"], env);
+    const result = await runAskCli(["--compact", "1", "-c"], env);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("[gpt-5-cli]");
