@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildRequest } from "../commands/conversation.js";
+import { buildRequest } from "../session/chat-session.js";
 import { determineInput } from "./runtime/input.js";
 import { parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";

@@ -13,7 +13,7 @@ import {
   extractResponseText,
   performCompact,
   prepareImageData,
-} from "../commands/conversation.js";
+} from "../session/chat-session.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
   READ_FILE_TOOL,

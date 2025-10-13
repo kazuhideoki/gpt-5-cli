@@ -1,3 +1,5 @@
+// chat-session.ts: 単発/継続のチャットセッションを組み立てて Responses API と履歴ストアを橋渡しするサービス層。
+// 将来的に Agents SDK 用セッション (`agentSession.ts` など) を並列配置する前提で構成する。
 import fs from "node:fs";
 import path from "node:path";
 import type OpenAI from "openai";

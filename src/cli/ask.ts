@@ -19,7 +19,7 @@ import {
   extractResponseText,
   performCompact,
   prepareImageData,
-} from "../commands/conversation.js";
+} from "../session/chat-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
 

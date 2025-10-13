@@ -2,7 +2,9 @@
 
 ## プロジェクト構成とモジュール
 
-- `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/commands/` や `src/cli/`）から横並びで組み合わせる設計。
+- `src/cli/` は default・d2・sql 各モードのエントリーポイントと共通ランタイム (`runtime/`) を束ねる。`runtime/` では CLI 初期化や入力分岐などの共通処理を提供する。
+- `src/session/` は Responses API を利用したチャットセッションのサービス層。履歴同期やツール実行のオーケストレーションを担い、将来的に Agents SDK 用セッション (`agent-session.ts` 予定) を並列配置する。
+- `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/session/` や `src/cli/`）から横並びで組み合わせる設計。
   - `config.ts` は設定値の読み込みと検証を担当し、他 core モジュールには依存しない。
   - `tools.ts` は関数ツール定義とランタイム生成を担い、Responses API 用のツール配列 `buildCliToolList` もここから提供する。
   - `openai.ts` は OpenAI クライアント生成のみを扱い、API キーの解決も内部で完結させている。
