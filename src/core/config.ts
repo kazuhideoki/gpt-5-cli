@@ -7,7 +7,7 @@ import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** プロジェクトのルートディレクトリ絶対パス。 */
-export const ROOT_DIR = path.resolve(__dirname, "../../..");
+export const ROOT_DIR = path.resolve(__dirname, "../..");
 
 const effortLevelSchema = z
   .string()
@@ -85,13 +85,45 @@ const envConfigSchema = z
   })
   .passthrough();
 
+interface LoadEnvironmentOptions {
+  envSuffix?: string;
+  baseDir?: string;
+}
+
 /**
- * リポジトリ直下の`.env`を読み込み、環境変数へ反映する。
+ * リポジトリ直下の`.env`を読み込み、必要に応じて`.env.{suffix}`で上書きする。
+ *
+ * @param options.envSuffix CLIごとの追加環境ファイル接尾辞。
+ * @param options.baseDir   ルートディレクトリをテストなどで上書きする場合に指定。
  */
-export function loadEnvironment(): void {
-  const envPath = path.join(ROOT_DIR, ".env");
-  if (fs.existsSync(envPath)) {
-    dotenv.config({ path: envPath });
+export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
+  const baseDir = options.baseDir ?? ROOT_DIR;
+  const appliedFromBase = new Set<string>();
+  const applyEnvFile = (filePath: string, mode: "base" | "override") => {
+    if (!fs.existsSync(filePath)) {
+      return;
+    }
+    const parsed = dotenv.parse(fs.readFileSync(filePath, "utf8"));
+    Object.entries(parsed).forEach(([key, value]) => {
+      if (mode === "base") {
+        if (process.env[key] === undefined) {
+          process.env[key] = value;
+          appliedFromBase.add(key);
+        }
+        return;
+      }
+      if (process.env[key] === undefined || appliedFromBase.has(key)) {
+        process.env[key] = value;
+      }
+    });
+  };
+
+  const envPath = path.join(baseDir, ".env");
+  applyEnvFile(envPath, "base");
+
+  const suffix = options.envSuffix?.trim();
+  if (suffix && suffix.length > 0) {
+    applyEnvFile(path.join(baseDir, `.env.${suffix}`), "override");
   }
 }
 
@@ -118,7 +150,7 @@ function expandHome(p: string): string {
  * @param defaultPath 既定パス。
  * @returns 解析済みの絶対パス。
  */
-export function resolveHistoryPath(defaultPath: string): string {
+export function resolveHistoryPath(defaultPath?: string): string {
   const configured = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
   if (typeof configured === "string") {
     const trimmed = configured.trim();
@@ -128,8 +160,15 @@ export function resolveHistoryPath(defaultPath: string): string {
     const expanded = expandHome(trimmed);
     return path.resolve(expanded);
   }
-  const expanded = expandHome(defaultPath);
-  return path.resolve(expanded);
+  if (typeof defaultPath === "string") {
+    const trimmed = defaultPath.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Default history path is empty.");
+    }
+    const expanded = expandHome(trimmed);
+    return path.resolve(expanded);
+  }
+  throw new Error("GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.");
 }
 
 /**
@@ -170,7 +209,7 @@ export function loadDefaults(): CliDefaults {
     }
     throw error;
   }
-  const historyIndexPath = resolveHistoryPath(path.join(ROOT_DIR, "history_index.json"));
+  const historyIndexPath = resolveHistoryPath();
   const promptsDir = resolvePromptsDir(path.join(ROOT_DIR, "prompts"));
 
   return {

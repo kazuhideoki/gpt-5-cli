@@ -494,6 +494,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       parseArgs,
       printHelp,
       historyTaskSchema: d2CliHistoryTaskSchema,
+      envFileSuffix: "d2",
     });
 
     if (bootstrap.status === "help") {

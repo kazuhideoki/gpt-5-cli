@@ -2,7 +2,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ROOT_DIR, loadDefaults, resolveHistoryPath, resolvePromptsDir } from "./config.js";
+import {
+  ROOT_DIR,
+  loadDefaults,
+  loadEnvironment,
+  resolveHistoryPath,
+  resolvePromptsDir,
+} from "./config.js";
 
 const envKeys = [
   "GPT_5_CLI_HISTORY_INDEX_FILE",
@@ -48,6 +54,50 @@ afterAll(() => {
   }
 });
 
+describe("loadEnvironment", () => {
+  const targetEnv = "OPENAI_DEFAULT_EFFORT";
+
+  afterEach(() => {
+    delete process.env[targetEnv];
+  });
+
+  it(".env の値が設定される", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      loadEnvironment({ baseDir: dir });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("medium");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it(".env.{suffix} が .env を上書きする", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
+      loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("既に環境変数が設定されていれば維持される", () => {
+    process.env.OPENAI_DEFAULT_EFFORT = "low";
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
+      fs.writeFileSync(path.join(dir, ".env.sql"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
+      loadEnvironment({ baseDir: dir, envSuffix: "sql" });
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("low");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("resolveHistoryPath", () => {
   it("環境変数が設定されていれば展開して返す", () => {
     process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/log.json";
@@ -55,9 +105,10 @@ describe("resolveHistoryPath", () => {
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
   });
 
-  it("環境変数が未設定なら既定値を返す", () => {
-    const resolved = resolveHistoryPath("/default.json");
-    expect(resolved).toBe(path.resolve("/default.json"));
+  it("環境変数が未設定ならエラーになる", () => {
+    expect(() => resolveHistoryPath()).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
+    );
   });
 
   it("空文字列を設定するとエラーになる", () => {
@@ -105,14 +156,23 @@ describe("resolvePromptsDir", () => {
 });
 
 describe("loadDefaults", () => {
+  it("履歴パスが未設定ならエラーになる", () => {
+    expect(() => loadDefaults()).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
+    );
+  });
+
   it("既定値を返す", () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/default.json";
     const defaults = loadDefaults();
     expect(defaults.modelMain).toBe("gpt-5");
     expect(defaults.modelMini).toBe("gpt-5-mini");
     expect(defaults.modelNano).toBe("gpt-5-nano");
     expect(defaults.effort).toBe("low");
     expect(defaults.verbosity).toBe("low");
-    expect(defaults.historyIndexPath).toBe(path.join(ROOT_DIR, "history_index.json"));
+    expect(defaults.historyIndexPath).toBe(
+      path.resolve(path.join(process.env.HOME!, "history/default.json")),
+    );
     expect(defaults.promptsDir).toBe(path.join(ROOT_DIR, "prompts"));
     expect(defaults.d2MaxIterations).toBe(8);
     expect(defaults.sqlMaxIterations).toBe(8);

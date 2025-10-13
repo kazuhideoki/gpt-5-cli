@@ -1,4 +1,8 @@
 .env
+.env.ask
+.env.d2
+.env.sql
+
 .tsbuildinfo
 node_modules/
 dist/
