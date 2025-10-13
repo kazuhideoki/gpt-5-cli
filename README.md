@@ -36,6 +36,7 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    - `GPT_5_CLI_HISTORY_INDEX_FILE` を設定する場合は空文字不可・`~` を含む場合は `HOME` が必須です。
    - System プロンプトのテンプレート配置先を変えたい場合は `GPT_5_CLI_PROMPTS_DIR` を設定します（空文字不可・`~` 展開対応）。
    - 画像添付（`-i`）機能を使う際も `HOME` が未設定だとエラーになります。
+   - CLI ごとに別の設定を使いたい場合は `.env.ask` / `.env.d2` / `.env.sql` を `.env` と同じディレクトリに配置してください。`loadEnvironment` はまず `.env` を基準値として読み込み、その後に CLI 名に対応するファイルで上書きします（例: ask CLI は `.env.ask` を追加で読み込みます）。各 CLI 専用 `.env.*` には必ず `GPT_5_CLI_HISTORY_INDEX_FILE` を設定してください。
 6. 任意: `prompts/ask.md` や `prompts/d2.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。対応するモードでのみ適用されます（存在しない／空ファイルは無視）。
 
 ## CLI の使い方
@@ -92,6 +93,7 @@ d2 モード固有のレンダリングやフラグ構成を持ちます。履�
 ## 履歴と設定の要点
 
 - 既定の履歴ファイルはリポジトリ直下の `history_index.json`（`GPT_5_CLI_HISTORY_INDEX_FILE` で変更可。`~` 展開対応）。
+- CLI ごとに履歴ファイルを分離する場合は `.env.ask`・`.env.d2`・`.env.sql` を用意し、各ファイルで `GPT_5_CLI_HISTORY_INDEX_FILE` を固有のパスに設定してください。`.env` に共通設定を記載しつつ、CLI 固有の値（モデルや effort など）を `.env.*` で上書きできます。同一プロセス内で複数 CLI を混在させない運用を前提にしています。
 - 履歴にはタイトル・最終 response.id・メタ情報・`turns`（user/assistant 各発話）を保存。共有前に機微情報の有無を確認してください。
 - `prompts/<mode>.md` が存在すると、そのモードで新規会話開始時に system メッセージとして付与されます。ファイルが無い場合は system メッセージ無しで実行されます。
 
