@@ -79,32 +79,45 @@ interface LoadEnvironmentOptions {
  */
 export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
   const baseDir = options.baseDir ?? ROOT_DIR;
-  const appliedFromBase = new Set<string>();
-  const applyEnvFile = (filePath: string, mode: "base" | "override") => {
-    if (!fs.existsSync(filePath)) {
-      return;
-    }
-    const parsed = dotenv.parse(fs.readFileSync(filePath, "utf8"));
-    Object.entries(parsed).forEach(([key, value]) => {
-      if (mode === "base") {
-        if (process.env[key] === undefined) {
-          process.env[key] = value;
-          appliedFromBase.add(key);
-        }
-        return;
-      }
-      if (process.env[key] === undefined || appliedFromBase.has(key)) {
+  // 既存の環境スナップショット（親プロセスが渡した値や Bun の自動読み込みを区別するため）
+  const existingEnv = new Map<string, string | undefined>(
+    Object.entries(process.env).map(([k, v]) => [k, v]),
+  );
+
+  const baseEnvPath = path.join(baseDir, ".env");
+  const baseParsed = fs.existsSync(baseEnvPath)
+    ? dotenv.parse(fs.readFileSync(baseEnvPath, "utf8"))
+    : undefined;
+
+  // 親環境に無いキーのみ .env で補完
+  if (baseParsed) {
+    for (const [key, value] of Object.entries(baseParsed)) {
+      if (!existingEnv.has(key)) {
         process.env[key] = value;
       }
-    });
-  };
-
-  const envPath = path.join(baseDir, ".env");
-  applyEnvFile(envPath, "base");
+    }
+  }
 
   const suffix = options.envSuffix?.trim();
   if (suffix && suffix.length > 0) {
-    applyEnvFile(path.join(baseDir, `.env.${suffix}`), "override");
+    const overrideEnvPath = path.join(baseDir, `.env.${suffix}`);
+    if (fs.existsSync(overrideEnvPath)) {
+      const overrideParsed = dotenv.parse(fs.readFileSync(overrideEnvPath, "utf8"));
+      for (const [key, value] of Object.entries(overrideParsed)) {
+        const existedAtStart = existingEnv.has(key);
+        if (!existedAtStart) {
+          // 新規キーはそのまま適用
+          process.env[key] = value;
+          continue;
+        }
+        // 既存キーの場合、元の値が .env の値と一致するなら上書き（Bun の自動 .env を置き換える）。
+        const baseValue = baseParsed?.[key];
+        if (baseValue !== undefined && existingEnv.get(key) === baseValue) {
+          process.env[key] = value;
+        }
+        // それ以外（親プロセスが明示した値など）は尊重し、上書きしない。
+      }
+    }
   }
 }
 
