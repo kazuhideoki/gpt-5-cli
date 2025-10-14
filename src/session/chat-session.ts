@@ -286,11 +286,10 @@ export async function executeWithTools(
   let iteration = 0;
   const defaultMaxIterations = 8;
   const maxIterations = (() => {
-    if (options.taskMode === "d2" && "d2MaxIterations" in options) {
-      return (options as { d2MaxIterations: number }).d2MaxIterations;
-    }
-    if (options.taskMode === "sql" && "sqlMaxIterations" in options) {
-      return (options as { sqlMaxIterations: number }).sqlMaxIterations;
+    // Note: ask モードは CLI オプションで maxIterations を渡さないため既定値 (8) を使用する。
+    // 将来的に ask でも上限を明示したい場合は CliOptions へ maxIterations を追加すること。
+    if ("maxIterations" in options) {
+      return (options as { maxIterations: number }).maxIterations;
     }
     return defaultMaxIterations;
   })();

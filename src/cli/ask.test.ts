@@ -20,8 +20,7 @@ function createDefaults(): CliDefaults {
     verbosity: "low",
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
-    d2MaxIterations: 8,
-    sqlMaxIterations: 8,
+    maxIterations: 8,
   };
 }
 

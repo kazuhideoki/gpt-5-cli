@@ -20,8 +20,7 @@ function createDefaults(): CliDefaults {
     verbosity: "low",
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
-    d2MaxIterations: 8,
-    sqlMaxIterations: 8,
+    maxIterations: 8,
   };
 }
 
@@ -47,8 +46,8 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     verbosityExplicit: false,
     taskModeExplicit: false,
     d2FileExplicit: false,
-    d2MaxIterations: 8,
-    d2MaxIterationsExplicit: false,
+    maxIterations: 8,
+    maxIterationsExplicit: false,
     hasExplicitHistory: false,
     helpRequested: false,
     ...overrides,
@@ -74,8 +73,8 @@ describe("d2 parseArgs", () => {
   it("--d2-iterations でツール呼び出し上限を設定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--d2-iterations", "5", "図"], defaults);
-    expect(options.d2MaxIterations).toBe(5);
-    expect(options.d2MaxIterationsExplicit).toBe(true);
+    expect(options.maxIterations).toBe(5);
+    expect(options.maxIterationsExplicit).toBe(true);
   });
 
   it("--d2-iterations へ不正な値を渡すとエラーになる", () => {
