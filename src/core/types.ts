@@ -16,6 +16,5 @@ export interface CliDefaults {
   verbosity: VerbosityLevel;
   historyIndexPath: string;
   promptsDir: string;
-  d2MaxIterations: number;
-  sqlMaxIterations: number;
+  maxIterations: number;
 }

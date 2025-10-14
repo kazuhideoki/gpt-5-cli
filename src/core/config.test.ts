@@ -20,8 +20,7 @@ const envKeys = [
   "OPENAI_DEFAULT_EFFORT",
   "OPENAI_DEFAULT_VERBOSITY",
   "OPENAI_API_KEY",
-  "GPT_5_CLI_D2_MAX_ITERATIONS",
-  "GPT_5_CLI_SQL_MAX_ITERATIONS",
+  "GPT_5_CLI_MAX_ITERATIONS",
 ];
 
 const envBackup = new Map<string, string | undefined>();
@@ -174,8 +173,7 @@ describe("loadDefaults", () => {
       path.resolve(path.join(process.env.HOME!, "history/default.json")),
     );
     expect(defaults.promptsDir).toBe(path.join(ROOT_DIR, "prompts"));
-    expect(defaults.d2MaxIterations).toBe(8);
-    expect(defaults.sqlMaxIterations).toBe(8);
+    expect(defaults.maxIterations).toBe(8);
   });
 
   it("環境変数を反映する", () => {
@@ -186,8 +184,7 @@ describe("loadDefaults", () => {
     process.env.OPENAI_DEFAULT_VERBOSITY = "medium";
     process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/data/hist.json";
     process.env.GPT_5_CLI_PROMPTS_DIR = "~/data/prompts";
-    process.env.GPT_5_CLI_D2_MAX_ITERATIONS = "5";
-    process.env.GPT_5_CLI_SQL_MAX_ITERATIONS = "9";
+    process.env.GPT_5_CLI_MAX_ITERATIONS = "5";
     const defaults = loadDefaults();
     expect(defaults.modelMain).toBe("main-x");
     expect(defaults.modelMini).toBe("mini-x");
@@ -198,8 +195,7 @@ describe("loadDefaults", () => {
       path.resolve(path.join(process.env.HOME!, "data/hist.json")),
     );
     expect(defaults.promptsDir).toBe(path.resolve(path.join(process.env.HOME!, "data/prompts")));
-    expect(defaults.d2MaxIterations).toBe(5);
-    expect(defaults.sqlMaxIterations).toBe(9);
+    expect(defaults.maxIterations).toBe(5);
   });
 
   it("不正なレベルはエラーになる", () => {

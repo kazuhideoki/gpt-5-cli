@@ -57,8 +57,8 @@ interface SqlDsnSnapshot {
 }
 
 export interface SqlCliOptions extends CliOptions {
-  sqlMaxIterations: number;
-  sqlMaxIterationsExplicit: boolean;
+  maxIterations: number;
+  maxIterationsExplicit: boolean;
 }
 
 const connectionSchema = z
@@ -114,8 +114,8 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     taskModeExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
-    sqlMaxIterations: z.number().int().positive(),
-    sqlMaxIterationsExplicit: z.boolean(),
+    maxIterations: z.number().int().positive(),
+    maxIterationsExplicit: z.boolean(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -195,7 +195,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       "-I, --sql-iterations <count>",
       "SQLモード時のツール呼び出し上限を指定します",
       parseSqlIterations,
-      defaults.sqlMaxIterations,
+      defaults.maxIterations,
     )
     .option("--compact <index>", "指定した履歴を要約します", (value: string) => {
       if (!/^\d+$/u.test(value)) {
@@ -248,8 +248,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: SqlCliOptions["taskMode"] = "sql";
-  const sqlMaxIterations =
-    typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.sqlMaxIterations;
+  const maxIterations =
+    typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.maxIterations;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -285,7 +285,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const sqlMaxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
+  const maxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
   const taskModeExplicit = false;
   const helpRequested = Boolean(opts.help);
 
@@ -311,8 +311,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       taskModeExplicit,
       hasExplicitHistory,
       helpRequested,
-      sqlMaxIterations,
-      sqlMaxIterationsExplicit,
+      maxIterations,
+      maxIterationsExplicit,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -353,7 +353,9 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
     "  POSTGRES_DSN            : PostgreSQL 接続文字列 (例: postgres://user:pass@host:5432/db)",
   );
   console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
-  console.log("  GPT_5_CLI_SQL_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数)");
+  console.log(
+    `  GPT_5_CLI_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数、既定: ${defaults.maxIterations})`,
+  );
   console.log(
     "  GPT_5_CLI_HISTORY_INDEX_FILE, GPT_5_CLI_PROMPTS_DIR : 共通設定 (default/d2 と同じ)",
   );
@@ -572,7 +574,7 @@ async function runSqlCli(): Promise<void> {
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
         dsnHash: sqlEnv.hash,
-        maxIterations: options.sqlMaxIterations,
+        maxIterations: options.maxIterations,
       }),
       tools: buildCliToolList(SQL_TOOL_REGISTRATIONS),
     });
