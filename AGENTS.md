@@ -5,17 +5,18 @@
 - `src/cli/` は default・d2・sql 各モードのエントリーポイントと共通ランタイム (`runtime/`) を束ねる。`runtime/` では CLI 初期化や入力分岐などの共通処理を提供する。
 - `src/session/` は Responses API を利用したチャットセッションのサービス層。履歴同期やツール実行のオーケストレーションを担い、将来的に Agents SDK 用セッション (`agent-session.ts` 予定) を並列配置する。
 - `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/session/` や `src/cli/`）から横並びで組み合わせる設計。
-  - `config.ts` は設定値の読み込みと検証を担当し、他 core モジュールには依存しない。
+  - `config.ts` は設定値の読み込みと検証、および OpenAI API キー解決（`resolveOpenAIApiKey`）を担当し、他 core モジュールには依存しない。
   - `tools.ts` は関数ツール定義とランタイム生成を担い、Responses API 用のツール配列 `buildCliToolList` もここから提供する。
-  - `openai.ts` は OpenAI クライアント生成のみを扱い、API キーの解決も内部で完結させている。
   - `options.ts`・`formatting.ts`・`prompts.ts`・`history.ts` は `types.ts` の型だけを参照する純粋なユーティリティ。
 
 ## ビルド・テスト・開発コマンド
 
 - `bun install`: 依存パッケージをインストール。
 - `bun run build`: TypeScript をコンパイルして `dist/` 以下を更新。
-- `bun run dev`: `tsx` 実行で `src/cli.ts` をホットリロード付きで起動。
-- `bun run start -- --help`: ビルド済み CLI のヘルプを確認。
+- `bun run dev`: ask CLI を TypeScript ソースから起動。
+- `bun run dev:d2`: d2 CLI を TypeScript ソースから起動。
+- `bun run dev:sql`: SQL CLI を TypeScript ソースから起動。
+- `bun run start -- --help`: ビルド済み ask CLI のヘルプを確認。
 - `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
 
 ## コーディングスタイルと命名規約
