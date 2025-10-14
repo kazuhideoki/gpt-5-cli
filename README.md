@@ -122,3 +122,10 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 - `bun run test`: Bun のテストランナーでユニットテスト・統合テストを実行
 - `bun run lint`: Biome による静的解析
 - `bun run format:check`: Biome によるフォーマット検査
+
+## レイヤー境界のLint
+
+- 依存方向を `core <- session <- cli` とし、`core` から `session/cli` への参照を禁止しています。
+  - 設定は `biome.json` の `overrides` で `noRestrictedImports` を適用。
+- 現状は `session` から `cli/types` への限定的依存が残っているため、`session -> cli` の禁止はまだ有効化していません。
+  - 将来的に `cli/types` の型を `core` 側へ移動できたら、`session -> cli` の制限も追加してください。

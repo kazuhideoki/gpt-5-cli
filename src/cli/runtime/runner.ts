@@ -2,7 +2,7 @@
 import { HistoryStore } from "../../core/history.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
-import type { CliDefaults, CliOptions } from "../types.js";
+import type { CliDefaults, CliOptions } from "../../core/types.js";
 import type { z } from "zod";
 
 interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {

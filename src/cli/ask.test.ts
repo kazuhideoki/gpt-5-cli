@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../session/chat-session.js";
 import { determineInput } from "./runtime/input.js";
 import { parseArgs } from "./ask.js";
-import type { CliDefaults, CliOptions, ConversationContext } from "./types.js";
+import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import type { AskCliHistoryTask } from "./ask.js";
 

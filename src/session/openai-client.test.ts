@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import OpenAI from "openai";
-import { createOpenAIClient } from "./openai.js";
+import { createOpenAIClient } from "./openai-client.js";
 
 const originalApiKey = process.env.OPENAI_API_KEY;
 
