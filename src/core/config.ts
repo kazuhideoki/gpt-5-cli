@@ -204,3 +204,18 @@ export function loadDefaults(): CliDefaults {
     maxIterations: envConfig.GPT_5_CLI_MAX_ITERATIONS ?? 8,
   };
 }
+
+/**
+ * OpenAI APIキーを環境から解決する。
+ * `.env` および `.env.{suffix}`（ask/d2/sql）による上書きを前提とする。
+ *
+ * @throws `OPENAI_API_KEY not found` を含むエラー（テスト互換のため）。
+ */
+export function resolveOpenAIApiKey(): string {
+  const raw = process.env.OPENAI_API_KEY;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    // テスト互換: 既存テストがこのメッセージ断片を期待している
+    throw new Error("OPENAI_API_KEY not found. Please set it in .env or .env.{ask|d2|sql}");
+  }
+  return raw.trim();
+}

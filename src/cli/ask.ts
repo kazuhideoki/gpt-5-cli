@@ -3,7 +3,7 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../core/types.js";
-import { createOpenAIClient } from "../core/openai.js";
+import { createOpenAIClient } from "../session/openai-client.js";
 import {
   expandLegacyShortFlags,
   parseEffortFlag,

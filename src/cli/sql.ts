@@ -14,7 +14,7 @@ import {
   performCompact,
   prepareImageData,
 } from "../session/chat-session.js";
-import { createOpenAIClient } from "../core/openai.js";
+import { createOpenAIClient } from "../session/openai-client.js";
 import {
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
