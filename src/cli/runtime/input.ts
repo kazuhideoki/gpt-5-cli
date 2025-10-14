@@ -1,7 +1,7 @@
 // input.ts: CLI がユーザー入力を受け取る際の履歴操作とフロー分岐を提供する共通ユーティリティ。
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { CliDefaults, CliOptions } from "../types.js";
+import type { CliDefaults, CliOptions } from "../../core/types.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 
 interface DetermineInputExit {

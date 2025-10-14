@@ -32,7 +32,7 @@ import {
 } from "../core/options.js";
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 const SQL_TOOL_REGISTRATIONS = [

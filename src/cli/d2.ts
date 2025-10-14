@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "./types.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
   expandLegacyShortFlags,

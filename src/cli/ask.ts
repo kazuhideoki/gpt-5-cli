@@ -2,7 +2,7 @@
 // ask.ts: 一問一答型の標準チャット CLI エントリーポイント。
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "./types.js";
+import type { CliDefaults, CliOptions } from "../core/types.js";
 import { createOpenAIClient } from "../core/openai.js";
 import {
   expandLegacyShortFlags,

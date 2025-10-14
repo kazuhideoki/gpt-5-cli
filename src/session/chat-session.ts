@@ -19,7 +19,7 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../cli/types.js";
+} from "../core/types.js";
 
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
   options: TOptions;

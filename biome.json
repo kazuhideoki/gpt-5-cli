@@ -36,12 +36,7 @@
               "options": {
                 "patterns": [
                   {
-                    "group": [
-                      "@session/*",
-                      "@cli/*",
-                      "../**/session/**",
-                      "../**/cli/**"
-                    ],
+                    "group": ["@session/*", "@cli/*", "../**/session/**", "../**/cli/**"],
                     "message": "core から session,cli への依存は禁止です"
                   }
                 ]

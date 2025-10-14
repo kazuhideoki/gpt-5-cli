@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import { buildSqlCliHistoryTask, buildSqlInstructionMessages, parseArgs } from "./sql.js";
-import type { CliDefaults } from "./types.js";
+import type { CliDefaults } from "../core/types.js";
 
 const defaults: CliDefaults = {
   modelMain: "gpt-5",
