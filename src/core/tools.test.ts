@@ -5,12 +5,14 @@ import path from "node:path";
 import {
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
+  MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FETCH_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   createToolRuntime,
+  resolveMermaidCommand,
   resolveWorkspacePath,
   type ToolRegistration,
   type ToolResult,
@@ -28,7 +30,8 @@ function createCall(name: string, args: Record<string, unknown>): ResponseFuncti
 }
 
 const MINIMAL_TOOLSET = [READ_FILE_TOOL] as const;
-const WORKSPACE_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL] as const;
+const D2_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL] as const;
+const MERMAID_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 const SQL_TOOLSET = [
   READ_FILE_TOOL,
   SQL_FETCH_SCHEMA_TOOL,
@@ -37,8 +40,8 @@ const SQL_TOOLSET = [
 ] as const;
 
 const { tools: MINIMAL_FUNCTION_TOOLS } = createToolRuntime(MINIMAL_TOOLSET);
-const { tools: WORKSPACE_FUNCTION_TOOLS, execute: executeWorkspaceToolCall } =
-  createToolRuntime(WORKSPACE_TOOLSET);
+const { tools: D2_FUNCTION_TOOLS, execute: executeD2ToolCall } = createToolRuntime(D2_TOOLSET);
+const { tools: MERMAID_FUNCTION_TOOLS } = createToolRuntime(MERMAID_TOOLSET);
 const { tools: SQL_FUNCTION_TOOLS, execute: executeSqlToolCall } = createToolRuntime(SQL_TOOLSET);
 
 const ORIGINAL_POSTGRES_DSN = process.env.POSTGRES_DSN;
@@ -77,8 +80,13 @@ describe("tool registration lists", () => {
   });
 
   it("ワークスペース操作向け拡張セットを構築できる", () => {
-    const toolNames = WORKSPACE_FUNCTION_TOOLS.map((tool) => tool.name);
+    const toolNames = D2_FUNCTION_TOOLS.map((tool) => tool.name);
     expect(toolNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
+  });
+
+  it("Mermaid 向けツールセットを構築できる", () => {
+    const toolNames = MERMAID_FUNCTION_TOOLS.map((tool) => tool.name);
+    expect(toolNames).toEqual(["read_file", "write_file", "mermaid_check"]);
   });
 });
 
@@ -120,7 +128,7 @@ describe("executeFunctionToolCall", () => {
       content: "a -> b",
     });
     const writeResult = JSON.parse(
-      await executeWorkspaceToolCall(writeCall, {
+      await executeD2ToolCall(writeCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -130,7 +138,7 @@ describe("executeFunctionToolCall", () => {
 
     const readCall = createCall("read_file", { path: "diagram.d2" });
     const readResult = JSON.parse(
-      await executeWorkspaceToolCall(readCall, {
+      await executeD2ToolCall(readCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -142,7 +150,7 @@ describe("executeFunctionToolCall", () => {
   it("ワークスペース外のパスは拒否される", async () => {
     const readCall = createCall("read_file", { path: "../secret.txt" });
     const result = JSON.parse(
-      await executeWorkspaceToolCall(readCall, {
+      await executeD2ToolCall(readCall, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -160,7 +168,7 @@ describe("executeFunctionToolCall", () => {
       arguments: "{}",
     };
     const result = JSON.parse(
-      await executeWorkspaceToolCall(call, {
+      await executeD2ToolCall(call, {
         cwd: tempDir,
         log: () => {},
       }),
@@ -194,7 +202,7 @@ describe("executeFunctionToolCall", () => {
       }),
     };
 
-    const { tools, execute } = createToolRuntime([...WORKSPACE_TOOLSET, extraTool]);
+    const { tools, execute } = createToolRuntime([...D2_TOOLSET, extraTool]);
     expect(tools.map((tool) => tool.name)).toContain("custom_echo");
 
     const call = createCall("custom_echo", { message: "hello" });
@@ -377,5 +385,18 @@ describe("executeFunctionToolCall", () => {
     );
     expect(result.success).toBe(false);
     expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+});
+
+describe("resolveMermaidCommand", () => {
+  it("CLI 同梱の Mermaid CLI を Node 経由で実行する", async () => {
+    const { command, args } = await resolveMermaidCommand();
+    expect(command).toBe(process.execPath);
+    expect(args).toHaveLength(1);
+    const scriptPath = args[0]!;
+    expect(path.isAbsolute(scriptPath)).toBe(true);
+    expect(scriptPath).toMatch(/@mermaid-js[/\\]mermaid-cli/);
+    const stat = await fs.stat(scriptPath);
+    expect(stat.isFile()).toBe(true);
   });
 });

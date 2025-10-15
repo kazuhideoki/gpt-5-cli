@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
+  MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FETCH_SCHEMA_TOOL,
@@ -53,12 +54,14 @@ describe("expandLegacyShortFlags", () => {
 describe("buildCliToolList", () => {
   const MINIMAL_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
-  const WORKSPACE_TOOL_REGISTRATIONS = [
+  const D2_TOOL_REGISTRATIONS = [
     READ_FILE_TOOL,
     WRITE_FILE_TOOL,
     D2_CHECK_TOOL,
     D2_FMT_TOOL,
   ] as const;
+
+  const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 
   const SQL_TOOL_REGISTRATIONS = [
     READ_FILE_TOOL,
@@ -76,13 +79,18 @@ describe("buildCliToolList", () => {
   });
 
   test("追加ツール登録を引数で拡張できる", () => {
-    const tools = buildCliToolList([...WORKSPACE_TOOL_REGISTRATIONS, ...SQL_TOOL_REGISTRATIONS]);
+    const tools = buildCliToolList([
+      ...D2_TOOL_REGISTRATIONS,
+      ...MERMAID_TOOL_REGISTRATIONS,
+      ...SQL_TOOL_REGISTRATIONS,
+    ]);
     const functionNames = tools.filter((tool) => tool.type === "function").map((tool) => tool.name);
     expect(functionNames).toEqual([
       "read_file",
       "write_file",
       "d2_check",
       "d2_fmt",
+      "mermaid_check",
       "sql_fetch_schema",
       "sql_dry_run",
       "sql_format",

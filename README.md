@@ -2,7 +2,7 @@
 
 OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継続、履歴管理、モデル/推論強度/冗長度の切替、画像入力、会話ログの要約 (`--compact`) をサポートします。
 
-本リポジトリは **ask**・**d2**・**sql** の 3 系統の CLI を提供します。`gpt-5-cli` コマンドが ask CLI、`gpt-5-cli-d2` が d2 CLI、`gpt-5-cli-sql` が SQL CLI です。どの CLI も共通ロジックを共有しつつ、モードごとのフラグ・振る舞いを最適化しています。
+本リポジトリは **ask**・**d2**・**mermaid**・**sql** の 4 系統の CLI を提供します。`gpt-5-cli` コマンドが ask CLI、`gpt-5-cli-d2` が d2 CLI、`gpt-5-cli-mermaid` が Mermaid CLI、`gpt-5-cli-sql` が SQL CLI です。どの CLI も共通ロジックを共有しつつ、モードごとのフラグ・振る舞いを最適化しています。
 
 ## セットアップ
 
@@ -22,7 +22,7 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    ```bash
    bun run build
    ```
-   - 開発中は ask CLI を `bun run dev`、d2 CLI を `bun run dev:d2` で TypeScript ソースから直接実行できます。
+   - 開発中は ask CLI を `bun run dev`、d2 CLI を `bun run dev:d2`、Mermaid CLI を `bun run dev:mermaid` で TypeScript ソースから直接実行できます。
 5. 任意の既定値（例）
    ```env
    OPENAI_MODEL_MAIN=gpt-5
@@ -36,8 +36,8 @@ OpenAI Responses API を利用する TypeScript 製の CLI です。会話の継
    - `GPT_5_CLI_HISTORY_INDEX_FILE` を設定する場合は空文字不可・`~` を含む場合は `HOME` が必須です。
    - System プロンプトのテンプレート配置先を変えたい場合は `GPT_5_CLI_PROMPTS_DIR` を設定します（空文字不可・`~` 展開対応）。
    - 画像添付（`-i`）機能を使う際も `HOME` が未設定だとエラーになります。
-   - CLI ごとに別の設定を使いたい場合は `.env.ask` / `.env.d2` / `.env.sql` を `.env` と同じディレクトリに配置してください。`loadEnvironment` はまず `.env` を基準値として読み込み、その後に CLI 名に対応するファイルで上書きします（例: ask CLI は `.env.ask`、SQL CLI は `.env.sql` を追加で読み込みます）。各 CLI 専用 `.env.*` には必ず `GPT_5_CLI_HISTORY_INDEX_FILE` を設定してください。
-6. 任意: `prompts/ask.md` や `prompts/d2.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。対応するモードでのみ適用されます（存在しない／空ファイルは無視）。
+   - CLI ごとに別の設定を使いたい場合は `.env.ask` / `.env.d2` / `.env.mermaid` / `.env.sql` を `.env` と同じディレクトリに配置してください。`loadEnvironment` はまず `.env` を基準値として読み込み、その後に CLI 名に対応するファイルで上書きします（例: ask CLI は `.env.ask`、Mermaid CLI は `.env.mermaid`、SQL CLI は `.env.sql` を追加で読み込みます）。各 CLI 専用 `.env.*` には必ず `GPT_5_CLI_HISTORY_INDEX_FILE` を設定してください。
+6. 任意: `prompts/ask.md` や `prompts/d2.md`、`prompts/mermaid.md` に内容を記載すると、新規会話の先頭に固定の指示を自動付与できます。対応するモードでのみ適用されます（存在しない／空ファイルは無視）。
 
 ## CLI の使い方
 
@@ -85,6 +85,19 @@ bun run start:d2 -- --help
 
 d2 モード固有のレンダリングやフラグ構成を持ちます。履歴ストアは ask CLI と共有されるため、`task.mode` によりどちらの CLI で作成した履歴か判別できます。
 
+### Mermaid CLI
+
+Mermaid 用の CLI は下記で起動できます。
+
+```bash
+gpt-5-cli-mermaid -- --help
+bun run start:mermaid -- --help
+```
+
+Mermaid CLI では `mermaid_check` ツールを通じて `@mermaid-js/mermaid-cli` の `mmdc` を実行し、Mermaid 記法の検証を行います。履歴ストアは共通で、タスクメタデータには対象ファイルパスが保存されます。Mermaid 専用の設定を分離したい場合は `.env.mermaid` に `GPT_5_CLI_HISTORY_INDEX_FILE` や既定モデルを指定してください。
+
+- `.mmd` など純粋な Mermaid ソースファイルを指定するのが最も確実です。Markdown で管理する場合は、Mermaid コードを必ず ```mermaid``` または `:::mermaid` ブロック内に記述してください（`mmdc` がチャートを抽出できません）。
+
 ### SQL CLI
 
 SQL 向け CLI は下記で起動します。
@@ -104,7 +117,7 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 ## 履歴と設定の要点
 
 - 既定の履歴ファイルはリポジトリ直下の `history_index.json`（`GPT_5_CLI_HISTORY_INDEX_FILE` で変更可。`~` 展開対応）。
-- CLI ごとに履歴ファイルを分離する場合は `.env.ask`・`.env.d2`・`.env.sql` を用意し、各ファイルで `GPT_5_CLI_HISTORY_INDEX_FILE` を固有のパスに設定してください。`.env` に共通設定を記載しつつ、CLI 固有の値（モデルや effort、SQL であれば DSN など）を `.env.*` で上書きできます。同一プロセス内で複数 CLI を混在させない運用を前提にしています。
+- CLI ごとに履歴ファイルを分離する場合は `.env.ask`・`.env.d2`・`.env.mermaid`・`.env.sql` を用意し、各ファイルで `GPT_5_CLI_HISTORY_INDEX_FILE` を固有のパスに設定してください。`.env` に共通設定を記載しつつ、CLI 固有の値（モデルや effort、SQL であれば DSN など）を `.env.*` で上書きできます。同一プロセス内で複数 CLI を混在させない運用を前提にしています。
 - 履歴にはタイトル・最終 response.id・メタ情報・`turns`（user/assistant 各発話）を保存。共有前に機微情報の有無を確認してください。
 - `prompts/<mode>.md` が存在すると、そのモードで新規会話開始時に system メッセージとして付与されます。ファイルが無い場合は system メッセージ無しで実行されます。
 
@@ -116,9 +129,10 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 
 ## 開発コマンド
 
-- `bun run build`: TypeScript をコンパイルして `dist/cli/ask.js` と `dist/cli/d2.js` を生成
+- `bun run build`: TypeScript をコンパイルして `dist/cli/ask.js`・`dist/cli/d2.js`・`dist/cli/mermaid.js`・`dist/cli/sql.js` を生成
 - `bun run dev`: Bun の TypeScript 実行機能で ask CLI を実行
 - `bun run dev:d2`: Bun の TypeScript 実行機能で d2 CLI を実行
+- `bun run dev:mermaid`: Bun の TypeScript 実行機能で Mermaid CLI を実行
 - `bun run test`: Bun のテストランナーでユニットテスト・統合テストを実行
 - `bun run lint`: Biome による静的解析
 - `bun run format:check`: Biome によるフォーマット検査

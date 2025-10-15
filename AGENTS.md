@@ -2,7 +2,7 @@
 
 ## プロジェクト構成とモジュール
 
-- `src/cli/` は default・d2・sql 各モードのエントリーポイントと共通ランタイム (`runtime/`) を束ねる。`runtime/` では CLI 初期化や入力分岐などの共通処理を提供する。
+- `src/cli/` は default・d2・mermaid・sql 各モードのエントリーポイントと共通ランタイム (`runtime/`) を束ねる。`runtime/` では CLI 初期化や入力分岐などの共通処理を提供する。
 - `src/session/` は Responses API を利用したチャットセッションのサービス層。履歴同期やツール実行のオーケストレーションを担い、将来的に Agents SDK 用セッション (`agent-session.ts` 予定) を並列配置する。
 - `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/session/` や `src/cli/`）から横並びで組み合わせる設計。
   - `config.ts` は設定値の読み込みと検証、および OpenAI API キー解決（`resolveOpenAIApiKey`）を担当し、他 core モジュールには依存しない。
@@ -15,6 +15,7 @@
 - `bun run build`: TypeScript をコンパイルして `dist/` 以下を更新。
 - `bun run dev`: ask CLI を TypeScript ソースから起動。
 - `bun run dev:d2`: d2 CLI を TypeScript ソースから起動。
+- `bun run dev:mermaid`: mermaid CLI を TypeScript ソースから起動。
 - `bun run dev:sql`: SQL CLI を TypeScript ソースから起動。
 - `bun run start -- --help`: ビルド済み ask CLI のヘルプを確認。
 - `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
@@ -59,7 +60,8 @@
 
 - `.env` をコミットせず、共有情報は `.env.example` に反映します。
 - 履歴ファイルには機微情報が含まれる可能性があるため、共有前に `GPT_5_CLI_HISTORY_INDEX_FILE` で書き出し先を変更するか、不要データを削除してください。
-- CLI ごとの `.env.ask` / `.env.d2` / `.env.sql` で共通 `.env` を上書きできる設計です。各 CLI 用 `.env.*` にも履歴ファイルパスを必ず定義してください。
+- CLI ごとの `.env.ask` / `.env.d2` / `.env.mermaid` / `.env.sql` で共通 `.env` を上書きできる設計です。各 CLI 用 `.env.*` にも履歴ファイルパスを必ず定義してください。
+- Mermaid CLI で Markdown を扱う場合は、必ず ```mermaid```（もしくは `:::mermaid`）ブロックにコードを入れてください。`.mmd` ファイルであればそのまま検証できます。
 
 ## 個人用スクリプトとしての運用
 
