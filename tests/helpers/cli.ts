@@ -67,6 +67,30 @@ export async function runD2Cli(args: string[], env: Record<string, string>): Pro
   return { stdout, stderr, exitCode };
 }
 
+export async function runMermaidCli(
+  args: string[],
+  env: Record<string, string>,
+): Promise<CliResult> {
+  const proc = Bun.spawn(["bun", "run", "src/cli/mermaid.ts", ...args], {
+    cwd: projectRoot,
+    env: {
+      ...process.env,
+      ...env,
+      NO_COLOR: "1",
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  return { stdout, stderr, exitCode };
+}
+
 export function createBaseEnv(port: number, historyPath: string): Record<string, string> {
   return {
     OPENAI_API_KEY: "test-key",
@@ -81,6 +105,9 @@ export function extractUserLines(output: string): string[] {
     .map((line) => line.trimEnd())
     .filter(
       (line) =>
-        line.length > 0 && !line.startsWith("[gpt-5-cli]") && !line.startsWith("[gpt-5-cli-d2]"),
+        line.length > 0 &&
+        !line.startsWith("[gpt-5-cli]") &&
+        !line.startsWith("[gpt-5-cli-d2]") &&
+        !line.startsWith("[gpt-5-cli-mermaid]"),
     );
 }

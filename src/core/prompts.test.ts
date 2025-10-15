@@ -33,6 +33,11 @@ describe("resolvePromptPath", () => {
     const resolved = resolvePromptPath("d2", tempDir);
     expect(resolved).toBe(path.join(tempDir, "d2.md"));
   });
+
+  it("mermaid モードでも対応するファイル名を返す", () => {
+    const resolved = resolvePromptPath("mermaid", tempDir);
+    expect(resolved).toBe(path.join(tempDir, "mermaid.md"));
+  });
 });
 
 describe("loadPrompt", () => {

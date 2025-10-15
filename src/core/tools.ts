@@ -530,6 +530,10 @@ interface D2Args {
   file_path: string;
 }
 
+interface MermaidArgs {
+  file_path: string;
+}
+
 async function d2CheckTool(args: D2Args, context: ToolExecutionContext): Promise<CommandResult> {
   const { cwd } = context;
   const resolvedPath = resolveWorkspacePath(args.file_path, cwd);
@@ -629,6 +633,44 @@ export const D2_FMT_TOOL: ToolRegistration<D2Args, CommandResult> = {
     },
   },
   handler: d2FmtTool,
+};
+
+async function mermaidCheckTool(
+  args: MermaidArgs,
+  context: ToolExecutionContext,
+): Promise<CommandResult> {
+  const { cwd } = context;
+  const resolvedPath = resolveWorkspacePath(args.file_path, cwd);
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-5-mermaid-check-"));
+  const outputPath = path.join(tempDir, "mermaid-output.svg");
+  const binName = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
+  const cliPath = path.join(cwd, "node_modules", ".bin", binName);
+  try {
+    return await runCommand(cliPath, ["-i", resolvedPath, "-o", outputPath, "--quiet"], cwd);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+export const MERMAID_CHECK_TOOL: ToolRegistration<MermaidArgs, CommandResult> = {
+  definition: {
+    type: "function",
+    strict: true,
+    name: "mermaid_check",
+    description: "Run mermaid-cli to validate a Mermaid diagram file.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the Mermaid file relative to the workspace root.",
+        },
+      },
+      required: ["file_path"],
+      additionalProperties: false,
+    },
+  },
+  handler: mermaidCheckTool,
 };
 
 export const SQL_FETCH_SCHEMA_TOOL: ToolRegistration<Record<string, never>, ToolResult> = {
