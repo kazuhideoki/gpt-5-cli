@@ -18,16 +18,14 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
   buildCliToolList,
-  createToolRuntime,
 } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
-  executeWithTools,
-  extractResponseText,
   performCompact,
   prepareImageData,
 } from "../session/chat-session.js";
+import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
 
@@ -48,7 +46,6 @@ interface MermaidContextInfo {
 }
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
-const MERMAID_TOOL_RUNTIME = createToolRuntime(MERMAID_TOOL_REGISTRATIONS);
 const MERMAID_FUNCTION_TOOLS = buildCliToolList(MERMAID_TOOL_REGISTRATIONS);
 
 const mermaidCliHistoryTaskSchema = z.object({
@@ -562,19 +559,20 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           : undefined,
       tools: MERMAID_FUNCTION_TOOLS,
     });
-    const response = await executeWithTools(
+    const agentResult = await runAgentConversation({
       client,
       request,
       options,
-      "[gpt-5-cli-mermaid]",
-      MERMAID_TOOL_RUNTIME,
-    );
-    const content = extractResponseText(response);
+      logLabel: "[gpt-5-cli-mermaid]",
+      toolRegistrations: MERMAID_TOOL_REGISTRATIONS,
+      maxTurns: options.maxIterations,
+    });
+    const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    if (response.id) {
+    if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as MermaidCliHistoryTask | undefined;
       const historyTask = buildMermaidCliHistoryTask(
         {
@@ -601,7 +599,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
           previousTask,
         },
-        responseId: response.id,
+        responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         task: historyTask,

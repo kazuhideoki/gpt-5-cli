@@ -18,16 +18,14 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
   buildCliToolList,
-  createToolRuntime,
 } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
-  executeWithTools,
-  extractResponseText,
   performCompact,
   prepareImageData,
 } from "../session/chat-session.js";
+import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
 
@@ -53,7 +51,6 @@ const D2_TOOL_REGISTRATIONS = [
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
 ] as const;
-const D2_TOOL_RUNTIME = createToolRuntime(D2_TOOL_REGISTRATIONS);
 const D2_FUNCTION_TOOLS = buildCliToolList(D2_TOOL_REGISTRATIONS);
 
 const d2CliHistoryTaskSchema = z.object({
@@ -558,19 +555,20 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
       tools: D2_FUNCTION_TOOLS,
     });
-    const response = await executeWithTools(
+    const agentResult = await runAgentConversation({
       client,
       request,
       options,
-      "[gpt-5-cli-d2]",
-      D2_TOOL_RUNTIME,
-    );
-    const content = extractResponseText(response);
+      logLabel: "[gpt-5-cli-d2]",
+      toolRegistrations: D2_TOOL_REGISTRATIONS,
+      maxTurns: options.maxIterations,
+    });
+    const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    if (response.id) {
+    if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as D2CliHistoryTask | undefined;
       const historyTask = buildD2CliHistoryTask(
         {
@@ -597,7 +595,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
           previousTask,
         },
-        responseId: response.id,
+        responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         task: historyTask,

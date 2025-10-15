@@ -11,6 +11,7 @@ import {
   SQL_FETCH_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
+  buildAgentsToolList,
   createToolRuntime,
   resolveMermaidCommand,
   resolveWorkspacePath,
@@ -385,6 +386,86 @@ describe("executeFunctionToolCall", () => {
     );
     expect(result.success).toBe(false);
     expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+});
+
+describe("buildAgentsToolList", () => {
+  it("Agents SDK のツール定義へ変換し、ハンドラ実行結果を文字列で返す", async () => {
+    const logs: string[] = [];
+    const debugLogs: string[] = [];
+    const registration: ToolRegistration<{ path: string }, ToolResult> = {
+      definition: {
+        type: "function",
+        strict: true,
+        name: "sample_tool",
+        description: "Emit the provided path.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string" },
+          },
+          required: ["path"],
+          additionalProperties: false,
+        },
+      },
+      handler: async (args): Promise<ToolResult> => ({
+        success: true,
+        path: args.path,
+      }),
+    };
+
+    const [agentTool] = buildAgentsToolList([registration], {
+      logLabel: "[agent-test]",
+      createExecutionContext: () => ({
+        cwd: "/workspace",
+        log: (message: string) => {
+          logs.push(message);
+        },
+      }),
+      debugLog: (message: string) => {
+        debugLogs.push(message);
+      },
+    });
+
+    const result = await (agentTool as any).invoke(
+      undefined,
+      JSON.stringify({ path: "diagram.d2" }),
+      {
+        toolCall: { call_id: "call-1", id: "call-1" },
+      },
+    );
+
+    expect(JSON.parse(result)).toEqual({ success: true, path: "diagram.d2" });
+    expect(logs).toContain("tool handling sample_tool (call-1)");
+    expect(debugLogs.some((entry) => entry.includes("arguments"))).toBe(true);
+    expect(debugLogs.some((entry) => entry.includes("output"))).toBe(true);
+  });
+
+  it("ハンドラが例外を投げた場合に失敗レスポンスを返す", async () => {
+    const registration: ToolRegistration = {
+      definition: {
+        type: "function",
+        strict: true,
+        name: "exploding_tool",
+        description: "Always throw.",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+      },
+      handler: async () => {
+        throw new Error("boom");
+      },
+    };
+
+    const [agentTool] = buildAgentsToolList([registration]);
+    const result = await (agentTool as any).invoke(undefined, "{}", {
+      toolCall: { call_id: "call-9", id: "call-9" },
+    });
+
+    expect(JSON.parse(result)).toEqual({ success: false, message: "boom" });
   });
 });
 
