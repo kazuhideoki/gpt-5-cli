@@ -12,6 +12,7 @@ import {
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   createToolRuntime,
+  resolveMermaidCommand,
   resolveWorkspacePath,
   type ToolRegistration,
   type ToolResult,
@@ -384,5 +385,18 @@ describe("executeFunctionToolCall", () => {
     );
     expect(result.success).toBe(false);
     expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+});
+
+describe("resolveMermaidCommand", () => {
+  it("CLI 同梱の Mermaid CLI を Node 経由で実行する", async () => {
+    const { command, args } = await resolveMermaidCommand();
+    expect(command).toBe(process.execPath);
+    expect(args).toHaveLength(1);
+    const scriptPath = args[0]!;
+    expect(path.isAbsolute(scriptPath)).toBe(true);
+    expect(scriptPath).toMatch(/@mermaid-js[/\\]mermaid-cli/);
+    const stat = await fs.stat(scriptPath);
+    expect(stat.isFile()).toBe(true);
   });
 });
