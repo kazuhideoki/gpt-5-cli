@@ -1,7 +1,6 @@
 .env
-.env.ask
-.env.d2
-.env.sql
+.env*
+!.env.example
 
 .tsbuildinfo
 node_modules/
@@ -13,5 +12,6 @@ dist/
 history_index.json
 # デフォルトのプロンプトディレクトリ
 prompts/
+
 .DS_Store
 .mcp.json

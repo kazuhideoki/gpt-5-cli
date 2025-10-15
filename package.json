@@ -30,11 +30,12 @@
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",
+    "@openai/agents": "^0.1.9",
     "commander": "^14.0.1",
     "dotenv": "^16.4.5",
     "openai": "^4.57.0",
     "pg": "^8.12.0",
-    "zod": "^4.1.11"
+    "zod": "^3.25.40"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.2.5",
