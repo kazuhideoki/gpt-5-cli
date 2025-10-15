@@ -657,7 +657,8 @@ export const MERMAID_CHECK_TOOL: ToolRegistration<MermaidArgs, CommandResult> = 
     type: "function",
     strict: true,
     name: "mermaid_check",
-    description: "Run mermaid-cli to validate a Mermaid diagram file.",
+    description:
+      "Run mermaid-cli to validate a Mermaid diagram file. When using Markdown, wrap the diagram in a ```mermaid``` block.",
     parameters: {
       type: "object",
       properties: {

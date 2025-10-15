@@ -96,6 +96,8 @@ bun run start:mermaid -- --help
 
 Mermaid CLI では `mermaid_check` ツールを通じて `@mermaid-js/mermaid-cli` の `mmdc` を実行し、Mermaid 記法の検証を行います。履歴ストアは共通で、タスクメタデータには対象ファイルパスが保存されます。Mermaid 専用の設定を分離したい場合は `.env.mermaid` に `GPT_5_CLI_HISTORY_INDEX_FILE` や既定モデルを指定してください。
 
+- `.mmd` など純粋な Mermaid ソースファイルを指定するのが最も確実です。Markdown で管理する場合は、Mermaid コードを必ず ```mermaid``` または `:::mermaid` ブロック内に記述してください（`mmdc` がチャートを抽出できません）。
+
 ### SQL CLI
 
 SQL 向け CLI は下記で起動します。

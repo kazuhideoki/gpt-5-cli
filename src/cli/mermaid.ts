@@ -133,6 +133,9 @@ function printHelp(defaults: CliDefaults, options: MermaidCliOptions): void {
   console.log("  -M          : Mermaidモードを明示（互換フラグ） (--mermaid-mode)");
   console.log("  -F <path>   : Mermaid出力ファイルパスを指定 (--mermaid-file)");
   console.log("  -I <count>  : Mermaidモード時のツール呼び出し上限 (--mermaid-iterations)");
+  console.log(
+    "  ※ `.mmd` など純粋な Mermaid ファイルを推奨。Markdown に埋め込む場合は必ず ```mermaid``` ブロック内に記述してください。",
+  );
   console.log("");
   console.log("環境変数(.env):");
   console.log(
@@ -460,7 +463,7 @@ function buildMermaidInstructionMessages(mermaidContext: MermaidContextInfo): Op
 
   const workflow = [
     "作業手順:",
-    `1. ${existenceNote}`,
+    `1. ${existenceNote}（Markdown に記述する場合は必ず \`\`\`mermaid\`\`\` ブロック内にコードを書く）`,
     "2. 変更後は必ず mermaid_check を実行し、構文エラーを確認する",
     "3. エラーが続く場合は修正しつつ 2 を繰り返す",
     "4. 最終応答では、日本語で変更内容・ファイルパス・mermaid_check の結果を要約し、Mermaidコード全文は回答に貼らない",
