@@ -9,8 +9,6 @@ import { z } from "zod";
 import {
   buildRequest,
   computeContext,
-  executeWithTools,
-  extractResponseText,
   performCompact,
   prepareImageData,
 } from "../session/chat-session.js";
@@ -21,7 +19,6 @@ import {
   SQL_FETCH_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   buildCliToolList,
-  createToolRuntime,
 } from "../core/tools.js";
 import {
   expandLegacyShortFlags,
@@ -33,6 +30,7 @@ import {
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
+import { runAgentConversation } from "../session/agent-session.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 const SQL_TOOL_REGISTRATIONS = [
@@ -41,7 +39,6 @@ const SQL_TOOL_REGISTRATIONS = [
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
-const SQL_TOOL_RUNTIME = createToolRuntime(SQL_TOOL_REGISTRATIONS);
 
 interface SqlConnectionMetadata {
   host?: string;
@@ -579,13 +576,20 @@ async function runSqlCli(): Promise<void> {
       tools: buildCliToolList(SQL_TOOL_REGISTRATIONS),
     });
 
-    const response = await executeWithTools(client, request, options, LOG_LABEL, SQL_TOOL_RUNTIME);
-    const content = extractResponseText(response);
+    const agentResult = await runAgentConversation({
+      client,
+      request,
+      options,
+      logLabel: LOG_LABEL,
+      toolRegistrations: SQL_TOOL_REGISTRATIONS,
+      maxTurns: options.maxIterations,
+    });
+    const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    if (response.id) {
+    if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
       const historyTask = buildSqlCliHistoryTask(
         {
@@ -611,7 +615,7 @@ async function runSqlCli(): Promise<void> {
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
           previousTask,
         },
-        responseId: response.id,
+        responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         task: historyTask,
