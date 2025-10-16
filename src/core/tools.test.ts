@@ -501,6 +501,24 @@ describe("SQL schema fetch tool queries", () => {
     ]);
   });
 
+  it("sql_fetch_column_schema は tables で複数テーブルの列を取得できる", async () => {
+    await SQL_FETCH_COLUMN_SCHEMA_TOOL.handler(
+      {
+        tables: [
+          { schema_name: "public", table_name: "reservations" },
+          { schema_name: "sales", table_name: "orders" },
+        ],
+      },
+      context,
+    );
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/\(table_schema = \$1 AND table_name = \$2\)/u);
+    expect(call.text).toMatch(/\(table_schema = \$3 AND table_name = \$4\)/u);
+    expect(call.text).toMatch(/\((?:table_schema = \$1 AND table_name = \$2).*OR.*(table_schema = \$3 AND table_name = \$4)\)/u);
+    expect(call.values).toEqual(["public", "reservations", "sales", "orders"]);
+  });
+
   it("sql_fetch_enum_schema はスキーマと enum 名をフィルタする", async () => {
     await SQL_FETCH_ENUM_SCHEMA_TOOL.handler(
       {

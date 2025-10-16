@@ -205,6 +205,12 @@ interface SqlFetchColumnSchemaArgs {
   schema_names?: string[];
   table_names?: string[];
   column_names?: string[];
+  tables?: SqlTableIdentifier[];
+}
+
+interface SqlTableIdentifier {
+  schema_name: string;
+  table_name: string;
 }
 
 interface SqlFetchEnumSchemaArgs {
@@ -248,6 +254,44 @@ function normalizeStringArray(value: unknown, fieldName: string): string[] | und
   }
   if (normalized.length === 0) {
     throw new Error(`${fieldName} must not be an empty array.`);
+  }
+  return normalized;
+}
+
+function normalizeTableIdentifiers(
+  value: unknown,
+  fieldName: string,
+): SqlTableIdentifier[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${fieldName} must be a non-empty array of { schema_name, table_name } objects.`);
+  }
+  const normalized: SqlTableIdentifier[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`${fieldName} must contain objects with schema_name and table_name.`);
+    }
+    const schemaRaw = (entry as Record<string, unknown>).schema_name;
+    const tableRaw = (entry as Record<string, unknown>).table_name;
+    if (typeof schemaRaw !== "string" || typeof tableRaw !== "string") {
+      throw new Error(`${fieldName} entries require non-empty schema_name and table_name strings.`);
+    }
+    const schema = schemaRaw.trim();
+    const table = tableRaw.trim();
+    if (!schema || !table) {
+      throw new Error(`${fieldName} entries require non-empty schema_name and table_name strings.`);
+    }
+    const exists = normalized.some(
+      (item) => item.schema_name === schema && item.table_name === table,
+    );
+    if (!exists) {
+      normalized.push({ schema_name: schema, table_name: table });
+    }
+  }
+  if (normalized.length === 0) {
+    throw new Error(`${fieldName} must be a non-empty array of unique table identifiers.`);
   }
   return normalized;
 }
@@ -515,6 +559,21 @@ async function fetchSqlColumnSchema(
     if (columnNames) {
       params.push(columnNames);
       filters.push(`column_name = ANY($${params.length}::text[])`);
+    }
+
+    const tableIdentifiers = normalizeTableIdentifiers(args.tables, "tables");
+    if (tableIdentifiers) {
+      const pairClauses: string[] = [];
+      for (const identifier of tableIdentifiers) {
+        params.push(identifier.schema_name);
+        const schemaIndex = params.length;
+        params.push(identifier.table_name);
+        const tableIndex = params.length;
+        pairClauses.push(`(table_schema = $${schemaIndex} AND table_name = $${tableIndex})`);
+      }
+      if (pairClauses.length > 0) {
+        filters.push(`(${pairClauses.join(" OR ")})`);
+      }
     }
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
@@ -1063,10 +1122,23 @@ export const SQL_FETCH_COLUMN_SCHEMA_TOOL: ToolRegistration<SqlFetchColumnSchema
             description: "Filter by table names (exact match).",
             items: { type: "string" },
           },
-          column_names: {
-            type: "array",
-            description: "Filter by column names (exact match).",
-            items: { type: "string" },
+        column_names: {
+          type: "array",
+          description: "Filter by column names (exact match).",
+          items: { type: "string" },
+        },
+        tables: {
+          type: "array",
+          description: "Filter by (schema_name, table_name) pairs.",
+          items: {
+            type: "object",
+            properties: {
+              schema_name: { type: "string" },
+              table_name: { type: "string" },
+            },
+            required: ["schema_name", "table_name"],
+            additionalProperties: false,
+          },
         },
       },
       required: [],
