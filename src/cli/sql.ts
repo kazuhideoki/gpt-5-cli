@@ -30,6 +30,7 @@ import {
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
+import type { HistoryEntry } from "../core/history.js";
 import { runAgentConversation } from "../session/agent-session.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
@@ -56,7 +57,7 @@ interface SqlDsnSnapshot {
 export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
   maxIterationsExplicit: boolean;
-  dsn: string;
+  dsn?: string;
 }
 
 const connectionSchema = z
@@ -72,6 +73,7 @@ const sqlContextSchema = z
   .object({
     type: z.literal("postgresql").optional(),
     dsn_hash: z.string().optional(),
+    dsn: z.string().optional(),
     connection: connectionSchema,
   })
   .optional();
@@ -86,6 +88,7 @@ export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
 interface SqlCliHistoryTaskOptions {
   taskMode: SqlCliOptions["taskMode"];
   dsnHash: string;
+  dsn: string;
   connection: SqlConnectionMetadata;
 }
 
@@ -104,7 +107,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     debug: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    dsn: z.string().min(1, "Error: --dsn は空にできません"),
+    dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -237,7 +240,14 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const effort = opts.effort ?? defaults.effort;
   const verbosity = opts.verbosity ?? defaults.verbosity;
   const debug = Boolean(opts.debug);
-  const dsn = typeof opts.dsn === "string" ? opts.dsn.trim() : "";
+  let dsn: string | undefined;
+  if (typeof opts.dsn === "string") {
+    const trimmed = opts.dsn.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Error: --dsn は空にできません");
+    }
+    dsn = trimmed;
+  }
   let continueConversation = Boolean(opts.continueConversation);
   let resumeIndex: number | undefined;
   let resumeListOnly = false;
@@ -280,10 +290,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   if (typeof opts.compact === "number") {
     operation = "compact";
     compactIndex = opts.compact;
-  }
-
-  if (dsn.length === 0) {
-    throw new Error("Error: --dsn は必須です");
   }
 
   const modelExplicit = program.getOptionValueSource("model") === "cli";
@@ -401,6 +407,40 @@ function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
   };
 }
 
+function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): string | undefined {
+  if (!entry) {
+    return undefined;
+  }
+  const task = entry.task as SqlCliHistoryTask | undefined;
+  const candidate = task?.sql?.dsn;
+  if (typeof candidate === "string") {
+    const trimmed = candidate.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function resolveSqlDsn(
+  provided: string | undefined,
+  contextEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
+  determineEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
+): string {
+  if (typeof provided === "string" && provided.trim().length > 0) {
+    return provided.trim();
+  }
+  const fromDetermine = pickHistoryDsn(determineEntry);
+  if (fromDetermine) {
+    return fromDetermine;
+  }
+  const fromContext = pickHistoryDsn(contextEntry);
+  if (fromContext) {
+    return fromContext;
+  }
+  throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
+}
+
 function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
   const parts: string[] = [];
   if (connection.host) {
@@ -483,6 +523,7 @@ export function buildSqlCliHistoryTask(
   const sqlMeta = {
     type: "postgresql" as const,
     dsn_hash: options.dsnHash,
+    dsn: options.dsn,
     connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
   };
 
@@ -546,8 +587,14 @@ async function runSqlCli(): Promise<void> {
       },
     );
 
-    const sqlEnv = createSqlSnapshot(options.dsn);
+    const determineActiveEntry = determine.activeEntry as
+      | HistoryEntry<SqlCliHistoryTask>
+      | undefined;
+    const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
+    const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
+    const sqlEnv = createSqlSnapshot(effectiveDsn);
     process.env.POSTGRES_DSN = sqlEnv.dsn;
+    options.dsn = sqlEnv.dsn;
 
     const imageInfo = prepareImageData(options.imagePath, LOG_LABEL);
     const request = buildRequest({
@@ -585,6 +632,7 @@ async function runSqlCli(): Promise<void> {
         {
           taskMode: options.taskMode,
           dsnHash: sqlEnv.hash,
+          dsn: sqlEnv.dsn,
           connection: sqlEnv.connection,
         },
         previousTask,

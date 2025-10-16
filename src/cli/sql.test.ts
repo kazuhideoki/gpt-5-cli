@@ -51,8 +51,15 @@ describe("parseArgs", () => {
     expect(options.debug).toBe(true);
   });
 
-  it("--dsn を省略するとエラー", () => {
-    expect(() => parseArgs(["SELECT"], defaults)).toThrow("--dsn は必須");
+  it("--dsn を省略すると未設定のまま返す", () => {
+    const options = parseArgs(["SELECT"], defaults);
+    expect(options.dsn).toBeUndefined();
+  });
+
+  it("--help は --dsn なしで取得できる", () => {
+    const options = parseArgs(["--help"], defaults);
+    expect(options.helpRequested).toBe(true);
+    expect(options.dsn).toBeUndefined();
   });
 });
 
@@ -78,6 +85,7 @@ describe("buildSqlCliHistoryTask", () => {
       {
         taskMode: "sql",
         dsnHash: "sha256:new",
+        dsn: "postgres://report:pass@db:5432/analytics",
         connection: { host: "db", port: 5432, database: "analytics", user: "report" },
       },
       undefined,
@@ -85,6 +93,7 @@ describe("buildSqlCliHistoryTask", () => {
     expect(task?.mode).toBe("sql");
     expect(task?.sql?.dsn_hash).toBe("sha256:new");
     expect(task?.sql?.connection?.host).toBe("db");
+    expect(task?.sql?.dsn).toBe("postgres://report:pass@db:5432/analytics");
   });
 
   it("既存のタスク情報を上書きする", () => {
@@ -93,6 +102,7 @@ describe("buildSqlCliHistoryTask", () => {
       sql: {
         type: "postgresql" as const,
         dsn_hash: "sha256:old",
+        dsn: "postgres://legacy/db",
         connection: { host: "legacy" },
       },
     };
@@ -100,6 +110,7 @@ describe("buildSqlCliHistoryTask", () => {
       {
         taskMode: "sql",
         dsnHash: "sha256:new",
+        dsn: "postgres://next@host/db",
         connection: { host: "next", database: "analytics" },
       },
       existing,
@@ -107,5 +118,6 @@ describe("buildSqlCliHistoryTask", () => {
     expect(updated?.sql?.dsn_hash).toBe("sha256:new");
     expect(updated?.sql?.connection?.host).toBe("next");
     expect(updated?.sql?.connection?.database).toBe("analytics");
+    expect(updated?.sql?.dsn).toBe("postgres://next@host/db");
   });
 });

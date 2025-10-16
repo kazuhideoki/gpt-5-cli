@@ -61,7 +61,12 @@ describe("sql CLI integration", () => {
       last_response_id?: string;
       task?: {
         mode?: string;
-        sql?: { type?: string; dsn_hash?: string; connection?: Record<string, unknown> };
+        sql?: {
+          type?: string;
+          dsn?: string;
+          dsn_hash?: string;
+          connection?: Record<string, unknown>;
+        };
       };
       turns?: Array<{ role?: string; text?: string }>;
       request_count?: number;
@@ -73,6 +78,7 @@ describe("sql CLI integration", () => {
     expect(entry.task?.mode).toBe("sql");
     expect(entry.task?.sql?.type).toBe("postgresql");
     expect(entry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(entry.task?.sql?.dsn).toBe(testDsn);
     expect(entry.task?.sql?.connection).toEqual({
       host: "127.0.0.1",
       port: 6543,
@@ -156,7 +162,7 @@ describe("sql CLI integration", () => {
     });
     expect(firstEntry.request_count).toBe(1);
 
-    const second = await runSqlCli(["--dsn", testDsn, "-c", "2回目"], env);
+    const second = await runSqlCli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
     expect(second.stdout).toContain("[gpt-5-cli-sql]");
     expect(extractUserLines(second.stdout).at(-1)).toBe("SQL OK (2)");
@@ -166,8 +172,9 @@ describe("sql CLI integration", () => {
     const secondEntry = historyAfterSecond[0];
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(secondEntry.task?.sql?.dsn).toBe(testDsn);
 
-    const third = await runSqlCli(["--dsn", testDsn, "-c", "3回目"], env);
+    const third = await runSqlCli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
     expect(third.stdout).toContain("[gpt-5-cli-sql]");
     expect(extractUserLines(third.stdout).at(-1)).toBe("SQL OK (3)");
@@ -177,8 +184,9 @@ describe("sql CLI integration", () => {
     const thirdEntry = historyAfterThird[0];
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(thirdEntry.task?.sql?.dsn).toBe(testDsn);
 
-    const summary = await runSqlCli(["--dsn", testDsn, "--compact", "1"], env);
+    const summary = await runSqlCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
     expect(summary.stdout).toContain("[gpt-5-cli-sql] compact: history=1");
     expect(extractUserLines(summary.stdout).at(-1)).toBe("SQL Summary");
@@ -187,6 +195,7 @@ describe("sql CLI integration", () => {
     expect(historyAfterSummary.length).toBe(1);
     const summaryEntry = historyAfterSummary[0];
     expect(summaryEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(summaryEntry.task?.sql?.dsn).toBe(testDsn);
     expect(summaryEntry.turns?.length).toBe(1);
     expect(summaryEntry.turns?.[0]?.role).toBe("system");
     expect(summaryEntry.turns?.[0]?.text).toBe("SQL Summary");
