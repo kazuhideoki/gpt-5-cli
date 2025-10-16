@@ -517,13 +517,13 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
 
     const mermaidContext = ensureMermaidContext(options);
 
-    const imageInfo = prepareImageData(options.imagePath, "[gpt-5-cli-mermaid]");
+    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli-mermaid]");
     const request = buildRequest({
       options,
       context,
       inputText: determine.inputText,
       systemPrompt,
-      imageDataUrl: imageInfo.dataUrl,
+      imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-mermaid]",
       additionalSystemMessages:

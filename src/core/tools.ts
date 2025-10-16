@@ -287,7 +287,9 @@ function normalizeTableIdentifiers(
     return undefined;
   }
   if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${fieldName} must be a non-empty array of { schema_name, table_name } objects.`);
+    throw new Error(
+      `${fieldName} must be a non-empty array of { schema_name, table_name } objects.`,
+    );
   }
   const normalized: SqlTableIdentifier[] = [];
   for (const entry of value) {
@@ -1191,31 +1193,31 @@ export const SQL_FETCH_COLUMN_SCHEMA_TOOL: ToolRegistration<SqlFetchColumnSchema
             description: "Filter by table names (exact match).",
             items: { type: "string" },
           },
-        column_names: {
-          type: "array",
-          description: "Filter by column names (exact match).",
-          items: { type: "string" },
-        },
-        tables: {
-          type: "array",
-          description: "Filter by (schema_name, table_name) pairs.",
-          items: {
-            type: "object",
-            properties: {
-              schema_name: { type: "string" },
-              table_name: { type: "string" },
+          column_names: {
+            type: "array",
+            description: "Filter by column names (exact match).",
+            items: { type: "string" },
+          },
+          tables: {
+            type: "array",
+            description: "Filter by (schema_name, table_name) pairs.",
+            items: {
+              type: "object",
+              properties: {
+                schema_name: { type: "string" },
+                table_name: { type: "string" },
+              },
+              required: ["schema_name", "table_name"],
+              additionalProperties: false,
             },
-            required: ["schema_name", "table_name"],
-            additionalProperties: false,
           },
         },
+        required: [],
+        additionalProperties: false,
       },
-      required: [],
-      additionalProperties: false,
     },
-  },
-  handler: sqlFetchColumnSchemaTool,
-};
+    handler: sqlFetchColumnSchemaTool,
+  };
 
 export const SQL_FETCH_ENUM_SCHEMA_TOOL: ToolRegistration<SqlFetchEnumSchemaArgs, ToolResult> = {
   definition: {

@@ -351,13 +351,13 @@ async function main(): Promise<void> {
       },
     );
 
-    const imageInfo = prepareImageData(options.imagePath, "[gpt-5-cli]");
+    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]");
     const request = buildRequest({
       options,
       context,
       inputText: determine.inputText,
       systemPrompt,
-      imageDataUrl: imageInfo.dataUrl,
+      imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
       tools: ASK_FUNCTION_TOOLS,

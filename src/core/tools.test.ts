@@ -475,11 +475,7 @@ describe("SQL schema fetch tool queries", () => {
     expect(call.text).toMatch(/table_schema\s*=\s*ANY\(\$1::text\[\]\)/u);
     expect(call.text).toMatch(/table_name\s*=\s*ANY\(\$2::text\[\]\)/u);
     expect(call.text).toMatch(/table_type\s*=\s*ANY\(\$3::text\[\]\)/u);
-    expect(call.values).toEqual([
-      ["public", "sales"],
-      ["reservations"],
-      ["BASE TABLE"],
-    ]);
+    expect(call.values).toEqual([["public", "sales"], ["reservations"], ["BASE TABLE"]]);
   });
 
   it("sql_fetch_column_schema は列フィルタをクエリへ反映する", async () => {
@@ -494,11 +490,7 @@ describe("SQL schema fetch tool queries", () => {
     expect(queryCalls).toHaveLength(1);
     const [call] = queryCalls;
     expect(call.text).toMatch(/column_name\s*=\s*ANY\(\$3::text\[\]\)/u);
-    expect(call.values).toEqual([
-      ["public"],
-      ["reservations"],
-      ["user_id", "created_at"],
-    ]);
+    expect(call.values).toEqual([["public"], ["reservations"], ["user_id", "created_at"]]);
   });
 
   it("sql_fetch_column_schema は tables で複数テーブルの列を取得できる", async () => {
@@ -515,7 +507,9 @@ describe("SQL schema fetch tool queries", () => {
     const [call] = queryCalls;
     expect(call.text).toMatch(/\(table_schema = \$1 AND table_name = \$2\)/u);
     expect(call.text).toMatch(/\(table_schema = \$3 AND table_name = \$4\)/u);
-    expect(call.text).toMatch(/\((?:table_schema = \$1 AND table_name = \$2).*OR.*(table_schema = \$3 AND table_name = \$4)\)/u);
+    expect(call.text).toMatch(
+      /\((?:table_schema = \$1 AND table_name = \$2).*OR.*(table_schema = \$3 AND table_name = \$4)\)/u,
+    );
     expect(call.values).toEqual(["public", "reservations", "sales", "orders"]);
   });
 
@@ -548,11 +542,7 @@ describe("SQL schema fetch tool queries", () => {
     expect(call.text).toMatch(/schemaname\s*=\s*ANY\(\$1::text\[\]\)/u);
     expect(call.text).toMatch(/tablename\s*=\s*ANY\(\$2::text\[\]\)/u);
     expect(call.text).toMatch(/indexname\s*=\s*ANY\(\$3::text\[\]\)/u);
-    expect(call.values).toEqual([
-      ["public"],
-      ["reservations"],
-      ["reservations_user_idx"],
-    ]);
+    expect(call.values).toEqual([["public"], ["reservations"], ["reservations_user_idx"]]);
   });
 });
 

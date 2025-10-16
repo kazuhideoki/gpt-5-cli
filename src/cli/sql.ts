@@ -604,13 +604,13 @@ async function runSqlCli(): Promise<void> {
     process.env.POSTGRES_DSN = sqlEnv.dsn;
     options.dsn = sqlEnv.dsn;
 
-    const imageInfo = prepareImageData(options.imagePath, LOG_LABEL);
+    const imageDataUrl = prepareImageData(options.imagePath, LOG_LABEL);
     const request = buildRequest({
       options,
       context,
       inputText: determine.inputText,
       systemPrompt,
-      imageDataUrl: imageInfo.dataUrl,
+      imageDataUrl,
       defaults,
       logLabel: LOG_LABEL,
       additionalSystemMessages: buildSqlInstructionMessages({

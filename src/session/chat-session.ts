@@ -199,15 +199,12 @@ function detectImageMime(filePath: string): string {
   }
 }
 
-interface ImageInfo {
-  dataUrl?: string;
-  mime?: string;
-  resolvedPath?: string;
-}
-
-export function prepareImageData(imagePath: string | undefined, logLabel: string): ImageInfo {
+export function prepareImageData(
+  imagePath: string | undefined,
+  logLabel: string,
+): string | undefined {
   if (!imagePath) {
-    return {};
+    return undefined;
   }
   const resolved = resolveImagePath(imagePath);
   const mime = detectImageMime(resolved);
@@ -218,7 +215,7 @@ export function prepareImageData(imagePath: string | undefined, logLabel: string
   }
   const dataUrl = `data:${mime};base64,${base64}`;
   console.log(`${logLabel} image_attached: ${resolved} (${mime})`);
-  return { dataUrl, mime, resolvedPath: resolved };
+  return dataUrl;
 }
 
 function collectFunctionToolCalls(response: Response): ResponseFunctionToolCall[] {

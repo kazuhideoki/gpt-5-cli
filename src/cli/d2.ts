@@ -514,13 +514,13 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
 
     const d2Context = ensureD2Context(options);
 
-    const imageInfo = prepareImageData(options.imagePath, "[gpt-5-cli-d2]");
+    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli-d2]");
     const request = buildRequest({
       options,
       context,
       inputText: determine.inputText,
       systemPrompt,
-      imageDataUrl: imageInfo.dataUrl,
+      imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages:
