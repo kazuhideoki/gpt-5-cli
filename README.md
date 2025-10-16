@@ -139,7 +139,5 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 
 ## レイヤー境界のLint
 
-- 依存方向を `core <- session <- cli` とし、`core` から `session/cli` への参照を禁止しています。
-  - 設定は `biome.json` の `overrides` で `noRestrictedImports` を適用。
-- 現状は `session` から `cli/types` への限定的依存が残っているため、`session -> cli` の禁止はまだ有効化していません。
-  - 将来的に `cli/types` の型を `core` 側へ移動できたら、`session -> cli` の制限も追加してください。
+- 依存方向は `core <- session <- cli` のみ許容し、`biome.json` の `noRestrictedImports` で `core` から `session/cli` への参照を禁止しています。
+- 同じ設定で `session` から `cli` への参照も禁止済みです。詳細な運用ルールは `AGENTS.md` の行動規範（R4）を参照してください。

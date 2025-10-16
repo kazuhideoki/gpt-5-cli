@@ -1,78 +1,90 @@
-# Repository Guidelines
+# Codex Agent Playbook — gpt-5-cli
 
-## プロジェクト構成とモジュール
+## 1. 役割と目的
 
-- `src/cli/` は default・d2・mermaid・sql 各モードのエントリーポイントと共通ランタイム (`runtime/`) を束ねる。`runtime/` では CLI 初期化や入力分岐などの共通処理を提供する。
-- `src/session/` は Responses API を利用したチャットセッションのサービス層。履歴同期やツール実行のオーケストレーションを担い、将来的に Agents SDK 用セッション (`agent-session.ts` 予定) を並列配置する。
-- `src/core/` は CLI から利用されるドメインロジック層。モジュール同士は `types.ts` で共有する型以外に依存を持たず、サービス層（例: `src/session/` や `src/cli/`）から横並びで組み合わせる設計。
-  - `config.ts` は設定値の読み込みと検証、および OpenAI API キー解決（`resolveOpenAIApiKey`）を担当し、他 core モジュールには依存しない。
-  - `tools.ts` は関数ツール定義とランタイム生成を担い、Responses API 用のツール配列 `buildCliToolList` もここから提供する。
-  - `options.ts`・`formatting.ts`・`prompts.ts`・`history.ts` は `types.ts` の型だけを参照する純粋なユーティリティ。
+- **あなたの役割**: `gpt-5-cli` の開発・保守を支援する開発エージェント。
+- **目的**: 既存設計を守りながら、コード・ドキュメント・テスト・PR を安全に更新すること。
+- **言語**: 最終的なユーザー向けの回答は **日本語** で出力すること。
 
-## ビルド・テスト・開発コマンド
+## 2. リポジトリ構成
 
-- `bun install`: 依存パッケージをインストール。
-- `bun run build`: TypeScript をコンパイルして `dist/` 以下を更新。
-- `bun run dev`: ask CLI を TypeScript ソースから起動。
-- `bun run dev:d2`: d2 CLI を TypeScript ソースから起動。
-- `bun run dev:mermaid`: mermaid CLI を TypeScript ソースから起動。
-- `bun run dev:sql`: SQL CLI を TypeScript ソースから起動。
-- `bun run start -- --help`: ビルド済み ask CLI のヘルプを確認。
-- `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`: 履歴機能の安定出力を検証するサンプル。
+以下は本リポジトリの構造と責務です。**推測せず**、必要に応じて該当ファイルを開いて確認してから編集してください。
 
-## コーディングスタイルと命名規約
+- `src/cli/` … `default`・`d2`・`mermaid`・`sql` 各モードのエントリーポイント群と共通ランタイム `runtime/` を束ねる。`runtime/` は CLI 初期化・入力分岐などの共通処理。
+- `src/session/` … Responses API を使うチャットセッションの **サービス層**。履歴同期とツール実行のオーケストレーションを担う。Agents SDK 用の `agent-session.ts` もここに並列配置されている。
+- `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/session/` や `src/cli/`）から横並びで組み合わせる設計。
+  - `config.ts` … 設定の読込・検証と API キー解決（`resolveOpenAIApiKey`）。**他 core モジュールに依存しない**。
+  - `tools.ts` … 関数ツール定義とランタイム生成。Responses API 用ツール配列 `buildCliToolList` を提供。
+  - `options.ts` / `formatting.ts` / `prompts.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
 
-- TypeScript は `strict` 設定、ES Modules (`type: module`) を採用。
-- インデントは 2 スペース、暗黙の `any` は禁止。
-- ログは `console.error` に送出し、ユーザー向けメッセージは `console.log` または `process.stdout.write` を利用。
-- ファイルの先頭にはコメントで概要と責務を明示すること
-- 関数・主要モジュールには JSDoc コメントを付与して意図を明示します。型はコメントでは無く Typescript 型定義すること
-- ファイル・識別子名は役割が伝わる英語名を使用し、CLI フラグは短縮形とロングオプションをペアで定義する方針です。
-- バリデーションやスキーマ検証が必要な場合は可能な限り `zod` を利用し、ランタイム整合性とエラーメッセージの統一を図ります。
-- `zod` でスキーマを定義した場合は `z.infer` で型を生成・共有し、同じ構造を手書きの `type`/`interface` と二重管理しないことを推奨します。
-- 繰り返し利用する既定値はマジックナンバー化せず、定数化すること。
-- モジュールの公開面は最小限とし、外部から利用しない型・スキーマ・ヘルパーは `export` しないで同一ファイル内に閉じ込める。
-- 依存方向は `core <- session <- cli` の一方向のみ許可します。
-- Biome で強制します（例: `biome.json` の `overrides`）。例外設定は設けません。
-  - `src/core/**/*` では `noRestrictedImports` により `@session/*`・`@cli/*`・相対 `../**/session/**`・`../**/cli/**` を禁止。
-  - `src/session/**/*` では `noRestrictedImports` により `@cli/*`・相対 `../**/cli/**` を禁止。
+**ビルド/開発コマンド**（よく使う順）
 
+- `bun run dev`（ask CLI を TS ソースから起動）
+- `bun run dev:d2` / `bun run dev:mermaid` / `bun run dev:sql`
+- `bun run build`（TS を `dist/` にコンパイル）
+- `bun run start -- --help`（ビルド済み ask CLI のヘルプ）
+- `GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json NO_COLOR=1 bun run start -- -r`（履歴機能の安定出力を検証）
 
-## テストガイドライン
+## 3. 行動規範
 
-- まず `bun run build` で型エラーがないか確認すること
-- 次に `bun run lint` と `bun run format:check` を必ず実行し、エラーや差分が無いことを確認してください。
-- そして `bun run test` を実行し、テストが全て成功することを確認してください。
-- 履歴関連変更時は前述の `-r` 例コマンドで出力差分を確認し、`jq . history_index.json` で JSON 整合性をチェックします。
-- 機能追加や更新では、必ず回帰を防ぐために `src/` 配下の対象モジュールと同じ階層へ `*.test.ts` の単体テストを配置し、`tests/` 配下には統合（integration）テストのみを追加してください。
-- 新しいメソッドや関数を追加したり設計を変更した場合は、影響範囲のテストが十分に揃っているかを点検し、依存モジュールのテストにも必要な更新が施されていることを確認してください。
+**R1. 型・モジュール方針**
 
-## コミットとPRガイドライン
+- TypeScript は `strict` で、ESM（`type: module`）。
+- インデントは 2 スペース。暗黙の `any` は禁止。
+- ファイル先頭に概要/責務コメントを置く。関数・主要モジュールには **JSDoc** を付与。型はコメントではなく **TypeScript の型定義**で表す。
+- 名前は役割が伝わる **英語** を用いる。CLI フラグ特に指示がなけれは **短縮形 + ロングオプション** をペアで用意。
 
-- コミットメッセージは Conventional Commits (`feat(cli): ...` / `fix(history): ...`) に従います。
-- PR には背景、実装概要、影響範囲、手動確認手順、関連 Issue を記載し、フラグ変更時は `README.md` と CLI ヘルプを同期させます。
-- Pull Request 説明には `bun run build` 結果や対話ログの抜粋など検証証跡を添付してください。
+**R2. スキーマ/検証**
 
-## 応答に関する指示
+- 可能な限り **`zod`** を使用。ランタイム整合性とエラーメッセージを統一する。
+- `zod` で定義したスキーマは **`z.infer`** で型共有し、同じ構造を手書きの `type/interface` と **二重管理しない**。
+- 既定値はマジックナンバー化せず定数化する。
 
-- 最終的なユーザーへの回答は日本語で行ってください。
+**R3. 公開面の最小化**
 
-## セキュリティと設定の注意
+- 外部から使わない型・スキーマ・ヘルパーは **`export` しない**。同一ファイルで閉じる。
 
-- `.env` をコミットせず、共有情報は `.env.example` に反映します。
-- 履歴ファイルには機微情報が含まれる可能性があるため、共有前に `GPT_5_CLI_HISTORY_INDEX_FILE` で書き出し先を変更するか、不要データを削除してください。
-- CLI ごとの `.env.ask` / `.env.d2` / `.env.mermaid` / `.env.sql` で共通 `.env` を上書きできる設計です。各 CLI 用 `.env.*` にも履歴ファイルパスを必ず定義してください。
-- Mermaid CLI で Markdown を扱う場合は、必ず ```mermaid```（もしくは `:::mermaid`）ブロックにコードを入れてください。`.mmd` ファイルであればそのまま検証できます。
+**R4. 参照規律（Biome で強制）**
 
-## 個人用スクリプトとしての運用
+- `core` から `@session/*`・`@cli/*`・相対 `../**/session/**`・`../**/cli/**` への import を禁止。
+- `session` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
+- 例外設定は設けない（`biome.json` の `overrides` で強制）。
 
-- 開発効率を優先し、フォールバック処理は不要です。入力検証で異常を検知した場合は即座にエラーを投げ、早期に失敗を把握してください。
-- メソッドやコードパスは指示がない限り最小限の完成度で構いません。追加要件が生じたタイミングで拡張してください。基本的に後方互換性も不要です。
+**R5. ログ/出力**
 
-## 作業ツール
+- ログは **`console.error`**、ユーザー向けメッセージは **`console.log` または `process.stdout.write`**。
 
-可能なら mcp\_\_serena 使って作業して
+**R6. 失敗の扱い**
 
-## タスク計画
+- 個人用スクリプト運用を前提に **フォールバック不要**。入力検証で異常を検知したら **即座に例外** を投げ早期失敗とする。
+- メソッド/コードパスは **最小限実装で可**。追加要件時に拡張。**後方互換は不要**。
 
-タスクに関わる詳細は plan\*.md を参照してください
+**R7. 回答スタイル**
+
+- 最終回答は **日本語**。ユーザー向けメッセージでは必要以上に専門用語を増やさない。
+
+## 4. 開発フロー
+
+**毎回この順に実行・合格してから PR**：
+
+1. `bun run build` で型エラーがないこと。
+2. `bun run lint` と `bun run format:check` を実行し、差分/エラーがないこと。
+3. `bun run test` の全テスト成功。
+4. 履歴関連変更がある場合：上記 `-r` 例コマンドで出力差分を目視確認し、`jq . history_index.json` で JSON 整合性確認。
+5. 新機能や変更では、対象モジュールと **同じ階層に `*.test.ts`** を追加。`tests/` には **統合テストのみ** を置く。
+6. 設計/メソッドを変更した場合、**依存モジュールのテストも更新** されていることを確認。
+7. 実装は小さく刻み、PR では再現手順と確認コマンドを具体的に記載する。
+
+## 5. コミットと PR ガイドライン
+
+- **Commit**: Conventional Commits に従う（例: `feat(cli): ...`, `fix(history): ...`）。
+- **PR 内容**: 背景 / 実装概要 / 影響範囲 / 手動確認手順 / 関連 Issue を記載。フラグ変更時は **`README.md` と CLI ヘルプを同期**。
+- **検証証跡**: `bun run build` の結果や対話ログの抜粋など、**検証証跡** を PR に添付。
+
+## 6. 作業ツール
+
+- 可能なら **`mcp__serena`** を使って作業する。
+
+## 7. タスク計画
+
+- タスクの詳細は **`plan*.md`** を参照する。
