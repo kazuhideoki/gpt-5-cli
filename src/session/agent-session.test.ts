@@ -35,7 +35,6 @@ const BASE_OPTIONS: CliOptions = {
   modelExplicit: false,
   effortExplicit: false,
   verbosityExplicit: false,
-  taskModeExplicit: false,
   hasExplicitHistory: false,
   helpRequested: false,
 };

@@ -42,7 +42,6 @@ export interface CliOptions {
   modelExplicit: boolean;
   effortExplicit: boolean;
   verbosityExplicit: boolean;
-  taskModeExplicit: boolean;
   hasExplicitHistory: boolean;
   helpRequested: boolean;
 }

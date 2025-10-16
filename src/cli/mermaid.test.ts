@@ -44,7 +44,6 @@ function createOptions(overrides: Partial<MermaidCliOptions> = {}): MermaidCliOp
     modelExplicit: false,
     effortExplicit: false,
     verbosityExplicit: false,
-    taskModeExplicit: false,
     mermaidFileExplicit: false,
     maxIterations: 8,
     maxIterationsExplicit: false,
@@ -59,15 +58,7 @@ describe("mermaid parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
-    expect(options.taskModeExplicit).toBe(false);
     expect(options.args).toEqual(["ダイアグラム"]);
-  });
-
-  it("互換フラグ -M を指定すると明示扱いになる", () => {
-    const defaults = createDefaults();
-    const options = parseArgs(["-M", "diagram"], defaults);
-    expect(options.taskMode).toBe("mermaid");
-    expect(options.taskModeExplicit).toBe(true);
   });
 
   it("--mermaid-iterations でツール呼び出し上限を設定できる", () => {

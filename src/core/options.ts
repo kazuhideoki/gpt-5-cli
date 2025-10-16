@@ -53,7 +53,7 @@ export function expandLegacyShortFlags(argv: string[]): string[] {
 
   const errorForUnknown = (flag: string): Error =>
     new Error(
-      `Invalid option: -${flag} は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num}, -D, -F を使用してください。`,
+      `Invalid option: -${flag} は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num}, -F を使用してください。`,
     );
 
   for (const arg of argv) {
@@ -66,7 +66,7 @@ export function expandLegacyShortFlags(argv: string[]): string[] {
       passThrough = true;
       continue;
     }
-    if (arg === "-D" || arg === "-F") {
+    if (arg === "-F") {
       result.push(arg);
       continue;
     }

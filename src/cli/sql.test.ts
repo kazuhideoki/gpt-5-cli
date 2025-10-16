@@ -61,7 +61,6 @@ describe("buildSqlCliHistoryTask", () => {
     const task = buildSqlCliHistoryTask(
       {
         taskMode: "sql",
-        taskModeExplicit: false,
         dsnHash: "sha256:new",
         connection: { host: "db", port: 5432, database: "analytics", user: "report" },
       },
@@ -84,7 +83,6 @@ describe("buildSqlCliHistoryTask", () => {
     const updated = buildSqlCliHistoryTask(
       {
         taskMode: "sql",
-        taskModeExplicit: false,
         dsnHash: "sha256:new",
         connection: { host: "next", database: "analytics" },
       },

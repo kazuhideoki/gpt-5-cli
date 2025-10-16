@@ -70,7 +70,6 @@ interface D2CliHistoryD2Context {
 
 interface D2CliHistoryTaskOptions {
   taskMode: D2CliOptions["taskMode"];
-  taskModeExplicit: boolean;
   d2FilePath?: string;
   d2FileExplicit: boolean;
 }
@@ -80,30 +79,22 @@ function buildD2CliHistoryTask(
   previousTask?: D2CliHistoryTask,
   d2Context?: D2CliHistoryD2Context,
 ): D2CliHistoryTask | undefined {
-  if (options.taskMode === "d2") {
-    const task: D2CliHistoryTask = { mode: "d2" };
-    let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-    const contextPath = d2Context?.absolutePath;
-    let filePath = contextPath ?? options.d2FilePath;
-    if (!filePath && !options.d2FileExplicit) {
-      filePath = d2Meta?.file_path;
-    }
-    if (contextPath) {
-      d2Meta = { ...d2Meta, file_path: contextPath };
-    } else if (filePath) {
-      d2Meta = { ...d2Meta, file_path: filePath };
-    }
-    if (d2Meta && Object.keys(d2Meta).length > 0) {
-      task.d2 = d2Meta;
-    }
-    return task;
+  const task: D2CliHistoryTask = { mode: options.taskMode };
+  let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+  const contextPath = d2Context?.absolutePath;
+  let filePath = contextPath ?? options.d2FilePath;
+  if (!filePath && !options.d2FileExplicit) {
+    filePath = d2Meta?.file_path;
   }
-
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
+  if (contextPath) {
+    d2Meta = { ...d2Meta, file_path: contextPath };
+  } else if (filePath) {
+    d2Meta = { ...d2Meta, file_path: filePath };
   }
-
-  return previousTask;
+  if (d2Meta && Object.keys(d2Meta).length > 0) {
+    task.d2 = d2Meta;
+  }
+  return task;
 }
 
 /**
@@ -184,7 +175,6 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    taskModeExplicit: z.boolean(),
     d2FileExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
@@ -363,7 +353,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const taskModeExplicit = false;
   const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
   const helpRequested = Boolean(opts.help);
@@ -388,7 +377,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      taskModeExplicit,
       d2FileExplicit,
       maxIterations,
       maxIterationsExplicit,
@@ -520,14 +508,8 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       determine.previousTitle,
       {
         logLabel: "[gpt-5-cli-d2]",
-        synchronizeWithHistory: ({ options: nextOptions, activeEntry, logWarning }) => {
-          if (!nextOptions.taskModeExplicit) {
-            const historyMode = activeEntry.task?.mode;
-            if (historyMode && historyMode !== "d2") {
-              logWarning("warn: 選択した履歴は d2 モードではありません (新規開始)");
-            }
-            nextOptions.taskMode = "d2";
-          }
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
+          nextOptions.taskMode = "d2";
 
           if (!nextOptions.d2FileExplicit) {
             const historyFile = activeEntry.task?.d2?.file_path;
@@ -570,7 +552,6 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       const historyTask = buildD2CliHistoryTask(
         {
           taskMode: options.taskMode,
-          taskModeExplicit: options.taskModeExplicit,
           d2FilePath: options.d2FilePath,
           d2FileExplicit: options.d2FileExplicit,
         },

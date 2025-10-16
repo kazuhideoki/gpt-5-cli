@@ -84,7 +84,6 @@ export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
 
 interface SqlCliHistoryTaskOptions {
   taskMode: SqlCliOptions["taskMode"];
-  taskModeExplicit: boolean;
   dsnHash: string;
   connection: SqlConnectionMetadata;
 }
@@ -108,7 +107,6 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    taskModeExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
     maxIterations: z.number().int().positive(),
@@ -283,7 +281,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
-  const taskModeExplicit = false;
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -305,7 +302,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      taskModeExplicit,
       hasExplicitHistory,
       helpRequested,
       maxIterations,
@@ -473,34 +469,26 @@ export function buildSqlCliHistoryTask(
   options: SqlCliHistoryTaskOptions,
   previousTask?: SqlCliHistoryTask,
 ): SqlCliHistoryTask | undefined {
-  if (options.taskMode === "sql") {
-    const task: SqlCliHistoryTask = { mode: "sql" };
-    const normalizedConnection = Object.fromEntries(
-      Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
-    );
-    const sqlMeta = {
-      type: "postgresql" as const,
-      dsn_hash: options.dsnHash,
-      connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
+  const task: SqlCliHistoryTask = { mode: options.taskMode };
+  const normalizedConnection = Object.fromEntries(
+    Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
+  );
+  const sqlMeta = {
+    type: "postgresql" as const,
+    dsn_hash: options.dsnHash,
+    connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
+  };
+
+  if (previousTask?.sql) {
+    task.sql = {
+      ...previousTask.sql,
+      ...sqlMeta,
     };
-
-    if (previousTask?.sql) {
-      task.sql = {
-        ...previousTask.sql,
-        ...sqlMeta,
-      };
-    } else {
-      task.sql = sqlMeta;
-    }
-
-    return task;
+  } else {
+    task.sql = sqlMeta;
   }
 
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
-  }
-
-  return previousTask;
+  return task;
 }
 
 /**
@@ -545,14 +533,8 @@ async function runSqlCli(): Promise<void> {
       determine.previousTitle,
       {
         logLabel: LOG_LABEL,
-        synchronizeWithHistory: ({ options: nextOptions, activeEntry, logWarning }) => {
-          if (!nextOptions.taskModeExplicit) {
-            const historyMode = activeEntry.task?.mode;
-            if (historyMode && historyMode !== "sql") {
-              logWarning("warn: 選択した履歴は sql モードではありません (新規開始)");
-            }
-            nextOptions.taskMode = "sql";
-          }
+        synchronizeWithHistory: ({ options: nextOptions }) => {
+          nextOptions.taskMode = "sql";
         },
       },
     );
@@ -594,7 +576,6 @@ async function runSqlCli(): Promise<void> {
       const historyTask = buildSqlCliHistoryTask(
         {
           taskMode: options.taskMode,
-          taskModeExplicit: options.taskModeExplicit,
           dsnHash: sqlEnv.hash,
           connection: sqlEnv.connection,
         },

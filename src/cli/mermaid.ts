@@ -65,7 +65,6 @@ interface MermaidCliHistoryDiagramContext {
 
 interface MermaidCliHistoryTaskOptions {
   taskMode: MermaidCliOptions["taskMode"];
-  taskModeExplicit: boolean;
   mermaidFilePath?: string;
   mermaidFileExplicit: boolean;
 }
@@ -75,30 +74,22 @@ function buildMermaidCliHistoryTask(
   previousTask?: MermaidCliHistoryTask,
   mermaidContext?: MermaidCliHistoryDiagramContext,
 ): MermaidCliHistoryTask | undefined {
-  if (options.taskMode === "mermaid") {
-    const task: MermaidCliHistoryTask = { mode: "mermaid" };
-    let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
-    const contextPath = mermaidContext?.absolutePath;
-    let filePath = contextPath ?? options.mermaidFilePath;
-    if (!filePath && !options.mermaidFileExplicit) {
-      filePath = mermaidMeta?.file_path;
-    }
-    if (contextPath) {
-      mermaidMeta = { ...mermaidMeta, file_path: contextPath };
-    } else if (filePath) {
-      mermaidMeta = { ...mermaidMeta, file_path: filePath };
-    }
-    if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
-      task.mermaid = mermaidMeta;
-    }
-    return task;
+  const task: MermaidCliHistoryTask = { mode: options.taskMode };
+  let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
+  const contextPath = mermaidContext?.absolutePath;
+  let filePath = contextPath ?? options.mermaidFilePath;
+  if (!filePath && !options.mermaidFileExplicit) {
+    filePath = mermaidMeta?.file_path;
   }
-
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
+  if (contextPath) {
+    mermaidMeta = { ...mermaidMeta, file_path: contextPath };
+  } else if (filePath) {
+    mermaidMeta = { ...mermaidMeta, file_path: filePath };
   }
-
-  return previousTask;
+  if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
+    task.mermaid = mermaidMeta;
+  }
+  return task;
 }
 
 /**
@@ -127,7 +118,6 @@ function printHelp(defaults: CliDefaults, options: MermaidCliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
-  console.log("  -M          : Mermaidモードを明示（互換フラグ） (--mermaid-mode)");
   console.log("  -F <path>   : Mermaid出力ファイルパスを指定 (--mermaid-file)");
   console.log("  -I <count>  : Mermaidモード時のツール呼び出し上限 (--mermaid-iterations)");
   console.log(
@@ -183,7 +173,6 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    taskModeExplicit: z.boolean(),
     mermaidFileExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
@@ -271,7 +260,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
-    .option("-M, --mermaid-mode", "Mermaid形式の生成モードを有効にします")
     .option("-F, --mermaid-file <path>", "Mermaid出力を保存するファイルパスを指定します")
     .option(
       "-I, --mermaid-iterations <count>",
@@ -305,7 +293,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     show?: string | boolean;
     debug?: boolean;
     image?: string;
-    mermaidMode?: boolean;
     mermaidFile?: string;
     mermaidIterations?: number;
     compact?: number;
@@ -368,7 +355,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const taskModeExplicit = program.getOptionValueSource("mermaidMode") === "cli";
   const mermaidFileExplicit = program.getOptionValueSource("mermaidFile") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("mermaidIterations") === "cli";
   const helpRequested = Boolean(opts.help);
@@ -393,7 +379,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      taskModeExplicit,
       mermaidFileExplicit,
       maxIterations,
       maxIterationsExplicit,
@@ -525,14 +510,8 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       determine.previousTitle,
       {
         logLabel: "[gpt-5-cli-mermaid]",
-        synchronizeWithHistory: ({ options: nextOptions, activeEntry, logWarning }) => {
-          if (!nextOptions.taskModeExplicit) {
-            const historyMode = activeEntry.task?.mode;
-            if (historyMode && historyMode !== "mermaid") {
-              logWarning("warn: 選択した履歴は mermaid モードではありません (新規開始)");
-            }
-            nextOptions.taskMode = "mermaid";
-          }
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
+          nextOptions.taskMode = "mermaid";
 
           if (!nextOptions.mermaidFileExplicit) {
             const historyFile = activeEntry.task?.mermaid?.file_path;
@@ -577,7 +556,6 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       const historyTask = buildMermaidCliHistoryTask(
         {
           taskMode: options.taskMode,
-          taskModeExplicit: options.taskModeExplicit,
           mermaidFilePath: options.mermaidFilePath,
           mermaidFileExplicit: options.mermaidFileExplicit,
         },

@@ -44,7 +44,6 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     modelExplicit: false,
     effortExplicit: false,
     verbosityExplicit: false,
-    taskModeExplicit: false,
     d2FileExplicit: false,
     maxIterations: 8,
     maxIterationsExplicit: false,
@@ -59,15 +58,7 @@ describe("d2 parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("d2");
-    expect(options.taskModeExplicit).toBe(false);
     expect(options.args).toEqual(["ダイアグラム"]);
-  });
-
-  it("互換フラグ -D を指定すると明示扱いになる", () => {
-    const defaults = createDefaults();
-    const options = parseArgs(["-D", "diagram"], defaults);
-    expect(options.taskMode).toBe("d2");
-    expect(options.taskModeExplicit).toBe(true);
   });
 
   it("--d2-iterations でツール呼び出し上限を設定できる", () => {

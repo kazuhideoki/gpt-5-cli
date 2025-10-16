@@ -31,7 +31,6 @@ export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
 
 interface AskCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
-  taskModeExplicit: boolean;
 }
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
@@ -42,11 +41,10 @@ function buildAskCliHistoryTask(
   options: AskCliHistoryTaskOptions,
   previousTask?: AskCliHistoryTask,
 ): AskCliHistoryTask | undefined {
-  if (options.taskModeExplicit) {
-    return { mode: options.taskMode };
-  }
-
-  return previousTask;
+  return {
+    ...previousTask,
+    mode: options.taskMode,
+  };
 }
 
 /**
@@ -118,7 +116,6 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    taskModeExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
   })
@@ -272,7 +269,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const taskModeExplicit = false;
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -294,7 +290,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      taskModeExplicit,
       hasExplicitHistory,
       helpRequested,
     });
@@ -407,7 +402,6 @@ async function main(): Promise<void> {
       const historyTask = buildAskCliHistoryTask(
         {
           taskMode: options.taskMode,
-          taskModeExplicit: options.taskModeExplicit,
         },
         previousTask,
       );
