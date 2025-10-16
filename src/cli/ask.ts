@@ -302,29 +302,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   }
 }
 
-/**
- * CLIオプションから次の入力アクションを決定する。
- * 履歴操作が指定されている場合は該当処理を実行して終了する。
- *
- * @param options 解析済みオプション。
- * @param historyStore 履歴管理ストア。
- * @param defaults 既定値セット。
- * @returns 入力テキストまたは終了指示。
- */
-/**
- * 履歴とオプションをもとに、今回の対話コンテキストを構築する。
- *
- * @param options CLIオプション（必要に応じて上書きされる）。
- * @param historyStore 履歴ストア。
- * @param inputText 現在のユーザー入力。
- * @param initialActiveEntry 既に選択された履歴エントリ。
- * @param explicitPrevId 明示的に指定されたレスポンスID。
- * @param explicitPrevTitle 明示的に指定されたタイトル。
- * @returns 対話に必要なコンテキスト。
- */
-/**
- * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
- */
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
