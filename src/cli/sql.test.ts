@@ -13,7 +13,7 @@ const defaults: CliDefaults = {
   verbosity: "low",
   historyIndexPath: "/tmp/history.json",
   promptsDir: "/tmp/prompts",
-  maxIterations: 6,
+  maxIterations: 10,
 };
 
 describe("parseArgs", () => {

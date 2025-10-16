@@ -20,7 +20,7 @@ function createDefaults(): CliDefaults {
     verbosity: "low",
     historyIndexPath: "/tmp/history.json",
     promptsDir: "/tmp/prompts",
-    maxIterations: 8,
+    maxIterations: 10,
   };
 }
 
@@ -45,7 +45,7 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     effortExplicit: false,
     verbosityExplicit: false,
     d2FileExplicit: false,
-    maxIterations: 8,
+    maxIterations: 10,
     maxIterationsExplicit: false,
     hasExplicitHistory: false,
     helpRequested: false,
