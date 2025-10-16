@@ -8,7 +8,10 @@ import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   buildAgentsToolList,
@@ -19,6 +22,7 @@ import {
   type ToolResult,
 } from "./tools.js";
 import type { ResponseFunctionToolCall } from "openai/resources/responses/responses";
+import { Client } from "pg";
 
 function createCall(name: string, args: Record<string, unknown>): ResponseFunctionToolCall {
   return {
@@ -35,7 +39,10 @@ const D2_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL]
 const MERMAID_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 const SQL_TOOLSET = [
   READ_FILE_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
@@ -70,14 +77,25 @@ describe("tool registration lists", () => {
 
   it("最小構成には SQL 系ツールが含まれない", () => {
     const toolNames = MINIMAL_FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).not.toContain("sql_fetch_schema");
+    expect(toolNames).not.toContain("sql_fetch_table_schema");
+    expect(toolNames).not.toContain("sql_fetch_column_schema");
+    expect(toolNames).not.toContain("sql_fetch_enum_schema");
+    expect(toolNames).not.toContain("sql_fetch_index_schema");
     expect(toolNames).not.toContain("sql_dry_run");
     expect(toolNames).not.toContain("sql_format");
   });
 
   it("SQL 向け拡張セットを構築できる", () => {
     const toolNames = SQL_FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).toEqual(["read_file", "sql_fetch_schema", "sql_dry_run", "sql_format"]);
+    expect(toolNames).toEqual([
+      "read_file",
+      "sql_fetch_table_schema",
+      "sql_fetch_column_schema",
+      "sql_fetch_enum_schema",
+      "sql_fetch_index_schema",
+      "sql_dry_run",
+      "sql_format",
+    ]);
   });
 
   it("ワークスペース操作向け拡張セットを構築できる", () => {
@@ -293,17 +311,24 @@ describe("executeFunctionToolCall", () => {
     expect(String(result.message)).toContain("POSTGRES_DSN");
   });
 
-  it("sql_fetch_schema は DSN 未設定時にエラーを返す", async () => {
+  it("SQL スキーマ系ツールは DSN 未設定時にエラーを返す", async () => {
     delete process.env.POSTGRES_DSN;
-    const call = createCall("sql_fetch_schema", {});
-    const result = JSON.parse(
-      await executeSqlToolCall(call, {
-        cwd: tempDir,
-        log: () => {},
-      }),
-    );
-    expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("POSTGRES_DSN");
+    const calls = [
+      createCall("sql_fetch_table_schema", {}),
+      createCall("sql_fetch_column_schema", {}),
+      createCall("sql_fetch_enum_schema", {}),
+      createCall("sql_fetch_index_schema", {}),
+    ];
+    for (const call of calls) {
+      const result = JSON.parse(
+        await executeSqlToolCall(call, {
+          cwd: tempDir,
+          log: () => {},
+        }),
+      );
+      expect(result.success).toBe(false);
+      expect(String(result.message)).toContain("POSTGRES_DSN");
+    }
   });
 
   it("sql_format は指定バイナリで整形できる", async () => {
@@ -386,6 +411,148 @@ describe("executeFunctionToolCall", () => {
     );
     expect(result.success).toBe(false);
     expect(String(result.message)).toContain("SELECT 文のみ");
+  });
+});
+
+describe("SQL schema fetch tool queries", () => {
+  type QueryCall = { text: string; values: unknown[] | undefined };
+
+  const originalConnect = Client.prototype.connect;
+  const originalQuery = Client.prototype.query;
+  const originalEnd = Client.prototype.end;
+
+  let queryCalls: QueryCall[];
+  let connectCount: number;
+  let endCount: number;
+
+  beforeEach(() => {
+    process.env.POSTGRES_DSN = "postgres://example.invalid/db";
+    queryCalls = [];
+    connectCount = 0;
+    endCount = 0;
+
+    Client.prototype.connect = async function mockConnect() {
+      connectCount += 1;
+    };
+    Client.prototype.query = async function mockQuery(
+      text: string,
+      values?: unknown[],
+    ): Promise<{ rows: unknown[] }> {
+      queryCalls.push({ text, values });
+      return { rows: [] };
+    };
+    Client.prototype.end = async function mockEnd() {
+      endCount += 1;
+    };
+  });
+
+  afterEach(() => {
+    Client.prototype.connect = originalConnect;
+    Client.prototype.query = originalQuery;
+    Client.prototype.end = originalEnd;
+  });
+
+  const context = {
+    cwd: process.cwd(),
+    log: () => {},
+  };
+
+  it("sql_fetch_table_schema は指定フィルタをクエリへ反映する", async () => {
+    const result = await SQL_FETCH_TABLE_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["public", " sales "],
+        table_names: ["reservations"],
+        table_types: ["base table"],
+      },
+      context,
+    );
+    expect(result.success).toBe(true);
+    expect(connectCount).toBe(1);
+    expect(endCount).toBe(1);
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/table_schema\s*NOT IN/u);
+    expect(call.text).toMatch(/table_schema\s*=\s*ANY\(\$1::text\[\]\)/u);
+    expect(call.text).toMatch(/table_name\s*=\s*ANY\(\$2::text\[\]\)/u);
+    expect(call.text).toMatch(/table_type\s*=\s*ANY\(\$3::text\[\]\)/u);
+    expect(call.values).toEqual([
+      ["public", "sales"],
+      ["reservations"],
+      ["BASE TABLE"],
+    ]);
+  });
+
+  it("sql_fetch_column_schema は列フィルタをクエリへ反映する", async () => {
+    await SQL_FETCH_COLUMN_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["public"],
+        table_names: ["reservations"],
+        column_names: [" user_id ", "created_at"],
+      },
+      context,
+    );
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/column_name\s*=\s*ANY\(\$3::text\[\]\)/u);
+    expect(call.values).toEqual([
+      ["public"],
+      ["reservations"],
+      ["user_id", "created_at"],
+    ]);
+  });
+
+  it("sql_fetch_column_schema は tables で複数テーブルの列を取得できる", async () => {
+    await SQL_FETCH_COLUMN_SCHEMA_TOOL.handler(
+      {
+        tables: [
+          { schema_name: "public", table_name: "reservations" },
+          { schema_name: "sales", table_name: "orders" },
+        ],
+      },
+      context,
+    );
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/\(table_schema = \$1 AND table_name = \$2\)/u);
+    expect(call.text).toMatch(/\(table_schema = \$3 AND table_name = \$4\)/u);
+    expect(call.text).toMatch(/\((?:table_schema = \$1 AND table_name = \$2).*OR.*(table_schema = \$3 AND table_name = \$4)\)/u);
+    expect(call.values).toEqual(["public", "reservations", "sales", "orders"]);
+  });
+
+  it("sql_fetch_enum_schema はスキーマと enum 名をフィルタする", async () => {
+    await SQL_FETCH_ENUM_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["types"],
+        enum_names: ["reservation_status"],
+      },
+      context,
+    );
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/n\.nspname\s*=\s*ANY\(\$1::text\[\]\)/u);
+    expect(call.text).toMatch(/t\.typname\s*=\s*ANY\(\$2::text\[\]\)/u);
+    expect(call.values).toEqual([["types"], ["reservation_status"]]);
+  });
+
+  it("sql_fetch_index_schema はインデックスフィルタをクエリへ反映する", async () => {
+    await SQL_FETCH_INDEX_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["public"],
+        table_names: ["reservations"],
+        index_names: ["reservations_user_idx"],
+      },
+      context,
+    );
+    expect(queryCalls).toHaveLength(1);
+    const [call] = queryCalls;
+    expect(call.text).toMatch(/schemaname\s*=\s*ANY\(\$1::text\[\]\)/u);
+    expect(call.text).toMatch(/tablename\s*=\s*ANY\(\$2::text\[\]\)/u);
+    expect(call.text).toMatch(/indexname\s*=\s*ANY\(\$3::text\[\]\)/u);
+    expect(call.values).toEqual([
+      ["public"],
+      ["reservations"],
+      ["reservations_user_idx"],
+    ]);
   });
 });
 

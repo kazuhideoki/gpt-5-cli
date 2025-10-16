@@ -48,11 +48,8 @@ describe("sql CLI integration", () => {
       return new Response("not found", { status: 404 });
     };
 
-    const env = {
-      ...createBaseEnv(server.port, historyPath),
-      POSTGRES_DSN: testDsn,
-    };
-    const result = await runSqlCli(["集計クエリを最適化して"], env);
+    const env = createBaseEnv(server.port, historyPath);
+    const result = await runSqlCli(["--dsn", testDsn, "集計クエリを最適化して"], env);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("[gpt-5-cli-sql]");
@@ -64,7 +61,12 @@ describe("sql CLI integration", () => {
       last_response_id?: string;
       task?: {
         mode?: string;
-        sql?: { type?: string; dsn_hash?: string; connection?: Record<string, unknown> };
+        sql?: {
+          type?: string;
+          dsn?: string;
+          dsn_hash?: string;
+          connection?: Record<string, unknown>;
+        };
       };
       turns?: Array<{ role?: string; text?: string }>;
       request_count?: number;
@@ -76,6 +78,7 @@ describe("sql CLI integration", () => {
     expect(entry.task?.mode).toBe("sql");
     expect(entry.task?.sql?.type).toBe("postgresql");
     expect(entry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(entry.task?.sql?.dsn).toBe(testDsn);
     expect(entry.task?.sql?.connection).toEqual({
       host: "127.0.0.1",
       port: 6543,
@@ -103,11 +106,8 @@ describe("sql CLI integration", () => {
       return new Response("not found", { status: 404 });
     };
 
-    const env = {
-      ...createBaseEnv(server.port, historyPath),
-      POSTGRES_DSN: testDsn,
-    };
-    const result = await runSqlCli(["失敗テスト"], env);
+    const env = createBaseEnv(server.port, historyPath);
+    const result = await runSqlCli(["--dsn", testDsn, "失敗テスト"], env);
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("[gpt-5-cli-sql]");
@@ -142,12 +142,9 @@ describe("sql CLI integration", () => {
       return new Response("not found", { status: 404 });
     };
 
-    const env = {
-      ...createBaseEnv(server.port, historyPath),
-      POSTGRES_DSN: testDsn,
-    };
+    const env = createBaseEnv(server.port, historyPath);
 
-    const first = await runSqlCli(["初回SQL"], env);
+    const first = await runSqlCli(["--dsn", testDsn, "初回SQL"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-sql]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("SQL OK (1)");
@@ -175,6 +172,7 @@ describe("sql CLI integration", () => {
     const secondEntry = historyAfterSecond[0];
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(secondEntry.task?.sql?.dsn).toBe(testDsn);
 
     const third = await runSqlCli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
@@ -186,6 +184,7 @@ describe("sql CLI integration", () => {
     const thirdEntry = historyAfterThird[0];
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(thirdEntry.task?.sql?.dsn).toBe(testDsn);
 
     const summary = await runSqlCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
@@ -196,6 +195,7 @@ describe("sql CLI integration", () => {
     expect(historyAfterSummary.length).toBe(1);
     const summaryEntry = historyAfterSummary[0];
     expect(summaryEntry.task?.sql?.dsn_hash).toBe(expectedHash);
+    expect(summaryEntry.task?.sql?.dsn).toBe(testDsn);
     expect(summaryEntry.turns?.length).toBe(1);
     expect(summaryEntry.turns?.[0]?.role).toBe("system");
     expect(summaryEntry.turns?.[0]?.text).toBe("SQL Summary");

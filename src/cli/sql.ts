@@ -16,7 +16,10 @@ import { createOpenAIClient } from "../session/openai-client.js";
 import {
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   buildCliToolList,
 } from "../core/tools.js";
@@ -30,12 +33,16 @@ import {
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
+import type { HistoryEntry } from "../core/history.js";
 import { runAgentConversation } from "../session/agent-session.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 const SQL_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
@@ -56,6 +63,7 @@ interface SqlDsnSnapshot {
 export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
   maxIterationsExplicit: boolean;
+  dsn?: string;
 }
 
 const connectionSchema = z
@@ -71,6 +79,7 @@ const sqlContextSchema = z
   .object({
     type: z.literal("postgresql").optional(),
     dsn_hash: z.string().optional(),
+    dsn: z.string().optional(),
     connection: connectionSchema,
   })
   .optional();
@@ -85,6 +94,7 @@ export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
 interface SqlCliHistoryTaskOptions {
   taskMode: SqlCliOptions["taskMode"];
   dsnHash: string;
+  dsn: string;
   connection: SqlConnectionMetadata;
 }
 
@@ -103,6 +113,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     debug: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
+    dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -185,6 +196,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
+    .option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します")
     .option("-i, --image <path>", "画像ファイルを添付します")
     .option(
       "-I, --sql-iterations <count>",
@@ -225,6 +237,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     image?: string;
     sqlIterations?: number;
     compact?: number;
+    dsn: string;
   }>();
 
   const args = program.args as string[];
@@ -233,6 +246,14 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const effort = opts.effort ?? defaults.effort;
   const verbosity = opts.verbosity ?? defaults.verbosity;
   const debug = Boolean(opts.debug);
+  let dsn: string | undefined;
+  if (typeof opts.dsn === "string") {
+    const trimmed = opts.dsn.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Error: --dsn は空にできません");
+    }
+    dsn = trimmed;
+  }
   let continueConversation = Boolean(opts.continueConversation);
   let resumeIndex: number | undefined;
   let resumeListOnly = false;
@@ -296,6 +317,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       showIndex,
       imagePath,
       debug,
+      dsn,
       operation,
       compactIndex,
       args,
@@ -338,13 +360,11 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
   console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
   console.log("  --debug     : デバッグログを有効化");
+  console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
   console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
   console.log("  -i <path>   : 入力に画像を添付");
   console.log("");
   console.log("環境変数(.env):");
-  console.log(
-    "  POSTGRES_DSN            : PostgreSQL 接続文字列 (例: postgres://user:pass@host:5432/db)",
-  );
   console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
   console.log(
     `  GPT_5_CLI_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数、既定: ${defaults.maxIterations})`,
@@ -377,21 +397,54 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`POSTGRES_DSN の解析に失敗しました: ${message}`);
+    throw new Error(`--dsn の値の解析に失敗しました: ${message}`);
   }
 }
 
-function ensureSqlEnvironment(): SqlDsnSnapshot {
-  const dsn = process.env.POSTGRES_DSN;
-  if (typeof dsn !== "string" || dsn.trim().length === 0) {
-    throw new Error("POSTGRES_DSN が未設定です");
+function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
+  if (typeof rawDsn !== "string" || rawDsn.trim().length === 0) {
+    throw new Error("Error: --dsn は必須です");
   }
-  const trimmed = dsn.trim();
+  const trimmed = rawDsn.trim();
   return {
     dsn: trimmed,
     hash: hashDsn(trimmed),
     connection: extractConnectionMetadata(trimmed),
   };
+}
+
+function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): string | undefined {
+  if (!entry) {
+    return undefined;
+  }
+  const task = entry.task as SqlCliHistoryTask | undefined;
+  const candidate = task?.sql?.dsn;
+  if (typeof candidate === "string") {
+    const trimmed = candidate.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
+function resolveSqlDsn(
+  provided: string | undefined,
+  contextEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
+  determineEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
+): string {
+  if (typeof provided === "string" && provided.trim().length > 0) {
+    return provided.trim();
+  }
+  const fromDetermine = pickHistoryDsn(determineEntry);
+  if (fromDetermine) {
+    return fromDetermine;
+  }
+  const fromContext = pickHistoryDsn(contextEntry);
+  if (fromContext) {
+    return fromContext;
+  }
+  throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
 }
 
 function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
@@ -427,14 +480,17 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   const connectionLine = formatConnectionDisplay(params.connection);
   const toolSummary = [
     "利用可能なツール:",
-    "- sql_fetch_schema: information_schema からテーブル/カラム情報を取得し JSON を返す",
+    "- sql_fetch_table_schema: information_schema.tables からテーブル情報を取得する",
+    "- sql_fetch_column_schema: information_schema.columns からカラム情報を取得する",
+    "- sql_fetch_enum_schema: PostgreSQL の enum 型と値を取得する",
+    "- sql_fetch_index_schema: pg_indexes からインデックス定義を取得する",
     "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
     "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
   ].join("\n");
 
   const workflow = [
     "作業手順:",
-    "1. 必要に応じて sql_fetch_schema でスキーマを把握する",
+    "1. 必要に応じて sql_fetch_table_schema で対象テーブルを把握し、sql_fetch_column_schema・sql_fetch_enum_schema・sql_fetch_index_schema で必要な詳細を取得する",
     "2. 修正案の作成時は SELECT/WITH ... SELECT のみ扱う",
     "3. 提案 SQL が用意できたら必ず sql_format で整形し、その直後に sql_dry_run を実行して成功するまで繰り返す（成功する前にユーザーへ最終回答しない）",
     "4. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜3 を実施する",
@@ -476,6 +532,7 @@ export function buildSqlCliHistoryTask(
   const sqlMeta = {
     type: "postgresql" as const,
     dsn_hash: options.dsnHash,
+    dsn: options.dsn,
     connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
   };
 
@@ -539,7 +596,14 @@ async function runSqlCli(): Promise<void> {
       },
     );
 
-    const sqlEnv = ensureSqlEnvironment();
+    const determineActiveEntry = determine.activeEntry as
+      | HistoryEntry<SqlCliHistoryTask>
+      | undefined;
+    const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
+    const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
+    const sqlEnv = createSqlSnapshot(effectiveDsn);
+    process.env.POSTGRES_DSN = sqlEnv.dsn;
+    options.dsn = sqlEnv.dsn;
 
     const imageInfo = prepareImageData(options.imagePath, LOG_LABEL);
     const request = buildRequest({
@@ -577,6 +641,7 @@ async function runSqlCli(): Promise<void> {
         {
           taskMode: options.taskMode,
           dsnHash: sqlEnv.hash,
+          dsn: sqlEnv.dsn,
           connection: sqlEnv.connection,
         },
         previousTask,

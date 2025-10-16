@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   ROOT_DIR,
+  DEFAULT_MAX_ITERATIONS,
   loadDefaults,
   loadEnvironment,
   resolveHistoryPath,
@@ -173,7 +174,7 @@ describe("loadDefaults", () => {
       path.resolve(path.join(process.env.HOME!, "history/default.json")),
     );
     expect(defaults.promptsDir).toBe(path.join(ROOT_DIR, "prompts"));
-    expect(defaults.maxIterations).toBe(8);
+    expect(defaults.maxIterations).toBe(DEFAULT_MAX_ITERATIONS);
   });
 
   it("環境変数を反映する", () => {
