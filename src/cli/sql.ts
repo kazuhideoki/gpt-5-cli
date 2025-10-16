@@ -21,7 +21,6 @@ import {
   SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
-  buildCliToolList,
 } from "../core/tools.js";
 import {
   expandLegacyShortFlags,
@@ -619,7 +618,6 @@ async function runSqlCli(): Promise<void> {
         dsnHash: sqlEnv.hash,
         maxIterations: options.maxIterations,
       }),
-      tools: buildCliToolList(SQL_TOOL_REGISTRATIONS),
     });
 
     const agentResult = await runAgentConversation({

@@ -13,12 +13,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import {
-  MERMAID_CHECK_TOOL,
-  READ_FILE_TOOL,
-  WRITE_FILE_TOOL,
-  buildCliToolList,
-} from "../core/tools.js";
+import { MERMAID_CHECK_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
@@ -46,7 +41,6 @@ interface MermaidContextInfo {
 }
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
-const MERMAID_FUNCTION_TOOLS = buildCliToolList(MERMAID_TOOL_REGISTRATIONS);
 
 const mermaidCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -536,7 +530,6 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         options.taskMode === "mermaid" && mermaidContext
           ? buildMermaidInstructionMessages(mermaidContext)
           : undefined,
-      tools: MERMAID_FUNCTION_TOOLS,
     });
     const agentResult = await runAgentConversation({
       client,

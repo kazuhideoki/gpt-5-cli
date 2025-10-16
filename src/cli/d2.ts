@@ -12,13 +12,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import {
-  D2_CHECK_TOOL,
-  D2_FMT_TOOL,
-  READ_FILE_TOOL,
-  WRITE_FILE_TOOL,
-  buildCliToolList,
-} from "../core/tools.js";
+import { D2_CHECK_TOOL, D2_FMT_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
@@ -51,7 +45,6 @@ const D2_TOOL_REGISTRATIONS = [
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
 ] as const;
-const D2_FUNCTION_TOOLS = buildCliToolList(D2_TOOL_REGISTRATIONS);
 
 const d2CliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -532,7 +525,6 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages:
         options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
-      tools: D2_FUNCTION_TOOLS,
     });
     const agentResult = await runAgentConversation({
       client,
