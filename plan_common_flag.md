@@ -40,11 +40,11 @@ src/
 - `FlagDefinition` 型（既存）を拡張して、`description`・`alias`・`group`（表示グルーピング用）を保持。
 - `buildCommonFlagMap()`（仮名）で `Map<string, FlagDefinition>` を返却。キーはロングオプション。
 - 共通化対象例:
-  - `--model` / `-m`
-  - `--env` / `-e`
-  - `--verbose` / `-v`
-  - `--interactive` / `-i`
-  - `--config` / `-c`（CLI cross-over で必要な場合）
+  - `-m` (model)
+  - `-e` (effort)
+  - `-v` (verbose)
+  - `--image` / `-i`
+  - `--continue` / `-c`（CLI cross-over で必要な場合）
 - 各フラグにはヘルプ本文・既定値・環境変数との関連を明示。
 
 ## フラグ構成ユーティリティ
