@@ -29,6 +29,7 @@ const askCliHistoryTaskSchema = z.object({
 
 export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
 
+/** Ask履歴タスク構築時に引数として受け渡すオプションの集合。 */
 interface AskCliHistoryTaskOptions {
   taskMode: CliOptions["taskMode"];
 }
@@ -37,6 +38,9 @@ const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 const ASK_TOOL_RUNTIME = createToolRuntime(ASK_TOOL_REGISTRATIONS);
 const ASK_FUNCTION_TOOLS = buildCliToolList(ASK_TOOL_REGISTRATIONS);
 
+/**
+ * Askモードで保存する履歴タスク情報を構築し、直前タスクの情報を必要に応じて引き継ぐ。
+ */
 function buildAskCliHistoryTask(
   options: AskCliHistoryTaskOptions,
   previousTask?: AskCliHistoryTask,
@@ -147,6 +151,7 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const program = new Command();
 
+  /** `--compact` フラグの文字列値を履歴番号として検証する。 */
   const parseCompactIndex = (value: string): number => {
     if (!/^\d+$/.test(value)) {
       throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
@@ -302,6 +307,9 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   }
 }
 
+/**
+ * ask CLI のメイン処理。環境初期化からAPI呼び出し・履歴更新までを統括する。
+ */
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);

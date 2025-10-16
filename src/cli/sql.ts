@@ -46,6 +46,7 @@ const SQL_TOOL_REGISTRATIONS = [
   SQL_FORMAT_TOOL,
 ] as const;
 
+/** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
   host?: string;
   port?: number;
@@ -53,12 +54,15 @@ interface SqlConnectionMetadata {
   user?: string;
 }
 
+/** 実行時に使用するDSNとそのハッシュ、接続メタデータをまとめたスナップショット。 */
+/** 実行時に使用するDSNとそのハッシュ、接続メタデータをまとめたスナップショット。 */
 interface SqlDsnSnapshot {
   dsn: string;
   hash: string;
   connection: SqlConnectionMetadata;
 }
 
+/** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
   maxIterationsExplicit: boolean;
@@ -90,6 +94,7 @@ const sqlCliHistoryTaskSchema = z.object({
 
 export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
 
+/** SQL履歴タスクを構築する際の引数一式。 */
 interface SqlCliHistoryTaskOptions {
   taskMode: SqlCliOptions["taskMode"];
   dsnHash: string;
@@ -140,6 +145,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     }
   });
 
+/** SQLモードのツール呼び出し上限を検証し、正の整数として解釈する。 */
 function parseSqlIterations(value: string): number {
   if (!/^\d+$/u.test(value)) {
     throw new InvalidArgumentError("Error: --sql-iterations の値は正の整数で指定してください");
@@ -378,11 +384,13 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  gpt-5-cli-sql --compact 3 -> 履歴 3 を要約");
 }
 
+/** DSN をハッシュ化し、履歴に保存しやすい識別子へ変換する。 */
 function hashDsn(dsn: string): string {
   const digest = createHash("sha256").update(dsn).digest("hex");
   return `sha256:${digest}`;
 }
 
+/** DSN から接続メタデータを抽出し、ホストやデータベースなどを返す。 */
 function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
   try {
     const url = new URL(dsn);
@@ -400,6 +408,7 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
   }
 }
 
+/** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
 function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
   if (typeof rawDsn !== "string" || rawDsn.trim().length === 0) {
     throw new Error("Error: --dsn は必須です");
@@ -412,6 +421,7 @@ function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
   };
 }
 
+/** 履歴エントリに保存された DSN を抽出し、存在すれば正規化して返す。 */
 function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): string | undefined {
   if (!entry) {
     return undefined;
@@ -427,6 +437,7 @@ function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): str
   return undefined;
 }
 
+/** CLI指定値と履歴情報を突き合わせ、実行に使用する DSN を決定する。 */
 function resolveSqlDsn(
   provided: string | undefined,
   contextEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
@@ -446,6 +457,7 @@ function resolveSqlDsn(
   throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
 }
 
+/** 接続メタデータをログ表示向けの `key=value` 文字列へ整形する。 */
 function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
   const parts: string[] = [];
   if (connection.host) {
@@ -463,6 +475,7 @@ function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
   return parts.length > 0 ? parts.join(", ") : "(接続情報なし)";
 }
 
+/** SQLシステムメッセージ生成時に必要なパラメータ群。 */
 interface SqlInstructionParams {
   connection: SqlConnectionMetadata;
   dsnHash: string;
@@ -513,13 +526,7 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   ];
 }
 
-/**
- * 履歴へ保存する SQL メタデータを組み立てる。
- *
- * @param options 現在の CLI オプションと接続スナップショット。
- * @param previousTask 既存の履歴タスク情報。
- * @returns 更新後の履歴タスク。
- */
+/** 履歴へ保存する SQL メタデータを組み立て、既存タスク情報と統合する。 */
 export function buildSqlCliHistoryTask(
   options: SqlCliHistoryTaskOptions,
   previousTask?: SqlCliHistoryTask,
@@ -548,7 +555,7 @@ export function buildSqlCliHistoryTask(
 }
 
 /**
- * SQL モード CLI 全体を実行する。
+ * SQLモード CLI のエントリーポイント。環境初期化からAPI利用・履歴更新までを統括する。
  */
 async function runSqlCli(): Promise<void> {
   try {

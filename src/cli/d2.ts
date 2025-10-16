@@ -23,6 +23,7 @@ import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
 
+/** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
   d2FilePath?: string;
   d2FileExplicit: boolean;
@@ -57,16 +58,21 @@ const d2CliHistoryTaskSchema = z.object({
 
 export type D2CliHistoryTask = z.infer<typeof d2CliHistoryTaskSchema>;
 
+/** 履歴同期時に判明したd2ファイルの実体パスを保持する補助情報。 */
 interface D2CliHistoryD2Context {
   absolutePath?: string;
 }
 
+/** d2履歴タスク構築時に利用するオプション群。 */
 interface D2CliHistoryTaskOptions {
   taskMode: D2CliOptions["taskMode"];
   d2FilePath?: string;
   d2FileExplicit: boolean;
 }
 
+/**
+ * d2モードで履歴へ保存するタスク情報を構築し、前回メタデータと現在情報を統合する。
+ */
 function buildD2CliHistoryTask(
   options: D2CliHistoryTaskOptions,
   previousTask?: D2CliHistoryTask,
@@ -200,6 +206,7 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const program = new Command();
 
+  /** `--compact` フラグの文字列値を履歴番号として検証する。 */
   const parseCompactIndex = (value: string): number => {
     if (!/^\d+$/.test(value)) {
       throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
@@ -207,6 +214,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     return Number.parseInt(value, 10);
   };
 
+  /** d2モードのツール呼び出し上限値を検証し、正の整数として解釈する。 */
   const parseD2Iterations = (value: string): number => {
     if (!/^\d+$/u.test(value)) {
       throw new InvalidArgumentError("Error: --d2-iterations の値は正の整数で指定してください");

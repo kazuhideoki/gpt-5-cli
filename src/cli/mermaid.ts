@@ -24,6 +24,7 @@ import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
 
+/** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
   mermaidFilePath?: string;
   mermaidFileExplicit: boolean;
@@ -53,16 +54,21 @@ const mermaidCliHistoryTaskSchema = z.object({
 
 export type MermaidCliHistoryTask = z.infer<typeof mermaidCliHistoryTaskSchema>;
 
+/** Mermaidファイルの実体パスを履歴へ反映させるための補助情報。 */
 interface MermaidCliHistoryDiagramContext {
   absolutePath?: string;
 }
 
+/** Mermaid履歴タスクを構築する際に受け取るオプション集合。 */
 interface MermaidCliHistoryTaskOptions {
   taskMode: MermaidCliOptions["taskMode"];
   mermaidFilePath?: string;
   mermaidFileExplicit: boolean;
 }
 
+/**
+ * Mermaidモードで履歴へ保存するタスク情報を構築し、前回メタデータと現在のファイル情報を統合する。
+ */
 function buildMermaidCliHistoryTask(
   options: MermaidCliHistoryTaskOptions,
   previousTask?: MermaidCliHistoryTask,
@@ -199,6 +205,7 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
   const program = new Command();
 
+  /** `--compact` フラグの文字列値を履歴番号として検証する。 */
   const parseCompactIndex = (value: string): number => {
     if (!/^\d+$/.test(value)) {
       throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
@@ -206,6 +213,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     return Number.parseInt(value, 10);
   };
 
+  /** Mermaidモードのツール呼び出し上限値を検証し、正の整数として解釈する。 */
   const parseMermaidIterations = (value: string): number => {
     if (!/^\d+$/u.test(value)) {
       throw new InvalidArgumentError(
