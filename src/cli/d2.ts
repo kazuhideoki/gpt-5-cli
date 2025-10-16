@@ -132,7 +132,6 @@ function printHelp(defaults: CliDefaults, options: D2CliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
-  console.log("  -D          : d2モードを明示（互換フラグ） (--d2-mode)");
   console.log("  -F <path>   : d2出力ファイルパスを指定 (--d2-file)");
   console.log("  -I <count>  : d2モード時のツール呼び出し上限 (--d2-iterations)");
   console.log("");
@@ -271,7 +270,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
-    .option("-D, --d2-mode", "d2形式の生成モードを有効にします")
     .option("-F, --d2-file <path>", "d2出力を保存するファイルパスを指定します")
     .option(
       "-I, --d2-iterations <count>",
@@ -305,7 +303,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     show?: string | boolean;
     debug?: boolean;
     image?: string;
-    d2Mode?: boolean;
     d2File?: string;
     d2Iterations?: number;
     compact?: number;
@@ -366,7 +363,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const taskModeExplicit = program.getOptionValueSource("d2Mode") === "cli";
+  const taskModeExplicit = false;
   const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
   const helpRequested = Boolean(opts.help);
