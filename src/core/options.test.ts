@@ -6,7 +6,10 @@ import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   buildCliToolList,
@@ -65,7 +68,10 @@ describe("buildCliToolList", () => {
 
   const SQL_TOOL_REGISTRATIONS = [
     READ_FILE_TOOL,
-    SQL_FETCH_SCHEMA_TOOL,
+    SQL_FETCH_TABLE_SCHEMA_TOOL,
+    SQL_FETCH_COLUMN_SCHEMA_TOOL,
+    SQL_FETCH_ENUM_SCHEMA_TOOL,
+    SQL_FETCH_INDEX_SCHEMA_TOOL,
     SQL_DRY_RUN_TOOL,
     SQL_FORMAT_TOOL,
   ] as const;
@@ -91,7 +97,10 @@ describe("buildCliToolList", () => {
       "d2_check",
       "d2_fmt",
       "mermaid_check",
-      "sql_fetch_schema",
+      "sql_fetch_table_schema",
+      "sql_fetch_column_schema",
+      "sql_fetch_enum_schema",
+      "sql_fetch_index_schema",
       "sql_dry_run",
       "sql_format",
     ]);

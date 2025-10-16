@@ -8,7 +8,10 @@ import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   buildAgentsToolList,
@@ -35,7 +38,10 @@ const D2_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL]
 const MERMAID_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 const SQL_TOOLSET = [
   READ_FILE_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
@@ -70,14 +76,25 @@ describe("tool registration lists", () => {
 
   it("最小構成には SQL 系ツールが含まれない", () => {
     const toolNames = MINIMAL_FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).not.toContain("sql_fetch_schema");
+    expect(toolNames).not.toContain("sql_fetch_table_schema");
+    expect(toolNames).not.toContain("sql_fetch_column_schema");
+    expect(toolNames).not.toContain("sql_fetch_enum_schema");
+    expect(toolNames).not.toContain("sql_fetch_index_schema");
     expect(toolNames).not.toContain("sql_dry_run");
     expect(toolNames).not.toContain("sql_format");
   });
 
   it("SQL 向け拡張セットを構築できる", () => {
     const toolNames = SQL_FUNCTION_TOOLS.map((tool) => tool.name);
-    expect(toolNames).toEqual(["read_file", "sql_fetch_schema", "sql_dry_run", "sql_format"]);
+    expect(toolNames).toEqual([
+      "read_file",
+      "sql_fetch_table_schema",
+      "sql_fetch_column_schema",
+      "sql_fetch_enum_schema",
+      "sql_fetch_index_schema",
+      "sql_dry_run",
+      "sql_format",
+    ]);
   });
 
   it("ワークスペース操作向け拡張セットを構築できる", () => {
@@ -293,17 +310,24 @@ describe("executeFunctionToolCall", () => {
     expect(String(result.message)).toContain("POSTGRES_DSN");
   });
 
-  it("sql_fetch_schema は DSN 未設定時にエラーを返す", async () => {
+  it("SQL スキーマ系ツールは DSN 未設定時にエラーを返す", async () => {
     delete process.env.POSTGRES_DSN;
-    const call = createCall("sql_fetch_schema", {});
-    const result = JSON.parse(
-      await executeSqlToolCall(call, {
-        cwd: tempDir,
-        log: () => {},
-      }),
-    );
-    expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("POSTGRES_DSN");
+    const calls = [
+      createCall("sql_fetch_table_schema", {}),
+      createCall("sql_fetch_column_schema", {}),
+      createCall("sql_fetch_enum_schema", {}),
+      createCall("sql_fetch_index_schema", {}),
+    ];
+    for (const call of calls) {
+      const result = JSON.parse(
+        await executeSqlToolCall(call, {
+          cwd: tempDir,
+          log: () => {},
+        }),
+      );
+      expect(result.success).toBe(false);
+      expect(String(result.message)).toContain("POSTGRES_DSN");
+    }
   });
 
   it("sql_format は指定バイナリで整形できる", async () => {

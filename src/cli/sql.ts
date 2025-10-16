@@ -16,7 +16,10 @@ import { createOpenAIClient } from "../session/openai-client.js";
 import {
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   buildCliToolList,
 } from "../core/tools.js";
@@ -36,7 +39,10 @@ import { runAgentConversation } from "../session/agent-session.js";
 const LOG_LABEL = "[gpt-5-cli-sql]";
 const SQL_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
-  SQL_FETCH_SCHEMA_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
@@ -474,14 +480,17 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   const connectionLine = formatConnectionDisplay(params.connection);
   const toolSummary = [
     "利用可能なツール:",
-    "- sql_fetch_schema: information_schema からテーブル/カラム情報を取得し JSON を返す",
+    "- sql_fetch_table_schema: information_schema.tables からテーブル情報を取得する",
+    "- sql_fetch_column_schema: information_schema.columns からカラム情報を取得する",
+    "- sql_fetch_enum_schema: PostgreSQL の enum 型と値を取得する",
+    "- sql_fetch_index_schema: pg_indexes からインデックス定義を取得する",
     "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
     "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
   ].join("\n");
 
   const workflow = [
     "作業手順:",
-    "1. 必要に応じて sql_fetch_schema でスキーマを把握する",
+    "1. 必要に応じて sql_fetch_table_schema で対象テーブルを把握し、sql_fetch_column_schema・sql_fetch_enum_schema・sql_fetch_index_schema で必要な詳細を取得する",
     "2. 修正案の作成時は SELECT/WITH ... SELECT のみ扱う",
     "3. 提案 SQL が用意できたら必ず sql_format で整形し、その直後に sql_dry_run を実行して成功するまで繰り返す（成功する前にユーザーへ最終回答しない）",
     "4. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜3 を実施する",

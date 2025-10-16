@@ -165,7 +165,14 @@ async function runCommand(
   });
 }
 
-interface SqlSchemaRow {
+interface SqlTableSchemaRow {
+  table_schema: string;
+  table_name: string;
+  table_type: string;
+  is_insertable_into: string;
+}
+
+interface SqlColumnSchemaRow {
   table_schema: string;
   table_name: string;
   column_name: string;
@@ -174,12 +181,75 @@ interface SqlSchemaRow {
   column_default: string | null;
 }
 
+interface SqlEnumValueRow {
+  schema_name: string;
+  enum_name: string;
+  enum_label: string;
+  sort_order: number;
+}
+
+interface SqlIndexSchemaRow {
+  table_schema: string;
+  table_name: string;
+  index_name: string;
+  index_definition: string;
+}
+
+interface SqlFetchTableSchemaArgs {
+  schema_names?: string[];
+  table_names?: string[];
+  table_types?: string[];
+}
+
+interface SqlFetchColumnSchemaArgs {
+  schema_names?: string[];
+  table_names?: string[];
+  column_names?: string[];
+}
+
+interface SqlFetchEnumSchemaArgs {
+  schema_names?: string[];
+  enum_names?: string[];
+}
+
+interface SqlFetchIndexSchemaArgs {
+  schema_names?: string[];
+  table_names?: string[];
+  index_names?: string[];
+}
+
 function requireEnvValue(name: string): string {
   const value = process.env[name];
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`Environment variable ${name} is required for SQL tools.`);
   }
   return value;
+}
+
+function normalizeStringArray(value: unknown, fieldName: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array of non-empty strings.`);
+  }
+  const normalized: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      throw new Error(`${fieldName} must be an array of non-empty strings.`);
+    }
+    const trimmed = item.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`${fieldName} must not contain empty strings.`);
+    }
+    if (!normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  }
+  if (normalized.length === 0) {
+    throw new Error(`${fieldName} must not be an empty array.`);
+  }
+  return normalized;
 }
 
 function ensureQueryString(raw: unknown): string {
@@ -375,17 +445,175 @@ function createPgClient(): Client {
   return new Client({ connectionString: dsn });
 }
 
-async function fetchSqlSchemaRows(): Promise<SqlSchemaRow[]> {
+async function fetchSqlTableSchema(
+  args: SqlFetchTableSchemaArgs = {},
+): Promise<SqlTableSchemaRow[]> {
   const client = createPgClient();
   await client.connect();
   try {
-    const result = await client.query<SqlSchemaRow>(
+    const filters = ["table_schema NOT IN ('pg_catalog', 'information_schema')"];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema = ANY($${params.length}::text[])`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`table_name = ANY($${params.length}::text[])`);
+    }
+
+    const tableTypes = normalizeStringArray(args.table_types, "table_types")?.map((value) =>
+      value.toUpperCase(),
+    );
+    if (tableTypes && tableTypes.length > 0) {
+      params.push(tableTypes);
+      filters.push(`table_type = ANY($${params.length}::text[])`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const result = await client.query<SqlTableSchemaRow>(
+      `
+        SELECT table_schema, table_name, table_type, is_insertable_into
+        FROM information_schema.tables
+        ${whereClause}
+        ORDER BY table_schema, table_name
+      `,
+      params,
+    );
+    return result.rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function fetchSqlColumnSchema(
+  args: SqlFetchColumnSchemaArgs = {},
+): Promise<SqlColumnSchemaRow[]> {
+  const client = createPgClient();
+  await client.connect();
+  try {
+    const filters = ["table_schema NOT IN ('pg_catalog', 'information_schema')"];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema = ANY($${params.length}::text[])`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`table_name = ANY($${params.length}::text[])`);
+    }
+
+    const columnNames = normalizeStringArray(args.column_names, "column_names");
+    if (columnNames) {
+      params.push(columnNames);
+      filters.push(`column_name = ANY($${params.length}::text[])`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const result = await client.query<SqlColumnSchemaRow>(
       `
         SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
         FROM information_schema.columns
-        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+        ${whereClause}
         ORDER BY table_schema, table_name, ordinal_position
       `,
+      params,
+    );
+    return result.rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<SqlEnumValueRow[]> {
+  const client = createPgClient();
+  await client.connect();
+  try {
+    const filters = ["n.nspname NOT IN ('pg_catalog', 'information_schema')", "t.typtype = 'e'"];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`n.nspname = ANY($${params.length}::text[])`);
+    }
+
+    const enumNames = normalizeStringArray(args.enum_names, "enum_names");
+    if (enumNames) {
+      params.push(enumNames);
+      filters.push(`t.typname = ANY($${params.length}::text[])`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const result = await client.query<SqlEnumValueRow>(
+      `
+        SELECT
+          n.nspname AS schema_name,
+          t.typname AS enum_name,
+          e.enumlabel AS enum_label,
+          e.enumsortorder AS sort_order
+        FROM pg_type t
+        JOIN pg_enum e ON e.enumtypid = t.oid
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        ${whereClause}
+        ORDER BY n.nspname, t.typname, e.enumsortorder
+      `,
+      params,
+    );
+    return result.rows;
+  } finally {
+    await client.end();
+  }
+}
+
+async function fetchSqlIndexSchema(
+  args: SqlFetchIndexSchemaArgs = {},
+): Promise<SqlIndexSchemaRow[]> {
+  const client = createPgClient();
+  await client.connect();
+  try {
+    const filters = ["schemaname NOT IN ('pg_catalog', 'information_schema')"];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`schemaname = ANY($${params.length}::text[])`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`tablename = ANY($${params.length}::text[])`);
+    }
+
+    const indexNames = normalizeStringArray(args.index_names, "index_names");
+    if (indexNames) {
+      params.push(indexNames);
+      filters.push(`indexname = ANY($${params.length}::text[])`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const result = await client.query<SqlIndexSchemaRow>(
+      `
+        SELECT
+          schemaname AS table_schema,
+          tablename AS table_name,
+          indexname AS index_name,
+          indexdef AS index_definition
+        FROM pg_indexes
+        ${whereClause}
+        ORDER BY schemaname, tablename, indexname
+      `,
+      params,
     );
     return result.rows;
   } finally {
@@ -452,12 +680,63 @@ interface SqlFormatResult extends ToolResult {
   formatted_sql?: string;
 }
 
-async function sqlFetchSchemaTool(
-  _args: Record<string, never>,
+async function sqlFetchTableSchemaTool(
+  args: SqlFetchTableSchemaArgs = {},
   _context: ToolExecutionContext,
 ): Promise<ToolResult> {
   try {
-    const rows = await fetchSqlSchemaRows();
+    const rows = await fetchSqlTableSchema(args);
+    return {
+      success: true,
+      rows,
+      row_count: rows.length,
+    } satisfies ToolResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies ToolResult;
+  }
+}
+
+async function sqlFetchColumnSchemaTool(
+  args: SqlFetchColumnSchemaArgs = {},
+  _context: ToolExecutionContext,
+): Promise<ToolResult> {
+  try {
+    const rows = await fetchSqlColumnSchema(args);
+    return {
+      success: true,
+      rows,
+      row_count: rows.length,
+    } satisfies ToolResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies ToolResult;
+  }
+}
+
+async function sqlFetchEnumSchemaTool(
+  args: SqlFetchEnumSchemaArgs = {},
+  _context: ToolExecutionContext,
+): Promise<ToolResult> {
+  try {
+    const rows = await fetchSqlEnumValues(args);
+    return {
+      success: true,
+      rows,
+      row_count: rows.length,
+    } satisfies ToolResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { success: false, message } satisfies ToolResult;
+  }
+}
+
+async function sqlFetchIndexSchemaTool(
+  args: SqlFetchIndexSchemaArgs = {},
+  _context: ToolExecutionContext,
+): Promise<ToolResult> {
+  try {
+    const rows = await fetchSqlIndexSchema(args);
     return {
       success: true,
       rows,
@@ -732,20 +1011,128 @@ export const MERMAID_CHECK_TOOL: ToolRegistration<MermaidArgs, CommandResult> = 
   handler: mermaidCheckTool,
 };
 
-export const SQL_FETCH_SCHEMA_TOOL: ToolRegistration<Record<string, never>, ToolResult> = {
+export const SQL_FETCH_TABLE_SCHEMA_TOOL: ToolRegistration<SqlFetchTableSchemaArgs, ToolResult> = {
   definition: {
     type: "function",
-    strict: true,
-    name: "sql_fetch_schema",
-    description: "Load table and column metadata from PostgreSQL using information_schema.",
+    strict: false,
+    name: "sql_fetch_table_schema",
+    description: "Retrieve table metadata from PostgreSQL information_schema.tables.",
     parameters: {
       type: "object",
-      properties: {},
+      properties: {
+        schema_names: {
+          type: "array",
+          description: "Filter by schema names (exact match).",
+          items: { type: "string" },
+        },
+        table_names: {
+          type: "array",
+          description: "Filter by table names (exact match).",
+          items: { type: "string" },
+        },
+        table_types: {
+          type: "array",
+          description: "Filter by table_type (BASE TABLE, VIEW, MATERIALIZED VIEW, etc.).",
+          items: { type: "string" },
+        },
+      },
       required: [],
       additionalProperties: false,
     },
   },
-  handler: sqlFetchSchemaTool,
+  handler: sqlFetchTableSchemaTool,
+};
+
+export const SQL_FETCH_COLUMN_SCHEMA_TOOL: ToolRegistration<SqlFetchColumnSchemaArgs, ToolResult> =
+  {
+    definition: {
+      type: "function",
+      strict: false,
+      name: "sql_fetch_column_schema",
+      description: "Retrieve column metadata from PostgreSQL information_schema.columns.",
+      parameters: {
+        type: "object",
+        properties: {
+          schema_names: {
+            type: "array",
+            description: "Filter by schema names (exact match).",
+            items: { type: "string" },
+          },
+          table_names: {
+            type: "array",
+            description: "Filter by table names (exact match).",
+            items: { type: "string" },
+          },
+          column_names: {
+            type: "array",
+            description: "Filter by column names (exact match).",
+            items: { type: "string" },
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlFetchColumnSchemaTool,
+};
+
+export const SQL_FETCH_ENUM_SCHEMA_TOOL: ToolRegistration<SqlFetchEnumSchemaArgs, ToolResult> = {
+  definition: {
+    type: "function",
+    strict: false,
+    name: "sql_fetch_enum_schema",
+    description: "Retrieve enum labels defined in PostgreSQL (pg_type/pg_enum).",
+    parameters: {
+      type: "object",
+      properties: {
+        schema_names: {
+          type: "array",
+          description: "Filter by schema names (exact match).",
+          items: { type: "string" },
+        },
+        enum_names: {
+          type: "array",
+          description: "Filter by enum type names (exact match).",
+          items: { type: "string" },
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlFetchEnumSchemaTool,
+};
+
+export const SQL_FETCH_INDEX_SCHEMA_TOOL: ToolRegistration<SqlFetchIndexSchemaArgs, ToolResult> = {
+  definition: {
+    type: "function",
+    strict: false,
+    name: "sql_fetch_index_schema",
+    description: "Retrieve index metadata from PostgreSQL pg_indexes.",
+    parameters: {
+      type: "object",
+      properties: {
+        schema_names: {
+          type: "array",
+          description: "Filter by schema names (exact match).",
+          items: { type: "string" },
+        },
+        table_names: {
+          type: "array",
+          description: "Filter by table names (exact match).",
+          items: { type: "string" },
+        },
+        index_names: {
+          type: "array",
+          description: "Filter by index names (exact match).",
+          items: { type: "string" },
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  handler: sqlFetchIndexSchemaTool,
 };
 
 export const SQL_DRY_RUN_TOOL: ToolRegistration<SqlDryRunArgs, SqlDryRunResult> = {
