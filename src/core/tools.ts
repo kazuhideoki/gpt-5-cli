@@ -224,6 +224,13 @@ interface SqlFetchIndexSchemaArgs {
   index_names?: string[];
 }
 
+/**
+ * 環境変数から安全に値を取得し、空文字や未設定を拒否する。
+ *
+ * @param name 取得対象の環境変数名。
+ * @returns 空白除去後の文字列。
+ * @throws 値が未設定または空だった場合。
+ */
 function requireEnvValue(name: string): string {
   const value = process.env[name];
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -232,6 +239,13 @@ function requireEnvValue(name: string): string {
   return value;
 }
 
+/**
+ * 文字列配列を検証し、空文字や重複を除いた結果を返す。
+ *
+ * @param value ユーザー入力値。
+ * @param fieldName エラー表示に用いるフィールド名。
+ * @returns 正規化済み配列。未指定時は undefined。
+ */
 function normalizeStringArray(value: unknown, fieldName: string): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -258,6 +272,13 @@ function normalizeStringArray(value: unknown, fieldName: string): string[] | und
   return normalized;
 }
 
+/**
+ * `(schema_name, table_name)` オブジェクト配列を検証し、重複を排除した結果を返す。
+ *
+ * @param value ユーザー入力値。
+ * @param fieldName エラー表示に用いるフィールド名。
+ * @returns 正規化済みのテーブル識別子配列。未指定時は undefined。
+ */
 function normalizeTableIdentifiers(
   value: unknown,
   fieldName: string,
@@ -461,6 +482,12 @@ function isSelectOnlyQuery(sql: string): boolean {
   return /^\s*(with\b[\s\S]*?\bselect\b|select\b)/iu.test(noComments);
 }
 
+/**
+ * PostgreSQL 由来のエラーから message/detail/hint を抽出して結合する。
+ *
+ * @param error 捕捉した例外。
+ * @returns ユーザーへ表示するメッセージ。
+ */
 function buildPgErrorMessage(error: unknown): string {
   if (error && typeof error === "object") {
     const maybeError = error as { message?: unknown; detail?: unknown; hint?: unknown };
@@ -484,11 +511,22 @@ function buildPgErrorMessage(error: unknown): string {
   return String(error);
 }
 
+/**
+ * `POSTGRES_DSN` の設定を利用して PostgreSQL クライアントを作成する。
+ *
+ * @returns 接続準備済みの `Client` インスタンス。
+ */
 function createPgClient(): Client {
   const dsn = requireEnvValue("POSTGRES_DSN");
   return new Client({ connectionString: dsn });
 }
 
+/**
+ * information_schema.tables を参照してテーブル定義を取得する。
+ *
+ * @param args スキーマ・テーブル名・テーブル種別フィルタ。
+ * @returns テーブル情報の配列。
+ */
 async function fetchSqlTableSchema(
   args: SqlFetchTableSchemaArgs = {},
 ): Promise<SqlTableSchemaRow[]> {
@@ -534,6 +572,12 @@ async function fetchSqlTableSchema(
   }
 }
 
+/**
+ * information_schema.columns を参照してカラム定義を取得する。
+ *
+ * @param args スキーマ・テーブル・カラム・複数テーブル指定によるフィルタ。
+ * @returns カラム情報の配列。
+ */
 async function fetchSqlColumnSchema(
   args: SqlFetchColumnSchemaArgs = {},
 ): Promise<SqlColumnSchemaRow[]> {
@@ -592,6 +636,12 @@ async function fetchSqlColumnSchema(
   }
 }
 
+/**
+ * pg_type/pg_enum を参照して enum ラベルを取得する。
+ *
+ * @param args スキーマ・enum 名フィルタ。
+ * @returns enum 値の配列。
+ */
 async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<SqlEnumValueRow[]> {
   const client = createPgClient();
   await client.connect();
@@ -633,6 +683,12 @@ async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<Sq
   }
 }
 
+/**
+ * pg_indexes を参照してインデックス定義を取得する。
+ *
+ * @param args スキーマ・テーブル・インデックス名フィルタ。
+ * @returns インデックス情報の配列。
+ */
 async function fetchSqlIndexSchema(
   args: SqlFetchIndexSchemaArgs = {},
 ): Promise<SqlIndexSchemaRow[]> {
@@ -680,6 +736,12 @@ async function fetchSqlIndexSchema(
   }
 }
 
+/**
+ * PREPARE/EXPLAIN を用いて SELECT クエリを検証し、プラン情報を返す。
+ *
+ * @param query 検証対象の SQL。
+ * @returns EXPLAIN JSON のプラン。
+ */
 async function performSqlDryRun(query: string): Promise<{ plan: unknown }> {
   const client = createPgClient();
   await client.connect();
@@ -703,6 +765,13 @@ async function performSqlDryRun(query: string): Promise<{ plan: unknown }> {
   }
 }
 
+/**
+ * sqruff を利用してクエリを整形し、整形済み SQL を返す。
+ *
+ * @param query 整形対象の SQL。
+ * @param cwd 実行時の作業ディレクトリ。
+ * @returns 整形済み SQL テキスト。
+ */
 async function formatSqlWithSqruff(query: string, cwd: string): Promise<string> {
   const bin = (process.env.SQRUFF_BIN ?? "sqruff").trim() || "sqruff";
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-5-sql-fmt-"));
