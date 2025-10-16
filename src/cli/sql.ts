@@ -56,6 +56,7 @@ interface SqlDsnSnapshot {
 export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
   maxIterationsExplicit: boolean;
+  dsn: string;
 }
 
 const connectionSchema = z
@@ -103,6 +104,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     debug: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
+    dsn: z.string().min(1, "Error: --dsn は空にできません"),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -185,6 +187,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     .option("-d, --delete [index]", "指定した番号の履歴を削除します")
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
+    .option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します")
     .option("-i, --image <path>", "画像ファイルを添付します")
     .option(
       "-I, --sql-iterations <count>",
@@ -225,6 +228,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     image?: string;
     sqlIterations?: number;
     compact?: number;
+    dsn: string;
   }>();
 
   const args = program.args as string[];
@@ -233,6 +237,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const effort = opts.effort ?? defaults.effort;
   const verbosity = opts.verbosity ?? defaults.verbosity;
   const debug = Boolean(opts.debug);
+  const dsn = typeof opts.dsn === "string" ? opts.dsn.trim() : "";
   let continueConversation = Boolean(opts.continueConversation);
   let resumeIndex: number | undefined;
   let resumeListOnly = false;
@@ -277,6 +282,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     compactIndex = opts.compact;
   }
 
+  if (dsn.length === 0) {
+    throw new Error("Error: --dsn は必須です");
+  }
+
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
@@ -296,6 +305,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       showIndex,
       imagePath,
       debug,
+      dsn,
       operation,
       compactIndex,
       args,
@@ -338,13 +348,11 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
   console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
   console.log("  --debug     : デバッグログを有効化");
+  console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
   console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
   console.log("  -i <path>   : 入力に画像を添付");
   console.log("");
   console.log("環境変数(.env):");
-  console.log(
-    "  POSTGRES_DSN            : PostgreSQL 接続文字列 (例: postgres://user:pass@host:5432/db)",
-  );
   console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
   console.log(
     `  GPT_5_CLI_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数、既定: ${defaults.maxIterations})`,
@@ -377,16 +385,15 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`POSTGRES_DSN の解析に失敗しました: ${message}`);
+    throw new Error(`--dsn の値の解析に失敗しました: ${message}`);
   }
 }
 
-function ensureSqlEnvironment(): SqlDsnSnapshot {
-  const dsn = process.env.POSTGRES_DSN;
-  if (typeof dsn !== "string" || dsn.trim().length === 0) {
-    throw new Error("POSTGRES_DSN が未設定です");
+function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
+  if (typeof rawDsn !== "string" || rawDsn.trim().length === 0) {
+    throw new Error("Error: --dsn は必須です");
   }
-  const trimmed = dsn.trim();
+  const trimmed = rawDsn.trim();
   return {
     dsn: trimmed,
     hash: hashDsn(trimmed),
@@ -539,7 +546,8 @@ async function runSqlCli(): Promise<void> {
       },
     );
 
-    const sqlEnv = ensureSqlEnvironment();
+    const sqlEnv = createSqlSnapshot(options.dsn);
+    process.env.POSTGRES_DSN = sqlEnv.dsn;
 
     const imageInfo = prepareImageData(options.imagePath, LOG_LABEL);
     const request = buildRequest({

@@ -18,25 +18,41 @@ const defaults: CliDefaults = {
 
 describe("parseArgs", () => {
   it("既定値で SQL モードとして解析する", () => {
-    const options = parseArgs(["SELECT"], defaults);
+    const options = parseArgs(["--dsn", "postgres://user:pass@host/db", "SELECT"], defaults);
     expect(options.taskMode).toBe("sql");
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
+    expect(options.dsn).toBe("postgres://user:pass@host/db");
   });
 
   it("--sql-iterations を検証する", () => {
-    const options = parseArgs(["--sql-iterations", "5", "query"], defaults);
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--sql-iterations", "5", "query"],
+      defaults,
+    );
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
   it("--sql-iterations へ不正な値を渡すとエラー", () => {
-    expect(() => parseArgs(["--sql-iterations", "0", "prompt"], defaults)).toThrow("1 以上");
+    expect(() =>
+      parseArgs(
+        ["--dsn", "postgres://user:pass@host/db", "--sql-iterations", "0", "prompt"],
+        defaults,
+      ),
+    ).toThrow("1 以上");
   });
 
   it("--debug でデバッグログを有効化する", () => {
-    const options = parseArgs(["--debug", "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--debug", "SELECT"],
+      defaults,
+    );
     expect(options.debug).toBe(true);
+  });
+
+  it("--dsn を省略するとエラー", () => {
+    expect(() => parseArgs(["SELECT"], defaults)).toThrow("--dsn は必須");
   });
 });
 
