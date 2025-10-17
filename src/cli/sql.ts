@@ -21,6 +21,7 @@ import {
   SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
+  setSqlEnvironment,
 } from "../core/tools.js";
 import {
   expandLegacyShortFlags,
@@ -630,6 +631,8 @@ async function runSqlCli(): Promise<void> {
     const { defaults, options, historyStore, systemPrompt } = bootstrap;
     const client = createOpenAIClient();
 
+    setSqlEnvironment(undefined);
+
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client, LOG_LABEL);
       return;
@@ -662,13 +665,7 @@ async function runSqlCli(): Promise<void> {
     const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
-    process.env.GPT_5_CLI_SQL_DSN = sqlEnv.dsn;
-    process.env.GPT_5_CLI_SQL_ENGINE = sqlEnv.engine;
-    if (sqlEnv.engine === "postgresql") {
-      process.env.POSTGRES_DSN = sqlEnv.dsn;
-    } else {
-      delete process.env.POSTGRES_DSN;
-    }
+    setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
     options.dsn = sqlEnv.dsn;
     options.engine = sqlEnv.engine;
     const toolRegistrations = SQL_TOOL_REGISTRY[sqlEnv.engine];

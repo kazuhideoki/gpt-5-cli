@@ -49,13 +49,16 @@ interface CommandResult extends ToolResult {
 
 type SqlEngineKind = "postgresql" | "mysql";
 
-interface SqlEnvironment {
+export interface SqlEnvironment {
   dsn: string;
   engine: SqlEngineKind;
 }
 
-const SQL_DSN_ENV = "GPT_5_CLI_SQL_DSN";
-const SQL_ENGINE_ENV = "GPT_5_CLI_SQL_ENGINE";
+let activeSqlEnvironment: SqlEnvironment | undefined;
+
+export function setSqlEnvironment(environment: SqlEnvironment | undefined): void {
+  activeSqlEnvironment = environment;
+}
 
 type ToolHandler<
   TArgs = unknown,
@@ -235,30 +238,13 @@ interface SqlFetchIndexSchemaArgs {
   index_names?: string[];
 }
 
-/**
- * 環境変数から安全に値を取得し、空文字や未設定を拒否する。
- *
- * @param name 取得対象の環境変数名。
- * @returns 空白除去後の文字列。
- * @throws 値が未設定または空だった場合。
- */
-function requireEnvValue(name: string): string {
-  const value = process.env[name];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`Environment variable ${name} is required for SQL tools.`);
-  }
-  return value;
-}
-
 function requireSqlEnvironment(): SqlEnvironment {
-  const dsn = requireEnvValue(SQL_DSN_ENV);
-  const engineRaw = requireEnvValue(SQL_ENGINE_ENV).toLowerCase();
-  if (engineRaw !== "postgresql" && engineRaw !== "mysql") {
+  if (!activeSqlEnvironment) {
     throw new Error(
-      `Environment variable ${SQL_ENGINE_ENV} must be either "postgresql" or "mysql" for SQL tools.`,
+      "SQL environment is not configured. Pass --dsn to the CLI before invoking SQL tools.",
     );
   }
-  return { dsn, engine: engineRaw as SqlEngineKind };
+  return activeSqlEnvironment;
 }
 
 /**
@@ -552,9 +538,7 @@ function buildMysqlErrorMessage(error: unknown): string {
 }
 
 /**
- * `POSTGRES_DSN` の設定を利用して PostgreSQL クライアントを作成する。
- *
- * @returns 接続準備済みの `Client` インスタンス。
+ * 与えられた DSN から PostgreSQL クライアントを構築する。
  */
 function createPgClient(dsn: string): Client {
   return new Client({ connectionString: dsn });

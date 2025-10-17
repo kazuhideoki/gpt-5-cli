@@ -16,6 +16,7 @@ import {
   WRITE_FILE_TOOL,
   buildAgentsToolList,
   createToolRuntime,
+  setSqlEnvironment,
   resolveMermaidCommand,
   resolveWorkspacePath,
   type ToolRegistration,
@@ -54,33 +55,10 @@ const { tools: D2_FUNCTION_TOOLS, execute: executeD2ToolCall } = createToolRunti
 const { tools: MERMAID_FUNCTION_TOOLS } = createToolRuntime(MERMAID_TOOLSET);
 const { tools: SQL_FUNCTION_TOOLS, execute: executeSqlToolCall } = createToolRuntime(SQL_TOOLSET);
 
-const ORIGINAL_SQL_DSN = process.env.GPT_5_CLI_SQL_DSN;
-const ORIGINAL_SQL_ENGINE = process.env.GPT_5_CLI_SQL_ENGINE;
-const ORIGINAL_POSTGRES_DSN = process.env.POSTGRES_DSN;
 const ORIGINAL_SQRUFF_BIN = process.env.SQRUFF_BIN;
 const ORIGINAL_MYSQL_CREATE_CONNECTION = mysql.createConnection;
 
 afterEach(() => {
-  if (ORIGINAL_SQL_DSN === undefined) {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-  } else {
-    process.env.GPT_5_CLI_SQL_DSN = ORIGINAL_SQL_DSN;
-  }
-
-  if (ORIGINAL_SQL_ENGINE === undefined) {
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-  } else {
-    process.env.GPT_5_CLI_SQL_ENGINE = ORIGINAL_SQL_ENGINE;
-  }
-
-  if (ORIGINAL_POSTGRES_DSN === undefined) {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-    delete process.env.POSTGRES_DSN;
-  } else {
-    process.env.POSTGRES_DSN = ORIGINAL_POSTGRES_DSN;
-  }
-
   if (ORIGINAL_SQRUFF_BIN === undefined) {
     delete process.env.SQRUFF_BIN;
   } else {
@@ -88,6 +66,7 @@ afterEach(() => {
   }
 
   mysql.createConnection = ORIGINAL_MYSQL_CREATE_CONNECTION;
+  setSqlEnvironment(undefined);
 });
 
 describe("tool registration lists", () => {
@@ -156,9 +135,7 @@ describe("executeFunctionToolCall", () => {
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-cli-tools-"));
-    process.env.GPT_5_CLI_SQL_DSN = "postgres://example.invalid/db";
-    process.env.GPT_5_CLI_SQL_ENGINE = "postgresql";
-    process.env.POSTGRES_DSN = process.env.GPT_5_CLI_SQL_DSN;
+    setSqlEnvironment({ dsn: "postgres://example.invalid/db", engine: "postgresql" });
   });
 
   afterEach(async () => {
@@ -273,9 +250,7 @@ describe("executeFunctionToolCall", () => {
   });
 
   it("sql_dry_run は DSN 未設定時にエラーを返す", async () => {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-    delete process.env.POSTGRES_DSN;
+    setSqlEnvironment(undefined);
     const call = createCall("sql_dry_run", { query: "SELECT 1" });
     const result = JSON.parse(
       await executeSqlToolCall(call, {
@@ -284,7 +259,7 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
+    expect(String(result.message)).toContain("SQL environment is not configured");
   });
 
   it("sql_dry_run は複数ステートメントを拒否する", async () => {
@@ -312,9 +287,7 @@ describe("executeFunctionToolCall", () => {
   });
 
   it("sql_dry_run は行末コメント付きの単一ステートメントを受け付ける", async () => {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-    delete process.env.POSTGRES_DSN;
+    setSqlEnvironment(undefined);
     const call = createCall("sql_dry_run", { query: "SELECT 1; -- ok" });
     const result = JSON.parse(
       await executeSqlToolCall(call, {
@@ -323,13 +296,11 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
+    expect(String(result.message)).toContain("SQL environment is not configured");
   });
 
   it("sql_dry_run はブロックコメントのみを後続に持つ入力を受け付ける", async () => {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-    delete process.env.POSTGRES_DSN;
+    setSqlEnvironment(undefined);
     const call = createCall("sql_dry_run", { query: "SELECT 1; /* trailing */" });
     const result = JSON.parse(
       await executeSqlToolCall(call, {
@@ -338,13 +309,11 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
+    expect(String(result.message)).toContain("SQL environment is not configured");
   });
 
   it("SQL スキーマ系ツールは DSN 未設定時にエラーを返す", async () => {
-    delete process.env.GPT_5_CLI_SQL_DSN;
-    delete process.env.GPT_5_CLI_SQL_ENGINE;
-    delete process.env.POSTGRES_DSN;
+    setSqlEnvironment(undefined);
     const calls = [
       createCall("sql_fetch_table_schema", {}),
       createCall("sql_fetch_column_schema", {}),
@@ -359,7 +328,7 @@ describe("executeFunctionToolCall", () => {
         }),
       );
       expect(result.success).toBe(false);
-      expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
+      expect(String(result.message)).toContain("SQL environment is not configured");
     }
   });
 
@@ -458,9 +427,7 @@ describe("SQL schema fetch tool queries", () => {
   let endCount: number;
 
   beforeEach(() => {
-    process.env.GPT_5_CLI_SQL_DSN = "postgres://example.invalid/db";
-    process.env.GPT_5_CLI_SQL_ENGINE = "postgresql";
-    process.env.POSTGRES_DSN = process.env.GPT_5_CLI_SQL_DSN;
+    setSqlEnvironment({ dsn: "postgres://example.invalid/db", engine: "postgresql" });
     queryCalls = [];
     connectCount = 0;
     endCount = 0;
@@ -620,8 +587,7 @@ describe("SQL schema fetch tool queries (MySQL)", () => {
   let createCalls: number;
 
   beforeEach(() => {
-    process.env.GPT_5_CLI_SQL_DSN = "mysql://example.invalid/test";
-    process.env.GPT_5_CLI_SQL_ENGINE = "mysql";
+    setSqlEnvironment({ dsn: "mysql://example.invalid/test", engine: "mysql" });
     connection = new MockMysqlConnection();
     createCalls = 0;
     mysql.createConnection = (async () => {
