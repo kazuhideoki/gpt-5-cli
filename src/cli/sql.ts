@@ -541,8 +541,8 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
     );
   } else {
     toolSummaryLines.push(
-      "- sql_fetch_enum_schema: ENUM 型の定義取得 (MySQL 対応は作業中)",
-      "- sql_fetch_index_schema: インデックス情報取得 (MySQL 対応は作業中)",
+      "- sql_fetch_enum_schema: ENUM 型の定義と候補値を取得する",
+      "- sql_fetch_index_schema: information_schema.statistics からインデックス定義を構築する",
     );
   }
   toolSummaryLines.push(
@@ -662,6 +662,8 @@ async function runSqlCli(): Promise<void> {
     const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
+    process.env.GPT_5_CLI_SQL_DSN = sqlEnv.dsn;
+    process.env.GPT_5_CLI_SQL_ENGINE = sqlEnv.engine;
     if (sqlEnv.engine === "postgresql") {
       process.env.POSTGRES_DSN = sqlEnv.dsn;
     } else {
@@ -704,15 +706,15 @@ async function runSqlCli(): Promise<void> {
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
       const historyTask = buildSqlCliHistoryTask(
-          {
-            taskMode: options.taskMode,
-            dsnHash: sqlEnv.hash,
-            dsn: sqlEnv.dsn,
-            connection: sqlEnv.connection,
-            engine: sqlEnv.engine,
-          },
-          previousTask,
-        );
+        {
+          taskMode: options.taskMode,
+          dsnHash: sqlEnv.hash,
+          dsn: sqlEnv.dsn,
+          connection: sqlEnv.connection,
+          engine: sqlEnv.engine,
+        },
+        previousTask,
+      );
       historyStore.upsertConversation({
         metadata: {
           model: options.model,

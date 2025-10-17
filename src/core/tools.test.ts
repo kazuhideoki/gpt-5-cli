@@ -23,6 +23,8 @@ import {
 } from "./tools.js";
 import type { ResponseFunctionToolCall } from "openai/resources/responses/responses";
 import { Client } from "pg";
+import mysql from "mysql2/promise";
+import type { Connection as MysqlConnection } from "mysql2/promise";
 
 function createCall(name: string, args: Record<string, unknown>): ResponseFunctionToolCall {
   return {
@@ -52,11 +54,28 @@ const { tools: D2_FUNCTION_TOOLS, execute: executeD2ToolCall } = createToolRunti
 const { tools: MERMAID_FUNCTION_TOOLS } = createToolRuntime(MERMAID_TOOLSET);
 const { tools: SQL_FUNCTION_TOOLS, execute: executeSqlToolCall } = createToolRuntime(SQL_TOOLSET);
 
+const ORIGINAL_SQL_DSN = process.env.GPT_5_CLI_SQL_DSN;
+const ORIGINAL_SQL_ENGINE = process.env.GPT_5_CLI_SQL_ENGINE;
 const ORIGINAL_POSTGRES_DSN = process.env.POSTGRES_DSN;
 const ORIGINAL_SQRUFF_BIN = process.env.SQRUFF_BIN;
+const ORIGINAL_MYSQL_CREATE_CONNECTION = mysql.createConnection;
 
 afterEach(() => {
+  if (ORIGINAL_SQL_DSN === undefined) {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+  } else {
+    process.env.GPT_5_CLI_SQL_DSN = ORIGINAL_SQL_DSN;
+  }
+
+  if (ORIGINAL_SQL_ENGINE === undefined) {
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
+  } else {
+    process.env.GPT_5_CLI_SQL_ENGINE = ORIGINAL_SQL_ENGINE;
+  }
+
   if (ORIGINAL_POSTGRES_DSN === undefined) {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
     delete process.env.POSTGRES_DSN;
   } else {
     process.env.POSTGRES_DSN = ORIGINAL_POSTGRES_DSN;
@@ -67,6 +86,8 @@ afterEach(() => {
   } else {
     process.env.SQRUFF_BIN = ORIGINAL_SQRUFF_BIN;
   }
+
+  mysql.createConnection = ORIGINAL_MYSQL_CREATE_CONNECTION;
 });
 
 describe("tool registration lists", () => {
@@ -135,6 +156,9 @@ describe("executeFunctionToolCall", () => {
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-cli-tools-"));
+    process.env.GPT_5_CLI_SQL_DSN = "postgres://example.invalid/db";
+    process.env.GPT_5_CLI_SQL_ENGINE = "postgresql";
+    process.env.POSTGRES_DSN = process.env.GPT_5_CLI_SQL_DSN;
   });
 
   afterEach(async () => {
@@ -249,6 +273,8 @@ describe("executeFunctionToolCall", () => {
   });
 
   it("sql_dry_run は DSN 未設定時にエラーを返す", async () => {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1" });
     const result = JSON.parse(
@@ -258,7 +284,7 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("POSTGRES_DSN");
+    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
   });
 
   it("sql_dry_run は複数ステートメントを拒否する", async () => {
@@ -286,6 +312,8 @@ describe("executeFunctionToolCall", () => {
   });
 
   it("sql_dry_run は行末コメント付きの単一ステートメントを受け付ける", async () => {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1; -- ok" });
     const result = JSON.parse(
@@ -295,10 +323,12 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("POSTGRES_DSN");
+    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
   });
 
   it("sql_dry_run はブロックコメントのみを後続に持つ入力を受け付ける", async () => {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
     delete process.env.POSTGRES_DSN;
     const call = createCall("sql_dry_run", { query: "SELECT 1; /* trailing */" });
     const result = JSON.parse(
@@ -308,10 +338,12 @@ describe("executeFunctionToolCall", () => {
       }),
     );
     expect(result.success).toBe(false);
-    expect(String(result.message)).toContain("POSTGRES_DSN");
+    expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
   });
 
   it("SQL スキーマ系ツールは DSN 未設定時にエラーを返す", async () => {
+    delete process.env.GPT_5_CLI_SQL_DSN;
+    delete process.env.GPT_5_CLI_SQL_ENGINE;
     delete process.env.POSTGRES_DSN;
     const calls = [
       createCall("sql_fetch_table_schema", {}),
@@ -327,7 +359,7 @@ describe("executeFunctionToolCall", () => {
         }),
       );
       expect(result.success).toBe(false);
-      expect(String(result.message)).toContain("POSTGRES_DSN");
+      expect(String(result.message)).toContain("GPT_5_CLI_SQL_DSN");
     }
   });
 
@@ -426,7 +458,9 @@ describe("SQL schema fetch tool queries", () => {
   let endCount: number;
 
   beforeEach(() => {
-    process.env.POSTGRES_DSN = "postgres://example.invalid/db";
+    process.env.GPT_5_CLI_SQL_DSN = "postgres://example.invalid/db";
+    process.env.GPT_5_CLI_SQL_ENGINE = "postgresql";
+    process.env.POSTGRES_DSN = process.env.GPT_5_CLI_SQL_DSN;
     queryCalls = [];
     connectCount = 0;
     endCount = 0;
@@ -543,6 +577,190 @@ describe("SQL schema fetch tool queries", () => {
     expect(call.text).toMatch(/tablename\s*=\s*ANY\(\$2::text\[\]\)/u);
     expect(call.text).toMatch(/indexname\s*=\s*ANY\(\$3::text\[\]\)/u);
     expect(call.values).toEqual([["public"], ["reservations"], ["reservations_user_idx"]]);
+  });
+});
+
+describe("SQL schema fetch tool queries (MySQL)", () => {
+  class MockMysqlConnection {
+    public executeCalls: Array<{ sql: string; values?: unknown[] }>; // parameters passed to execute
+    public queryCalls: Array<{ sql: string; values?: unknown[] }>;
+    public ended: boolean;
+    public executeImpl: (sql: string, values?: unknown[]) => Promise<[unknown, unknown]>;
+    public queryImpl: (sql: string, values?: unknown[]) => Promise<[unknown, unknown]>;
+
+    constructor() {
+      this.executeCalls = [];
+      this.queryCalls = [];
+      this.ended = false;
+      this.executeImpl = async () => [[], []];
+      this.queryImpl = async () => [[], []];
+    }
+
+    async execute(sql: string, values?: unknown[]): Promise<[unknown, unknown]> {
+      this.executeCalls.push({ sql, values: Array.isArray(values) ? values : undefined });
+      return this.executeImpl(sql, values);
+    }
+
+    async query(sql: string, values?: unknown[]): Promise<[unknown, unknown]> {
+      this.queryCalls.push({ sql, values: Array.isArray(values) ? values : undefined });
+      return this.queryImpl(sql, values);
+    }
+
+    async end(): Promise<void> {
+      this.ended = true;
+    }
+  }
+
+  const context = {
+    cwd: process.cwd(),
+    log: () => {},
+  };
+
+  let connection: MockMysqlConnection;
+  let createCalls: number;
+
+  beforeEach(() => {
+    process.env.GPT_5_CLI_SQL_DSN = "mysql://example.invalid/test";
+    process.env.GPT_5_CLI_SQL_ENGINE = "mysql";
+    connection = new MockMysqlConnection();
+    createCalls = 0;
+    mysql.createConnection = (async () => {
+      createCalls += 1;
+      return connection as unknown as MysqlConnection;
+    }) as typeof mysql.createConnection;
+  });
+
+  afterEach(() => {
+    mysql.createConnection = ORIGINAL_MYSQL_CREATE_CONNECTION;
+  });
+
+  it("sql_fetch_table_schema は MySQL の information_schema を参照する", async () => {
+    connection.executeImpl = async () => [
+      [
+        {
+          table_schema: "app",
+          table_name: "orders",
+          table_type: "BASE TABLE",
+          is_insertable_into: "YES",
+        },
+      ],
+      [],
+    ];
+
+    const result = await SQL_FETCH_TABLE_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["app"],
+        table_types: ["base table"],
+      },
+      context,
+    );
+
+    expect(result.success).toBe(true);
+    expect(createCalls).toBe(1);
+    expect(connection.executeCalls[0]?.sql).toContain("information_schema.tables");
+    expect(connection.executeCalls[0]?.values?.[0]).toEqual(["app"]);
+    expect(connection.ended).toBe(true);
+  });
+
+  it("sql_fetch_column_schema は MySQL でもフィルタを適用する", async () => {
+    connection.executeImpl = async () => [
+      [
+        {
+          table_schema: "app",
+          table_name: "orders",
+          column_name: "status",
+          data_type: "enum",
+          is_nullable: "NO",
+          column_default: "pending",
+        },
+      ],
+      [],
+    ];
+
+    const result = await SQL_FETCH_COLUMN_SCHEMA_TOOL.handler(
+      {
+        schema_names: ["app"],
+        table_names: ["orders"],
+        column_names: ["status"],
+      },
+      context,
+    );
+
+    expect(result.success).toBe(true);
+    expect(connection.executeCalls[0]?.sql).toContain("information_schema.columns");
+    expect(connection.executeCalls[0]?.values?.[0]).toEqual(["app"]);
+    expect(connection.ended).toBe(true);
+  });
+
+  it("sql_fetch_enum_schema は ENUM 値を展開する", async () => {
+    connection.executeImpl = async () => [
+      [
+        {
+          table_schema: "app",
+          table_name: "orders",
+          column_name: "status",
+          column_type: "enum('draft','published','archived')",
+        },
+      ],
+      [],
+    ];
+
+    const result = (await SQL_FETCH_ENUM_SCHEMA_TOOL.handler({}, context)) as ToolResult & {
+      rows?: Array<{ enum_label: string; enum_name: string; sort_order: number }>;
+      row_count?: number;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.row_count).toBe(3);
+    expect(result.rows?.map((row) => row.enum_label)).toEqual(["draft", "published", "archived"]);
+    expect(result.rows?.every((row) => row.enum_name === "orders.status")).toBe(true);
+    expect(connection.ended).toBe(true);
+  });
+
+  it("sql_fetch_index_schema は statistics から定義を生成する", async () => {
+    connection.executeImpl = async () => [
+      [
+        {
+          table_schema: "app",
+          table_name: "orders",
+          index_name: "PRIMARY",
+          index_definition: "PRIMARY KEY (id)",
+        },
+      ],
+      [],
+    ];
+
+    const result = await SQL_FETCH_INDEX_SCHEMA_TOOL.handler({}, context);
+
+    expect(result.success).toBe(true);
+    expect(connection.executeCalls[0]?.sql).toContain("information_schema.statistics");
+    expect(
+      (result as ToolResult & { rows?: Array<{ index_definition?: string }> }).rows?.[0]
+        ?.index_definition,
+    ).toBe("PRIMARY KEY (id)");
+    expect(connection.ended).toBe(true);
+  });
+
+  it("sql_dry_run は MySQL の EXPLAIN FORMAT=JSON を実行する", async () => {
+    connection.queryImpl = async (sql) => {
+      if (typeof sql === "string" && sql.startsWith("EXPLAIN")) {
+        return [[{ EXPLAIN: { plan: "ok" } }], []];
+      }
+      return [[], []];
+    };
+
+    const call = createCall("sql_dry_run", { query: "SELECT 1" });
+    const result = JSON.parse(
+      await executeSqlToolCall(call, {
+        cwd: context.cwd,
+        log: context.log,
+      }),
+    ) as ToolResult & { plan?: unknown };
+
+    expect(result.success).toBe(true);
+    expect(result.plan).toEqual({ plan: "ok" });
+    expect(connection.queryCalls[0]?.sql).toContain("EXPLAIN FORMAT=JSON");
+    expect(connection.ended).toBe(true);
   });
 });
 

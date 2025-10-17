@@ -98,7 +98,8 @@ describe("buildSqlInstructionMessages", () => {
     expect(text).toContain("mysql.internal");
     expect(text).toContain("sha256:mysql");
     expect(text).toContain("5 回");
-    expect(text).toContain("MySQL 対応は作業中");
+    expect(text).toContain("ENUM 型の定義と候補値を取得する");
+    expect(text).toContain("information_schema.statistics");
   });
 });
 
