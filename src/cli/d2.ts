@@ -58,44 +58,6 @@ const d2CliHistoryTaskSchema = z.object({
 
 export type D2CliHistoryTask = z.infer<typeof d2CliHistoryTaskSchema>;
 
-/** 履歴同期時に判明したd2ファイルの実体パスを保持する補助情報。 */
-interface D2CliHistoryD2Context {
-  absolutePath?: string;
-}
-
-/** d2履歴タスク構築時に利用するオプション群。 */
-interface D2CliHistoryTaskOptions {
-  taskMode: D2CliOptions["taskMode"];
-  d2FilePath?: string;
-  d2FileExplicit: boolean;
-}
-
-/**
- * d2モードで履歴へ保存するタスク情報を構築し、前回メタデータと現在情報を統合する。
- */
-function buildD2CliHistoryTask(
-  options: D2CliHistoryTaskOptions,
-  previousTask?: D2CliHistoryTask,
-  d2Context?: D2CliHistoryD2Context,
-): D2CliHistoryTask | undefined {
-  const task: D2CliHistoryTask = { mode: options.taskMode };
-  let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
-  const contextPath = d2Context?.absolutePath;
-  let filePath = contextPath ?? options.d2FilePath;
-  if (!filePath && !options.d2FileExplicit) {
-    filePath = d2Meta?.file_path;
-  }
-  if (contextPath) {
-    d2Meta = { ...d2Meta, file_path: contextPath };
-  } else if (filePath) {
-    d2Meta = { ...d2Meta, file_path: filePath };
-  }
-  if (d2Meta && Object.keys(d2Meta).length > 0) {
-    task.d2 = d2Meta;
-  }
-  return task;
-}
-
 /**
  * CLIの利用方法を標準出力に表示する。
  *
@@ -549,15 +511,21 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
 
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as D2CliHistoryTask | undefined;
-      const historyTask = buildD2CliHistoryTask(
-        {
-          taskMode: options.taskMode,
-          d2FilePath: options.d2FilePath,
-          d2FileExplicit: options.d2FileExplicit,
-        },
-        previousTask,
-        d2Context ? { absolutePath: d2Context.absolutePath } : undefined,
-      );
+      const historyTask: D2CliHistoryTask = { mode: options.taskMode };
+      let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+      const contextPath = d2Context?.absolutePath;
+      let filePath = contextPath ?? options.d2FilePath;
+      if (!filePath && !options.d2FileExplicit) {
+        filePath = d2Meta?.file_path;
+      }
+      if (contextPath) {
+        d2Meta = { ...d2Meta, file_path: contextPath };
+      } else if (filePath) {
+        d2Meta = { ...d2Meta, file_path: filePath };
+      }
+      if (d2Meta && Object.keys(d2Meta).length > 0) {
+        historyTask.d2 = d2Meta;
+      }
       historyStore.upsertConversation({
         metadata: {
           model: options.model,

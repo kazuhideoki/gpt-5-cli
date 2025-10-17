@@ -29,27 +29,9 @@ const askCliHistoryTaskSchema = z.object({
 
 export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
 
-/** Ask履歴タスク構築時に引数として受け渡すオプションの集合。 */
-interface AskCliHistoryTaskOptions {
-  taskMode: CliOptions["taskMode"];
-}
-
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 const ASK_TOOL_RUNTIME = createToolRuntime(ASK_TOOL_REGISTRATIONS);
 const ASK_FUNCTION_TOOLS = buildCliToolList(ASK_TOOL_REGISTRATIONS);
-
-/**
- * Askモードで保存する履歴タスク情報を構築し、直前タスクの情報を必要に応じて引き継ぐ。
- */
-function buildAskCliHistoryTask(
-  options: AskCliHistoryTaskOptions,
-  previousTask?: AskCliHistoryTask,
-): AskCliHistoryTask | undefined {
-  return {
-    ...previousTask,
-    mode: options.taskMode,
-  };
-}
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -384,12 +366,10 @@ async function main(): Promise<void> {
 
     if (response.id) {
       const previousTask = context.activeEntry?.task as AskCliHistoryTask | undefined;
-      const historyTask = buildAskCliHistoryTask(
-        {
-          taskMode: options.taskMode,
-        },
-        previousTask,
-      );
+      const historyTask: AskCliHistoryTask = {
+        ...(previousTask ?? {}),
+        mode: options.taskMode,
+      };
       historyStore.upsertConversation({
         metadata: {
           model: options.model,

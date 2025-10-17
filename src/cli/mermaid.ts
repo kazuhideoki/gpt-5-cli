@@ -54,44 +54,6 @@ const mermaidCliHistoryTaskSchema = z.object({
 
 export type MermaidCliHistoryTask = z.infer<typeof mermaidCliHistoryTaskSchema>;
 
-/** Mermaidファイルの実体パスを履歴へ反映させるための補助情報。 */
-interface MermaidCliHistoryDiagramContext {
-  absolutePath?: string;
-}
-
-/** Mermaid履歴タスクを構築する際に受け取るオプション集合。 */
-interface MermaidCliHistoryTaskOptions {
-  taskMode: MermaidCliOptions["taskMode"];
-  mermaidFilePath?: string;
-  mermaidFileExplicit: boolean;
-}
-
-/**
- * Mermaidモードで履歴へ保存するタスク情報を構築し、前回メタデータと現在のファイル情報を統合する。
- */
-function buildMermaidCliHistoryTask(
-  options: MermaidCliHistoryTaskOptions,
-  previousTask?: MermaidCliHistoryTask,
-  mermaidContext?: MermaidCliHistoryDiagramContext,
-): MermaidCliHistoryTask | undefined {
-  const task: MermaidCliHistoryTask = { mode: options.taskMode };
-  let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
-  const contextPath = mermaidContext?.absolutePath;
-  let filePath = contextPath ?? options.mermaidFilePath;
-  if (!filePath && !options.mermaidFileExplicit) {
-    filePath = mermaidMeta?.file_path;
-  }
-  if (contextPath) {
-    mermaidMeta = { ...mermaidMeta, file_path: contextPath };
-  } else if (filePath) {
-    mermaidMeta = { ...mermaidMeta, file_path: filePath };
-  }
-  if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
-    task.mermaid = mermaidMeta;
-  }
-  return task;
-}
-
 /**
  * CLIの利用方法を標準出力に表示する。
  *
@@ -554,15 +516,21 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
 
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as MermaidCliHistoryTask | undefined;
-      const historyTask = buildMermaidCliHistoryTask(
-        {
-          taskMode: options.taskMode,
-          mermaidFilePath: options.mermaidFilePath,
-          mermaidFileExplicit: options.mermaidFileExplicit,
-        },
-        previousTask,
-        mermaidContext ? { absolutePath: mermaidContext.absolutePath } : undefined,
-      );
+      const historyTask: MermaidCliHistoryTask = { mode: options.taskMode };
+      let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
+      const contextPath = mermaidContext?.absolutePath;
+      let filePath = contextPath ?? options.mermaidFilePath;
+      if (!filePath && !options.mermaidFileExplicit) {
+        filePath = mermaidMeta?.file_path;
+      }
+      if (contextPath) {
+        mermaidMeta = { ...mermaidMeta, file_path: contextPath };
+      } else if (filePath) {
+        mermaidMeta = { ...mermaidMeta, file_path: filePath };
+      }
+      if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
+        historyTask.mermaid = mermaidMeta;
+      }
       historyStore.upsertConversation({
         metadata: {
           model: options.model,
