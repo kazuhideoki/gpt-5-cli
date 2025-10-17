@@ -144,6 +144,7 @@ describe("mermaid CLI integration", () => {
     const historyAfterFirst = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterFirst.length).toBe(1);
     const firstEntry = historyAfterFirst[0];
+    expect(firstEntry.task?.mode).toBe("mermaid");
     expect(firstEntry.task?.mermaid?.file_path).toBe(expectedAbsolutePath);
     expect(firstEntry.request_count).toBe(1);
 
@@ -155,6 +156,7 @@ describe("mermaid CLI integration", () => {
     const historyAfterSecond = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSecond.length).toBe(1);
     const secondEntry = historyAfterSecond[0];
+    expect(secondEntry.task?.mode).toBe("mermaid");
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.task?.mermaid?.file_path).toBe(expectedAbsolutePath);
 
@@ -166,6 +168,7 @@ describe("mermaid CLI integration", () => {
     const historyAfterThird = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterThird.length).toBe(1);
     const thirdEntry = historyAfterThird[0];
+    expect(thirdEntry.task?.mode).toBe("mermaid");
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.task?.mermaid?.file_path).toBe(expectedAbsolutePath);
 
@@ -177,6 +180,7 @@ describe("mermaid CLI integration", () => {
     const historyAfterSummary = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSummary.length).toBe(1);
     const summaryEntry = historyAfterSummary[0];
+    expect(summaryEntry.task?.mode).toBe("mermaid");
     expect(summaryEntry.task?.mermaid?.file_path).toBe(expectedAbsolutePath);
     expect(summaryEntry.turns?.length).toBe(1);
     expect(summaryEntry.turns?.[0]?.role).toBe("system");

@@ -140,6 +140,7 @@ describe("d2 CLI integration", () => {
     const historyAfterFirst = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterFirst.length).toBe(1);
     const firstEntry = historyAfterFirst[0];
+    expect(firstEntry.task?.mode).toBe("d2");
     expect(firstEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(firstEntry.request_count).toBe(1);
 
@@ -151,6 +152,7 @@ describe("d2 CLI integration", () => {
     const historyAfterSecond = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSecond.length).toBe(1);
     const secondEntry = historyAfterSecond[0];
+    expect(secondEntry.task?.mode).toBe("d2");
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     const third = await runD2Cli(["-c", "3回目"], env);
@@ -161,6 +163,7 @@ describe("d2 CLI integration", () => {
     const historyAfterThird = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterThird.length).toBe(1);
     const thirdEntry = historyAfterThird[0];
+    expect(thirdEntry.task?.mode).toBe("d2");
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(callIndex).toBe(responses.length);
@@ -217,6 +220,7 @@ describe("d2 CLI integration", () => {
     const historyAfterSummary = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSummary.length).toBe(1);
     const entry = historyAfterSummary[0];
+    expect(entry.task?.mode).toBe("d2");
     expect(entry.task?.d2?.file_path).toBe(expectedAbsolutePath);
     expect(entry.turns?.length).toBe(1);
     expect(entry.turns?.[0]?.role).toBe("system");

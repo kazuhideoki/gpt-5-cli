@@ -457,24 +457,6 @@ function resolveSqlDsn(
   throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
 }
 
-/** 接続メタデータをログ表示向けの `key=value` 文字列へ整形する。 */
-function formatConnectionDisplay(connection: SqlConnectionMetadata): string {
-  const parts: string[] = [];
-  if (connection.host) {
-    parts.push(`host=${connection.host}`);
-  }
-  if (typeof connection.port === "number") {
-    parts.push(`port=${connection.port}`);
-  }
-  if (connection.database) {
-    parts.push(`database=${connection.database}`);
-  }
-  if (connection.user) {
-    parts.push(`user=${connection.user}`);
-  }
-  return parts.length > 0 ? parts.join(", ") : "(接続情報なし)";
-}
-
 /** SQLシステムメッセージ生成時に必要なパラメータ群。 */
 interface SqlInstructionParams {
   connection: SqlConnectionMetadata;
@@ -489,7 +471,20 @@ interface SqlInstructionParams {
  * @returns Responses API へ渡すシステムメッセージ配列。
  */
 export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenAIInputMessage[] {
-  const connectionLine = formatConnectionDisplay(params.connection);
+  const connectionParts: string[] = [];
+  if (params.connection.host) {
+    connectionParts.push(`host=${params.connection.host}`);
+  }
+  if (typeof params.connection.port === "number") {
+    connectionParts.push(`port=${params.connection.port}`);
+  }
+  if (params.connection.database) {
+    connectionParts.push(`database=${params.connection.database}`);
+  }
+  if (params.connection.user) {
+    connectionParts.push(`user=${params.connection.user}`);
+  }
+  const connectionLine = connectionParts.length > 0 ? connectionParts.join(", ") : "(接続情報なし)";
   const toolSummary = [
     "利用可能なツール:",
     "- sql_fetch_table_schema: information_schema.tables からテーブル情報を取得する",
