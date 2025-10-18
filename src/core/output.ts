@@ -6,6 +6,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
+type CopySource =
+  | {
+      type: "content";
+      value: string;
+    }
+  | {
+      type: "file";
+      filePath: string;
+    };
+
 interface DeliverOutputParams {
   /** 書き出す本文。 */
   content: string;
@@ -15,6 +25,8 @@ interface DeliverOutputParams {
   filePath?: string;
   /** クリップボードへコピーする場合に `true`。 */
   copy?: boolean;
+  /** コピー対象を本文以外へ変更する場合の情報。 */
+  copySource?: CopySource;
 }
 
 interface DeliverOutputResult {
@@ -92,7 +104,26 @@ export async function deliverOutput(params: DeliverOutputParams): Promise<Delive
   }
 
   if (params.copy) {
-    await copyWithPbcopy(params.content);
+    const copySource = params.copySource ?? {
+      type: "content" as const,
+      value: params.content,
+    };
+    let copyContent: string;
+    if (copySource.type === "content") {
+      copyContent = copySource.value;
+    } else {
+      const resolvedCopyPath = ensureWorkspacePath(copySource.filePath, cwd);
+      try {
+        copyContent = await fs.readFile(resolvedCopyPath, { encoding: "utf8" });
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException;
+        if (nodeError?.code === "ENOENT") {
+          throw new Error(`Error: --copy の対象ファイルが存在しません: ${copySource.filePath}`);
+        }
+        throw error;
+      }
+    }
+    await copyWithPbcopy(copyContent);
     result.copied = true;
   }
 

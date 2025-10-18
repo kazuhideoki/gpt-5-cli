@@ -554,6 +554,10 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       content,
       filePath: summaryOutputPath,
       copy: options.copyOutput,
+      copySource: {
+        type: "file",
+        filePath: options.mermaidFilePath,
+      },
     });
 
     if (agentResult.responseId) {

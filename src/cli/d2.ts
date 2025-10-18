@@ -595,6 +595,10 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       content,
       filePath: summaryOutputPath,
       copy: options.copyOutput,
+      copySource: {
+        type: "file",
+        filePath: options.d2FilePath,
+      },
     });
 
     if (agentResult.responseId) {

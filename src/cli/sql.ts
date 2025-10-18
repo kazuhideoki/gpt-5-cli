@@ -788,6 +788,10 @@ async function runSqlCli(): Promise<void> {
       content,
       filePath: summaryOutputPath,
       copy: options.copyOutput,
+      copySource: {
+        type: "file",
+        filePath: options.sqlFilePath,
+      },
     });
 
     if (agentResult.responseId) {
