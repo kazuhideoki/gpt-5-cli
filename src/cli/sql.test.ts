@@ -28,6 +28,8 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
+    expect(options.sqlFilePath).toBe("query.sql");
+    expect(options.outputPath).toBe("query.sql");
   });
 
   it("--sql-iterations を検証する", () => {
@@ -54,6 +56,24 @@ describe("parseArgs", () => {
       defaults,
     );
     expect(options.debug).toBe(true);
+  });
+
+  it("--output で出力パスを指定できる", () => {
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
+      defaults,
+    );
+    expect(options.sqlFilePath).toBe("result.sql");
+    expect(options.outputExplicit).toBe(true);
+  });
+
+  it("--copy でコピー出力を有効化する", () => {
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--copy", "SELECT"],
+      defaults,
+    );
+    expect(options.copyOutput).toBe(true);
+    expect(options.copyExplicit).toBe(true);
   });
 
   it("--dsn を省略すると未設定のまま返す", () => {

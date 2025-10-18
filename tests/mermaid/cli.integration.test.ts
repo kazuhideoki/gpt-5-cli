@@ -54,7 +54,7 @@ describe("mermaid CLI integration", () => {
     const env = createBaseEnv(server.port, historyPath);
     const relativePath = path.join("diagrams", "flow.mmd");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
-    const result = await runMermaidCli(["-F", relativePath, "Mermaid 図を作成"], env);
+    const result = await runMermaidCli(["-o", relativePath, "Mermaid 図を作成"], env);
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("[gpt-5-cli-mermaid]");
@@ -135,7 +135,7 @@ describe("mermaid CLI integration", () => {
     const relativePath = path.join("diagrams", "flowchart.mmd");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
 
-    const first = await runMermaidCli(["-F", relativePath, "初回Mermaid"], env);
+    const first = await runMermaidCli(["-o", relativePath, "初回Mermaid"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-mermaid]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("Mermaid OK (1)");

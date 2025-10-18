@@ -61,6 +61,8 @@ bun run start -- --help  # リポジトリ直下で Bun から実行
 - `-r{N}`: N 番目（新しい順）の履歴で再開。テキスト省略時は対話的に入力。
 - `-d{N}`: N 番目の履歴を削除。
 - `-s{N}`: N 番目の会話ログを表示（`NO_COLOR=1` で色無し）。
+- `-o, --output <path>`: 結果を指定ファイルに保存。ワークスペース配下の相対パスまたはフルパスのみ扱う。
+- `--copy`: 結果をクリップボードへコピー（macOS の `pbcopy` を利用）。
 - フラグ連結: 1 つの `-` に続けてまとめて指定可（例: `-m1e2v2`）。分割指定も可（例: `-m1 -e2 -v2`）。`-i` は次の引数でパスを受け取るので連結不可。
 - 番号付きフラグ: `-r{N}`/`-d{N}`/`-s{N}` は文字の直後に数字を続けます（例: `-r2`）。
 
@@ -85,6 +87,11 @@ bun run start:d2 -- --help
 
 d2 モード固有のレンダリングやフラグ構成を持ちます。履歴ストアは ask CLI と共有されるため、`task.mode` によりどちらの CLI で作成した履歴か判別できます。
 
+主な追加フラグ:
+
+- `-o, --output <path>`: 生成した D2 コードを保存するファイルパス。指定しない場合は `diagram.d2` をワークスペース直下に用意します。
+- `--copy`: 最終結果をクリップボードへコピー（macOS の `pbcopy` が必要）。
+
 ### Mermaid CLI
 
 Mermaid 用の CLI は下記で起動できます。
@@ -98,6 +105,11 @@ Mermaid CLI では `mermaid_check` ツールを通じて `@mermaid-js/mermaid-cl
 
 - `.mmd` など純粋な Mermaid ソースファイルを指定するのが最も確実です。Markdown で管理する場合は、Mermaid コードを必ず ```mermaid``` または `:::mermaid` ブロック内に記述してください（`mmdc` がチャートを抽出できません）。
 
+主な追加フラグ:
+
+- `-o, --output <path>`: 生成・修正した Mermaid ソースを保存するファイルパス。未指定時は `diagram.mmd` を利用します。
+- `--copy`: 応答テキストをクリップボードへコピー（macOS の `pbcopy` が必要）。
+
 ### SQL CLI
 
 SQL 向け CLI は下記で起動します。
@@ -108,6 +120,11 @@ bun run start:sql -- --help
 ```
 
 SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追加され、会話履歴には SQL 用タスクメタデータが保存されます。CLI ごとの履歴分離を行う場合は `.env.sql` に `GPT_5_CLI_HISTORY_INDEX_FILE` を設定し、必要に応じて `OPENAI_DEFAULT_EFFORT` なども上書きしてください。
+
+主な追加フラグ:
+
+- `-o, --output <path>`: 応答した SQL を保存するファイルパス。未指定時は `query.sql` を既定として使用します。
+- `--copy`: 応答テキストをクリップボードへコピー（macOS の `pbcopy` が必要）。
 
 ## 依存関係
 

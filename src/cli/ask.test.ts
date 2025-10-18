@@ -32,6 +32,10 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     continueConversation: false,
     debug: false,
     taskMode: "ask",
+    outputPath: undefined,
+    outputExplicit: false,
+    copyOutput: false,
+    copyExplicit: false,
     resumeListOnly: false,
     operation: "ask",
     args: [],
@@ -113,6 +117,13 @@ describe("parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--debug", "確認"], defaults);
     expect(options.debug).toBe(true);
+  });
+
+  it("--copy でコピー出力を有効化する", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["--copy", "テスト"], defaults);
+    expect(options.copyOutput).toBe(true);
+    expect(options.copyExplicit).toBe(true);
   });
 
   it("d2関連フラグは parseArgs で拒否される", () => {

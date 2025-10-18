@@ -131,7 +131,7 @@ describe("d2 CLI integration", () => {
     const relativePath = path.join("diagrams", "sample.d2");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
 
-    const first = await runD2Cli(["-F", relativePath, "初回D2"], env);
+    const first = await runD2Cli(["-o", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");
@@ -199,7 +199,7 @@ describe("d2 CLI integration", () => {
     const relativePath = path.join("diagrams", "sample.d2");
     const expectedAbsolutePath = path.resolve(projectRoot, relativePath);
 
-    const first = await runD2Cli(["-F", relativePath, "初回D2"], env);
+    const first = await runD2Cli(["-o", relativePath, "初回D2"], env);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("[gpt-5-cli-d2]");
     expect(extractUserLines(first.stdout).at(-1)).toBe("D2 OK (1)");

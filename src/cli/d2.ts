@@ -21,6 +21,7 @@ import {
   WRITE_FILE_TOOL,
   buildCliToolList,
 } from "../core/tools.js";
+import { deliverOutput } from "../core/output.js";
 import {
   buildRequest,
   computeContext,
@@ -34,8 +35,7 @@ import type { ResponseCreateParamsNonStreaming } from "openai/resources/response
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
-  d2FilePath?: string;
-  d2FileExplicit: boolean;
+  d2FilePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
 }
@@ -48,6 +48,8 @@ interface D2ContextInfo {
   absolutePath: string;
   exists: boolean;
 }
+
+const DEFAULT_D2_FILE = "diagram.d2";
 
 const D2_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
@@ -80,6 +82,12 @@ export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"
 
 const d2CliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
   d2: z
     .object({
       file_path: z.string().optional(),
@@ -115,7 +123,8 @@ function printHelp(defaults: CliDefaults, options: D2CliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
-  console.log("  -F <path>   : d2出力ファイルパスを指定 (--d2-file)");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
   console.log("  -I <count>  : d2モード時のツール呼び出し上限 (--d2-iterations)");
   console.log("");
   console.log("環境変数(.env):");
@@ -158,16 +167,19 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    outputPath: z.string().min(1).optional(),
+    outputExplicit: z.boolean(),
+    copyOutput: z.boolean(),
+    copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    d2FilePath: z.string().min(1).optional(),
+    d2FilePath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    d2FileExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
   })
@@ -254,7 +266,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
-    .option("-F, --d2-file <path>", "d2出力を保存するファイルパスを指定します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
     .option(
       "-I, --d2-iterations <count>",
       "d2モード時のツール呼び出し上限を指定します",
@@ -287,7 +300,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     show?: string | boolean;
     debug?: boolean;
     image?: string;
-    d2File?: string;
+    output?: string;
+    copy?: boolean;
     d2Iterations?: number;
     compact?: number;
   }>();
@@ -308,10 +322,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: D2CliOptions["taskMode"] = "d2";
-  const d2FilePath =
-    typeof opts.d2File === "string" && opts.d2File.length > 0 ? opts.d2File : undefined;
+  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (outputPath && outputPath.length === 0) {
+    outputPath = undefined;
+  }
+  const copyOutput = Boolean(opts.copy);
   const maxIterations =
     typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.maxIterations;
+  if (!outputPath) {
+    outputPath = DEFAULT_D2_FILE;
+  }
+  const d2FilePath = outputPath;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -347,7 +368,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const d2FileExplicit = program.getOptionValueSource("d2File") === "cli";
+  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
@@ -363,6 +385,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       showIndex,
       imagePath,
       debug,
+      outputPath,
+      outputExplicit,
+      copyOutput,
+      copyExplicit,
       operation,
       compactIndex,
       taskMode,
@@ -371,7 +397,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      d2FileExplicit,
       maxIterations,
       maxIterationsExplicit,
       hasExplicitHistory,
@@ -397,8 +422,7 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo | undefined {
     return undefined;
   }
   const cwd = process.cwd();
-  const rawPath =
-    options.d2FilePath && options.d2FilePath.trim().length > 0 ? options.d2FilePath : "diagram.d2";
+  const rawPath = options.d2FilePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
@@ -411,6 +435,7 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo | undefined {
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
   options.d2FilePath = relativePath;
+  options.outputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
 }
@@ -513,10 +538,17 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         logLabel: "[gpt-5-cli-d2]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
+          const historyTask = activeEntry.task as D2CliHistoryTask | undefined;
 
-          if (!nextOptions.d2FileExplicit) {
-            const historyFile = activeEntry.task?.d2?.file_path;
-            nextOptions.d2FilePath = historyFile ?? nextOptions.d2FilePath;
+          if (!nextOptions.outputExplicit) {
+            const historyFile = historyTask?.output?.file ?? historyTask?.d2?.file_path;
+            if (historyFile) {
+              nextOptions.outputPath = historyFile;
+              nextOptions.d2FilePath = historyFile;
+            }
+          }
+          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyTask.output.copy;
           }
         },
       },
@@ -551,20 +583,27 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    await deliverOutput({
+      content,
+      filePath: options.d2FilePath,
+      copy: options.copyOutput,
+    });
+
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as D2CliHistoryTask | undefined;
       const historyTask: D2CliHistoryTask = { mode: options.taskMode };
       let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
       const contextPath = d2Context?.absolutePath;
-      let filePath = contextPath ?? options.d2FilePath;
-      if (!filePath && !options.d2FileExplicit) {
-        filePath = d2Meta?.file_path;
-      }
+      const filePath = contextPath ?? options.d2FilePath;
       if (contextPath) {
         d2Meta = { ...d2Meta, file_path: contextPath };
       } else if (filePath) {
         d2Meta = { ...d2Meta, file_path: filePath };
       }
+      historyTask.output = {
+        file: options.d2FilePath,
+        copy: options.copyOutput ? true : undefined,
+      };
       if (d2Meta && Object.keys(d2Meta).length > 0) {
         historyTask.d2 = d2Meta;
       }

@@ -3,6 +3,8 @@
  * @file SQL モードの CLI エントリーポイント。PostgreSQL と連携した SELECT クエリ編集を
  * OpenAI Responses API のエージェントと SQL 専用ツールで実現する。
  */
+import fs from "node:fs";
+import path from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
@@ -30,6 +32,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
+import { deliverOutput } from "../core/output.js";
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
@@ -81,7 +84,10 @@ export interface SqlCliOptions extends CliOptions {
   maxIterationsExplicit: boolean;
   dsn?: string;
   engine?: SqlEngine;
+  sqlFilePath: string;
 }
+
+const DEFAULT_SQL_FILE = "query.sql";
 
 const connectionSchema = z
   .object({
@@ -103,6 +109,12 @@ const sqlContextSchema = z
 
 const sqlCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
   sql: sqlContextSchema,
 });
 
@@ -130,9 +142,14 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    outputPath: z.string().min(1).optional(),
+    outputExplicit: z.boolean(),
+    copyOutput: z.boolean(),
+    copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
+    sqlFilePath: z.string().min(1),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -219,6 +236,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     .option("--debug", "デバッグログを有効化します")
     .option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します")
     .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
     .option(
       "-I, --sql-iterations <count>",
       "SQLモード時のツール呼び出し上限を指定します",
@@ -256,6 +275,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     show?: string | boolean;
     debug?: boolean;
     image?: string;
+    output?: string;
+    copy?: boolean;
     sqlIterations?: number;
     compact?: number;
     dsn: string;
@@ -285,8 +306,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: SqlCliOptions["taskMode"] = "sql";
+  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (outputPath && outputPath.length === 0) {
+    outputPath = undefined;
+  }
+  const copyOutput = Boolean(opts.copy);
   const maxIterations =
     typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.maxIterations;
+  if (!outputPath) {
+    outputPath = DEFAULT_SQL_FILE;
+  }
+  const sqlFilePath = outputPath;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -322,6 +352,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
+  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
@@ -331,6 +363,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       effort,
       verbosity,
       continueConversation,
+      outputPath,
+      outputExplicit,
+      copyOutput,
+      copyExplicit,
       taskMode,
       resumeIndex,
       resumeListOnly,
@@ -338,6 +374,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       showIndex,
       imagePath,
       debug,
+      sqlFilePath,
       dsn,
       operation,
       compactIndex,
@@ -383,6 +420,8 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  --debug     : デバッグログを有効化");
   console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
   console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
   console.log("  -i <path>   : 入力に画像を添付");
   console.log("");
   console.log("環境変数(.env):");
@@ -447,6 +486,25 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`--dsn の値の解析に失敗しました: ${message}`);
   }
+}
+
+function ensureSqlOutputPath(options: SqlCliOptions): string {
+  const cwd = process.cwd();
+  const rawPath = options.sqlFilePath;
+  const absolutePath = path.resolve(cwd, rawPath);
+  const normalizedRoot = path.resolve(cwd);
+  if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
+    throw new Error(
+      `Error: SQL出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
+    );
+  }
+  if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+    throw new Error(`Error: 指定した出力パスはディレクトリです: ${rawPath}`);
+  }
+  const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  options.sqlFilePath = relativePath;
+  options.outputPath = relativePath;
+  return absolutePath;
 }
 
 /** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
@@ -653,11 +711,21 @@ async function runSqlCli(): Promise<void> {
       determine.previousTitle,
       {
         logLabel: LOG_LABEL,
-        synchronizeWithHistory: ({ options: nextOptions }) => {
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
+          const historyTask = activeEntry.task as SqlCliHistoryTask | undefined;
+          if (!nextOptions.outputExplicit && historyTask?.output?.file) {
+            nextOptions.outputPath = historyTask.output.file;
+            nextOptions.sqlFilePath = historyTask.output.file;
+          }
+          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyTask.output.copy;
+          }
         },
       },
     );
+
+    ensureSqlOutputPath(options);
 
     const determineActiveEntry = determine.activeEntry as
       | HistoryEntry<SqlCliHistoryTask>
@@ -700,6 +768,12 @@ async function runSqlCli(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    await deliverOutput({
+      content,
+      filePath: options.sqlFilePath,
+      copy: options.copyOutput,
+    });
+
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
       const historyTask = buildSqlCliHistoryTask(
@@ -712,6 +786,12 @@ async function runSqlCli(): Promise<void> {
         },
         previousTask,
       );
+      if (historyTask) {
+        historyTask.output = {
+          file: options.sqlFilePath,
+          copy: options.copyOutput ? true : undefined,
+        };
+      }
       historyStore.upsertConversation({
         metadata: {
           model: options.model,

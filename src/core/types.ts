@@ -31,6 +31,10 @@ export interface CliOptions {
   continueConversation: boolean;
   debug: boolean;
   taskMode: TaskMode;
+  outputPath?: string;
+  outputExplicit: boolean;
+  copyOutput: boolean;
+  copyExplicit: boolean;
   resumeIndex?: number;
   resumeListOnly: boolean;
   deleteIndex?: number;
