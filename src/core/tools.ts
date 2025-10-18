@@ -183,6 +183,7 @@ interface SqlTableSchemaRow {
   table_schema: string;
   table_name: string;
   table_type: string;
+  /** PostgreSQL の information_schema.tables では提供されるが、MySQL では列自体が存在しない。 */
   is_insertable_into?: string;
 }
 
