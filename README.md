@@ -136,6 +136,17 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 - `bun run test`: Bun のテストランナーでユニットテスト・統合テストを実行
 - `bun run lint`: Biome による静的解析
 - `bun run format:check`: Biome によるフォーマット検査
+- `bun run knip:exports`: Knip による未使用 export チェック
+- `bun run knip:fix-exports`: Knip で未使用 export を自動削除
+
+## 未使用 export の整理（Knip）
+
+Knip を使ってプロジェクト全体の未使用 export を検出・削除できます。
+
+1. まず `bun run knip:exports` で未使用 export を洗い出す。
+2. 問題なければ `bun run knip:fix-exports` を実行し、自動削除を適用する。
+
+CI でも同じチェックを行うため、未使用 export が残っていると Pull Request が失敗します。
 
 ## レイヤー境界のLint
 

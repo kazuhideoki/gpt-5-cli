@@ -20,7 +20,7 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
   maxTurns?: number;
 }
 
-export interface AgentConversationResult {
+interface AgentConversationResult {
   assistantText: string;
   responseId?: string;
 }
