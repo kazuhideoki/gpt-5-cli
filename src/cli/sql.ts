@@ -23,6 +23,7 @@ import {
   SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
+  WRITE_FILE_TOOL,
   setSqlEnvironment,
 } from "../core/tools.js";
 import {
@@ -45,6 +46,7 @@ export type SqlEngine = "postgresql" | "mysql";
 
 const POSTGRES_SQL_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FETCH_COLUMN_SCHEMA_TOOL,
   SQL_FETCH_ENUM_SCHEMA_TOOL,
@@ -567,6 +569,7 @@ interface SqlInstructionParams {
   dsnHash: string;
   maxIterations: number;
   engine: SqlEngine;
+  filePath: string;
 }
 
 /**
@@ -610,6 +613,8 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   toolSummaryLines.push(
     "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
     "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
+    "- write_file: 整形済み SQL を対象ファイルへ上書き保存する",
+    "- read_file: 既存の SQL ファイルを確認する",
   );
   const toolSummary = toolSummaryLines.join("\n");
 
@@ -618,13 +623,15 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
     "1. 必要に応じて sql_fetch_table_schema で対象テーブルを把握し、sql_fetch_column_schema・sql_fetch_enum_schema・sql_fetch_index_schema で必要な詳細を取得する",
     "2. 修正案の作成時は SELECT/WITH ... SELECT のみ扱う",
     "3. 提案 SQL が用意できたら必ず sql_format で整形し、その直後に sql_dry_run を実行して成功するまで繰り返す（成功する前にユーザーへ最終回答しない）",
-    "4. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜3 を実施する",
-    "5. sql_dry_run が成功したら最終応答を行い、整形済み SQL を ```sql コードブロックで提示しつつ、dry run の結果や確認事項を日本語でまとめる",
+    "4. 検証が完了した SQL は write_file で対象ファイルへ保存し、必要に応じて read_file で差分を確認する",
+    "5. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜4 を実施する",
+    "6. sql_dry_run が成功したら最終応答を行い、整形済み SQL を ```sql コードブロックで提示しつつ、dry run の結果や確認事項を日本語でまとめる",
   ].join("\n");
 
   const systemText = [
     `あなたは ${engineLabel} SELECT クエリの専門家です。`,
     "許可されたツール以外は利用せず、ローカルワークスペース外へアクセスしないでください。",
+    `成果物ファイル: ${params.filePath} (ワークスペース相対パス)`,
     `接続情報: ${connectionLine} (dsn hash=${params.dsnHash})`,
     `ツール呼び出し上限の目安: ${params.maxIterations} 回`,
     toolSummary,
@@ -755,6 +762,7 @@ async function runSqlCli(): Promise<void> {
         dsnHash: sqlEnv.hash,
         maxIterations: options.maxIterations,
         engine: sqlEnv.engine,
+        filePath: options.sqlFilePath,
       }),
     });
 
@@ -771,9 +779,14 @@ async function runSqlCli(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath =
+      options.outputExplicit && options.outputPath && options.outputPath !== options.sqlFilePath
+        ? options.outputPath
+        : undefined;
+
     await deliverOutput({
       content,
-      filePath: options.sqlFilePath,
+      filePath: summaryOutputPath,
       copy: options.copyOutput,
     });
 
@@ -790,8 +803,9 @@ async function runSqlCli(): Promise<void> {
         previousTask,
       );
       if (historyTask) {
+        const historyOutputFile = summaryOutputPath ?? options.sqlFilePath;
         historyTask.output = {
-          file: options.sqlFilePath,
+          file: historyOutputFile,
           copy: options.copyOutput ? true : undefined,
         };
       }

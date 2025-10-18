@@ -586,9 +586,14 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath =
+      options.outputExplicit && options.outputPath && options.outputPath !== options.d2FilePath
+        ? options.outputPath
+        : undefined;
+
     await deliverOutput({
       content,
-      filePath: options.d2FilePath,
+      filePath: summaryOutputPath,
       copy: options.copyOutput,
     });
 
@@ -603,8 +608,9 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       } else if (filePath) {
         d2Meta = { ...d2Meta, file_path: filePath };
       }
+      const historyOutputFile = summaryOutputPath ?? options.d2FilePath;
       historyTask.output = {
-        file: options.d2FilePath,
+        file: historyOutputFile,
         copy: options.copyOutput ? true : undefined,
       };
       if (d2Meta && Object.keys(d2Meta).length > 0) {

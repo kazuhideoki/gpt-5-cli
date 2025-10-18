@@ -545,9 +545,14 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath =
+      options.outputExplicit && options.outputPath && options.outputPath !== options.mermaidFilePath
+        ? options.outputPath
+        : undefined;
+
     await deliverOutput({
       content,
-      filePath: options.mermaidFilePath,
+      filePath: summaryOutputPath,
       copy: options.copyOutput,
     });
 
@@ -562,8 +567,9 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       } else if (filePath) {
         mermaidMeta = { ...mermaidMeta, file_path: filePath };
       }
+      const historyOutputFile = summaryOutputPath ?? options.mermaidFilePath;
       historyTask.output = {
-        file: options.mermaidFilePath,
+        file: historyOutputFile,
         copy: options.copyOutput ? true : undefined,
       };
       if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {

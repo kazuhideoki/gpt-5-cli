@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -187,5 +188,39 @@ describe("mermaid CLI integration", () => {
     expect(summaryEntry.turns?.[0]?.text).toBe("Mermaid Summary");
     expect(summaryEntry.resume?.summary?.text).toBe("Mermaid Summary");
     expect(callIndex).toBe(responses.length);
+  });
+
+  test("既存の Mermaid ファイルを最終応答で上書きしない", async () => {
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        const body = { id: "resp-mermaid", output_text: ["Mermaid OK"] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const uniqueDir = path.join("tmp", "mermaid-tests", crypto.randomUUID());
+    const relativePath = path.join(uniqueDir, "sample.mmd");
+    const absolutePath = path.resolve(projectRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    const sentinel = "graph TD;\n";
+    fs.writeFileSync(absolutePath, sentinel, "utf8");
+
+    const result = await runMermaidCli(["-o", relativePath, "既存ファイルテスト"], env);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[gpt-5-cli-mermaid]");
+    expect(extractUserLines(result.stdout).at(-1)).toBe("Mermaid OK");
+
+    const persisted = fs.readFileSync(absolutePath, "utf8");
+    expect(persisted).toBe(sentinel);
+
+    fs.rmSync(path.dirname(absolutePath), { recursive: true, force: true });
   });
 });

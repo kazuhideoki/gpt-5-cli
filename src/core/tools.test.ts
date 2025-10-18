@@ -42,6 +42,7 @@ const D2_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, D2_CHECK_TOOL, D2_FMT_TOOL]
 const MERMAID_TOOLSET = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 const SQL_TOOLSET = [
   READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FETCH_COLUMN_SCHEMA_TOOL,
   SQL_FETCH_ENUM_SCHEMA_TOOL,
@@ -89,6 +90,7 @@ describe("tool registration lists", () => {
     const toolNames = SQL_FUNCTION_TOOLS.map((tool) => tool.name);
     expect(toolNames).toEqual([
       "read_file",
+      "write_file",
       "sql_fetch_table_schema",
       "sql_fetch_column_schema",
       "sql_fetch_enum_schema",

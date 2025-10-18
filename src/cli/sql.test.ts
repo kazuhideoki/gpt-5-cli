@@ -95,6 +95,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:abcd",
       maxIterations: 7,
       engine: "postgresql",
+      filePath: "query.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -103,6 +104,8 @@ describe("buildSqlInstructionMessages", () => {
     expect(text).toContain("7 回");
     expect(text).toContain("PostgreSQL SELECT クエリ");
     expect(text).toContain("sql_dry_run");
+    expect(text).toContain("query.sql");
+    expect(text).toContain("write_file");
   });
 
   it("MySQL エンジン向けの文言を切り替える", () => {
@@ -111,6 +114,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:mysql",
       maxIterations: 5,
       engine: "mysql",
+      filePath: "output.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -120,6 +124,7 @@ describe("buildSqlInstructionMessages", () => {
     expect(text).toContain("5 回");
     expect(text).toContain("ENUM 型の定義と候補値を取得する");
     expect(text).toContain("information_schema.statistics");
+    expect(text).toContain("output.sql");
   });
 });
 
