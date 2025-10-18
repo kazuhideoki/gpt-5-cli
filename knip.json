@@ -1,0 +1,6 @@
+{
+  "$schema": "https://raw.githubusercontent.com/webpro/knip/main/schema.json",
+  "entry": ["src/**/*.ts", "tests/**/*.ts"],
+  "ignore": ["dist/**"],
+  "ignoreFiles": ["**/*.d.ts"]
+}

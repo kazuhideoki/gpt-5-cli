@@ -17,7 +17,7 @@ interface DetermineInputResult<THistoryTask = unknown> {
   previousTitle?: string;
 }
 
-export type DetermineResult<THistoryTask = unknown> =
+type DetermineResult<THistoryTask = unknown> =
   | DetermineInputExit
   | DetermineInputResult<THistoryTask>;
 
