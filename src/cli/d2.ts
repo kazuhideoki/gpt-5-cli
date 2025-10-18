@@ -425,7 +425,10 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo | undefined {
   const rawPath = options.d2FilePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
-  if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
+  const relative = path.relative(normalizedRoot, absolutePath);
+  const isInsideWorkspace =
+    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  if (!isInsideWorkspace) {
     throw new Error(
       `Error: d2出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
     );
