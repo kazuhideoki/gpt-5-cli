@@ -932,12 +932,17 @@ async function fetchMysqlEnumValues(
 
     const enumNames = normalizeStringArray(args.enum_names, "enum_names");
     if (enumNames) {
-      params.push(enumNames);
-      filters.push(`column_name IN (?)`);
-    }
+      const columnOnlyNames = new Set<string>();
+        const parts = name
+          .split(".")
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0);
+        if (parts.length === 0) {
+          columnOnlyNames.add(column);
+        }
 
-    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
-    const [rows] = await connection.execute(
+      if (columnOnlyNames.size > 0) {
+        params.push([...columnOnlyNames]);
       `
         SELECT
           table_schema,

@@ -683,8 +683,7 @@ describe("SQL schema fetch tool queries (MySQL)", () => {
     expect(connection.ended).toBe(true);
   });
 
-  it("sql_fetch_index_schema は statistics から定義を生成する", async () => {
-    connection.executeImpl = async () => [
+    expect(connection.executeCalls[0]?.values).toEqual(["orders", "status"]);
       [
         {
           table_schema: "app",
