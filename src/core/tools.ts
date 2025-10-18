@@ -933,16 +933,53 @@ async function fetchMysqlEnumValues(
     const enumNames = normalizeStringArray(args.enum_names, "enum_names");
     if (enumNames) {
       const columnOnlyNames = new Set<string>();
+      const qualifiedConditions: string[] = [];
+      const qualifiedValues: unknown[] = [];
+
+      for (const name of enumNames) {
         const parts = name
           .split(".")
           .map((part) => part.trim())
           .filter((part) => part.length > 0);
         if (parts.length === 0) {
+          continue;
+        }
+        const column = parts.pop() as string;
+        if (parts.length === 0) {
           columnOnlyNames.add(column);
         }
+        const table = parts.pop();
+        const schema = parts.length > 0 ? parts.join(".") : undefined;
+
+        if (table || schema) {
+          const clauses: string[] = [];
+          if (schema) {
+            clauses.push("table_schema = ?");
+            qualifiedValues.push(schema);
+          }
+          if (table) {
+            clauses.push("table_name = ?");
+            qualifiedValues.push(table);
+          }
+          clauses.push("column_name = ?");
+          qualifiedValues.push(column);
+          qualifiedConditions.push(`(${clauses.join(" AND ")})`);
+        }
+      }
 
       if (columnOnlyNames.size > 0) {
         params.push([...columnOnlyNames]);
+        filters.push(`column_name IN (?)`);
+      }
+
+      if (qualifiedConditions.length > 0) {
+        filters.push(`(${qualifiedConditions.join(" OR ")})`);
+        params.push(...qualifiedValues);
+      }
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const [rows] = await connection.execute(
       `
         SELECT
           table_schema,

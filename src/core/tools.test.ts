@@ -683,7 +683,37 @@ describe("SQL schema fetch tool queries (MySQL)", () => {
     expect(connection.ended).toBe(true);
   });
 
+  it("sql_fetch_enum_schema は table.column 形式のフィルタを解釈する", async () => {
+    connection.executeImpl = async () => [
+      [
+        {
+          table_schema: "app",
+          table_name: "orders",
+          column_name: "status",
+          column_type: "enum('draft','published')",
+        },
+      ],
+      [],
+    ];
+
+    const result = (await SQL_FETCH_ENUM_SCHEMA_TOOL.handler(
+      {
+        enum_names: ["orders.status"],
+      },
+      context,
+    )) as ToolResult & {
+      rows?: Array<{ enum_label: string; enum_name: string }>;
+      row_count?: number;
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.row_count).toBe(2);
     expect(connection.executeCalls[0]?.values).toEqual(["orders", "status"]);
+    expect(result.rows?.map((row) => row.enum_label)).toEqual(["draft", "published"]);
+  });
+
+  it("sql_fetch_index_schema は statistics から定義を生成する", async () => {
+    connection.executeImpl = async () => [
       [
         {
           table_schema: "app",
