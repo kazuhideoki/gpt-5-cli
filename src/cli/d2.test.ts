@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { determineInput } from "./runtime/input.js";
-import { parseArgs } from "./d2.js";
+import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js";
 import type { CliDefaults } from "../core/types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
@@ -169,5 +169,34 @@ describe("d2 determineInput", () => {
     }
     expect(store.listed).toBe(false);
     expect(helpCalled).toBe(true);
+  });
+});
+
+describe("d2 web search integration", () => {
+  it("web_search ツールを d2lang.com のみに制限する", () => {
+    const tool = createD2WebSearchTool();
+    expect(tool).toBeDefined();
+    if (typeof tool !== "object" || tool === null) {
+      throw new Error("web_search ツールの生成に失敗しました");
+    }
+    const providerData = (tool as { providerData?: unknown }).providerData;
+    expect(providerData).toBeDefined();
+    if (!providerData || typeof providerData !== "object") {
+      throw new Error("web_search ツールの providerData を取得できませんでした");
+    }
+    const filters = (providerData as { filters?: unknown }).filters;
+    expect(filters).toBeDefined();
+    if (!filters || typeof filters !== "object") {
+      throw new Error("web_search ツールの filters を取得できませんでした");
+    }
+    const allowedDomains = (filters as { allowed_domains?: unknown }).allowed_domains;
+    expect(Array.isArray(allowedDomains)).toBe(true);
+    expect(allowedDomains).toEqual(["d2lang.com"]);
+  });
+
+  it("Responses API 用ツールから web_search_preview を除外する", () => {
+    const tools = buildD2ResponseTools();
+    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+    expect(hasPreview).toBe(false);
   });
 });

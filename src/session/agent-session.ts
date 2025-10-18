@@ -1,5 +1,6 @@
 // agent-session.ts: Agents SDK を利用して CLI からの会話処理を実行するラッパー。
 import { Agent, Runner, extractAllTextOutput, setTraceProcessors, user } from "@openai/agents";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type { AgentInputItem, ModelSettings } from "@openai/agents";
 import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
@@ -18,6 +19,7 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
   logLabel: string;
   toolRegistrations: Iterable<ToolRegistration<any, any>>;
   maxTurns?: number;
+  additionalAgentTools?: AgentsSdkTool[];
 }
 
 interface AgentConversationResult {
@@ -34,7 +36,8 @@ interface AgentConversationResult {
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
 ): Promise<AgentConversationResult> {
-  const { client, request, options, logLabel, toolRegistrations, maxTurns } = params;
+  const { client, request, options, logLabel, toolRegistrations, maxTurns, additionalAgentTools } =
+    params;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
   const userInputs = buildUserInputs(messages);
@@ -50,7 +53,7 @@ export async function runAgentConversation<TOptions extends CliOptions>(
 
   ensureResponsesOutputCompatibility(client);
 
-  const agentTools = buildAgentsToolList(toolRegistrations, {
+  const agentToolsBase = buildAgentsToolList(toolRegistrations, {
     logLabel,
     createExecutionContext: () => ({
       cwd: process.cwd(),
@@ -60,6 +63,10 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     }),
     debugLog,
   });
+  const agentTools =
+    additionalAgentTools && additionalAgentTools.length > 0
+      ? [...agentToolsBase, ...additionalAgentTools]
+      : agentToolsBase;
 
   const modelSettings = buildModelSettings(request);
   const previousResponseId =
