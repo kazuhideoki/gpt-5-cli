@@ -183,7 +183,7 @@ interface SqlTableSchemaRow {
   table_schema: string;
   table_name: string;
   table_type: string;
-  is_insertable_into: string;
+  is_insertable_into?: string;
 }
 
 interface SqlColumnSchemaRow {
@@ -647,8 +647,7 @@ async function fetchMysqlTableSchema(
         SELECT
           table_schema,
           table_name,
-          table_type,
-          is_insertable_into
+          table_type
         FROM information_schema.tables
         ${whereClause}
         ORDER BY table_schema, table_name
