@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import fs from "node:fs";
 import path from "node:path";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
+import { webSearchTool } from "@openai/agents-openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
@@ -12,7 +14,13 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import { D2_CHECK_TOOL, D2_FMT_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
+import {
+  D2_CHECK_TOOL,
+  D2_FMT_TOOL,
+  READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  buildCliToolList,
+} from "../core/tools.js";
 import {
   buildRequest,
   computeContext,
@@ -22,6 +30,7 @@ import {
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
+import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
@@ -46,6 +55,28 @@ const D2_TOOL_REGISTRATIONS = [
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
 ] as const;
+
+const D2_WEB_SEARCH_ALLOWED_DOMAINS = ["d2lang.com"] as const;
+const D2_TOUR_URL = "https://d2lang.com/tour";
+
+/**
+ * d2 モードで利用する web_search ツール定義を生成する。
+ */
+export function createD2WebSearchTool(): AgentsSdkTool {
+  return webSearchTool({
+    filters: { allowedDomains: [...D2_WEB_SEARCH_ALLOWED_DOMAINS] },
+    searchContextSize: "medium",
+    name: "web_search",
+  });
+}
+
+/**
+ * d2 モードで Responses API へ渡すツール配列を生成する。
+ */
+export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
+  const tools = buildCliToolList(D2_TOOL_REGISTRATIONS) ?? [];
+  return tools.filter((tool) => tool.type !== "web_search_preview");
+}
 
 const d2CliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -401,6 +432,7 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
     "- write_file: 指定ファイルを UTF-8 テキストで上書きする（diffは自分で計画する）",
     "- d2_check: D2の構文を検証してエラーが無いことを確認する",
     "- d2_fmt: D2ファイルを整形してフォーマットを揃える",
+    "- web_search: d2lang.com/tour の公式ドキュメントを検索し参照する",
   ].join("\n");
 
   const workflow = [
@@ -408,8 +440,15 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
     `1. ${existenceNote}`,
     "2. 変更後は必ず d2_check を実行し、構文エラーを確認する",
     "3. エラーが無いことを確認したら d2_fmt を実行し、整形結果を確認する",
-    "4. エラーが続く場合は修正しつつ 2〜3 を繰り返す",
-    "5. 最終応答では、日本語で変更内容・ファイルパス・d2_check/d2_fmt の結果を要約し、D2コード全文は回答に貼らない",
+    "4. オンライン情報が必要な場合は web_search で d2lang.com/tour の内容のみを確認する",
+    "5. エラーが続く場合は修正しつつ 2〜4 を繰り返す",
+    "6. 最終応答では、日本語で変更内容・ファイルパス・d2_check/d2_fmt の結果を要約し、D2コード全文は回答に貼らない",
+  ].join("\n");
+
+  const searchGuidelines = [
+    "Web検索ガイドライン:",
+    `- web_search で参照できるのは ${D2_TOUR_URL} 配下の情報のみです。`,
+    "- d2lang.com 以外の出典は利用・引用しないでください。",
   ].join("\n");
 
   const systemText = [
@@ -418,6 +457,7 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
     `対象ファイル: ${pathHint}`,
     toolSummary,
     workflow,
+    searchGuidelines,
   ].join("\n\n");
 
   return [
@@ -495,6 +535,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages:
         options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
+      tools: buildD2ResponseTools(),
     });
     const agentResult = await runAgentConversation({
       client,
@@ -503,6 +544,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       logLabel: "[gpt-5-cli-d2]",
       toolRegistrations: D2_TOOL_REGISTRATIONS,
       maxTurns: options.maxIterations,
+      additionalAgentTools: [createD2WebSearchTool()],
     });
     const content = agentResult.assistantText;
     if (!content) {
