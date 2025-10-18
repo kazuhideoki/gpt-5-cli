@@ -440,12 +440,12 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       argv,
       logLabel: "[gpt-5-cli-mermaid]",
       parseArgs,
-      printHelp,
       historyTaskSchema: mermaidCliHistoryTaskSchema,
       envFileSuffix: "mermaid",
     });
 
     if (bootstrap.status === "help") {
+      printHelp(bootstrap.defaults, bootstrap.options);
       return;
     }
 

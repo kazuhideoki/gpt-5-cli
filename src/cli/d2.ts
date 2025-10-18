@@ -437,12 +437,12 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       argv,
       logLabel: "[gpt-5-cli-d2]",
       parseArgs,
-      printHelp,
       historyTaskSchema: d2CliHistoryTaskSchema,
       envFileSuffix: "d2",
     });
 
     if (bootstrap.status === "help") {
+      printHelp(bootstrap.defaults, bootstrap.options);
       return;
     }
 

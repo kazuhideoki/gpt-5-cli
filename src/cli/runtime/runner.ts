@@ -9,7 +9,6 @@ interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
   argv: string[];
   logLabel: string;
   parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
-  printHelp: (defaults: CliDefaults, options: TOptions) => void;
   historyTaskSchema: z.ZodType<THistoryTask>;
   envFileSuffix?: string;
 }
@@ -56,7 +55,6 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryTask = unknown
   }
 
   if (options.helpRequested) {
-    params.printHelp(defaults, options);
     return {
       status: "help",
       defaults,

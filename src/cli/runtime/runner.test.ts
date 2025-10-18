@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { bootstrapCli } from "./runner.js";
+import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../types.js";
 
 interface TempResources {
@@ -86,15 +87,12 @@ describe("bootstrapCli", () => {
       expect(argv).toEqual(["質問"]);
       return createOptions(defaults, { args: ["質問"] });
     };
-    const printHelp = () => {
-      throw new Error("should not be called");
-    };
 
     const result = bootstrapCli({
       argv: ["質問"],
       logLabel: "[test-cli]",
       parseArgs,
-      printHelp,
+      historyTaskSchema: z.object({}),
     });
 
     expect(result.status).toBe("ready");
@@ -106,24 +104,19 @@ describe("bootstrapCli", () => {
     expect(result.options.args).toEqual(["質問"]);
   });
 
-  it("ヘルプ要求時はprintHelpを呼び出して終了する", () => {
-    let helpCalled = false;
+  it("ヘルプ要求時はヘルプ状態で終了する", () => {
     const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
       expect(argv).toEqual(["--help"]);
       return createOptions(defaults, { helpRequested: true });
-    };
-    const printHelp = () => {
-      helpCalled = true;
     };
 
     const result = bootstrapCli({
       argv: ["--help"],
       logLabel: "[test-cli]",
       parseArgs,
-      printHelp,
+      historyTaskSchema: z.object({}),
     });
 
-    expect(helpCalled).toBe(true);
     expect(result.status).toBe("help");
     expect("historyStore" in result).toBe(false);
   });

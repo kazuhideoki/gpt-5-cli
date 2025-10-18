@@ -300,12 +300,12 @@ async function main(): Promise<void> {
       argv,
       logLabel: "[gpt-5-cli]",
       parseArgs,
-      printHelp,
       historyTaskSchema: askCliHistoryTaskSchema,
       envFileSuffix: "ask",
     });
 
     if (bootstrap.status === "help") {
+      printHelp(bootstrap.defaults, bootstrap.options);
       return;
     }
 

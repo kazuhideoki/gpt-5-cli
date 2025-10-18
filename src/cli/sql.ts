@@ -619,12 +619,12 @@ async function runSqlCli(): Promise<void> {
       argv,
       logLabel: LOG_LABEL,
       parseArgs,
-      printHelp,
       historyTaskSchema: sqlCliHistoryTaskSchema,
       envFileSuffix: "sql",
     });
 
     if (bootstrap.status === "help") {
+      printHelp(bootstrap.defaults, bootstrap.options);
       return;
     }
 
