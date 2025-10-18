@@ -1436,7 +1436,7 @@ export const D2_FMT_TOOL: ToolRegistration<D2Args, CommandResult> = {
 
 const MERMAID_BIN_NAME = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
 
-export interface ResolvedMermaidCommand {
+interface ResolvedMermaidCommand {
   command: string;
   args: string[];
 }
@@ -1765,7 +1765,7 @@ export function createToolRuntime<TContext extends ToolExecutionContext = ToolEx
   };
 }
 
-export interface BuildAgentsToolListOptions {
+interface BuildAgentsToolListOptions {
   createExecutionContext?: () => ToolExecutionContext;
   debugLog?: (message: string) => void;
   logLabel?: string;

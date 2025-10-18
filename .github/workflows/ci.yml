@@ -28,6 +28,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Check unused exports
+        run: bun run knip:exports
+
       - name: Check formatting
         run: bun run format:check
 
