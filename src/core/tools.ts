@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { tool as defineAgentTool } from "@openai/agents";
 import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { Client } from "pg";
+import mysql, { type Connection as MysqlConnection } from "mysql2/promise";
 import type {
   FunctionTool,
   ResponseCreateParamsNonStreaming,
@@ -44,6 +45,19 @@ interface CommandResult extends ToolResult {
   exit_code: number;
   stdout: string;
   stderr: string;
+}
+
+type SqlEngineKind = "postgresql" | "mysql";
+
+export interface SqlEnvironment {
+  dsn: string;
+  engine: SqlEngineKind;
+}
+
+let activeSqlEnvironment: SqlEnvironment | undefined;
+
+export function setSqlEnvironment(environment: SqlEnvironment | undefined): void {
+  activeSqlEnvironment = environment;
 }
 
 type ToolHandler<
@@ -169,7 +183,8 @@ interface SqlTableSchemaRow {
   table_schema: string;
   table_name: string;
   table_type: string;
-  is_insertable_into: string;
+  /** PostgreSQL の information_schema.tables では提供されるが、MySQL では列自体が存在しない。 */
+  is_insertable_into?: string;
 }
 
 interface SqlColumnSchemaRow {
@@ -224,19 +239,13 @@ interface SqlFetchIndexSchemaArgs {
   index_names?: string[];
 }
 
-/**
- * 環境変数から安全に値を取得し、空文字や未設定を拒否する。
- *
- * @param name 取得対象の環境変数名。
- * @returns 空白除去後の文字列。
- * @throws 値が未設定または空だった場合。
- */
-function requireEnvValue(name: string): string {
-  const value = process.env[name];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`Environment variable ${name} is required for SQL tools.`);
+function requireSqlEnvironment(): SqlEnvironment {
+  if (!activeSqlEnvironment) {
+    throw new Error(
+      "SQL environment is not configured. Pass --dsn to the CLI before invoking SQL tools.",
+    );
   }
-  return value;
+  return activeSqlEnvironment;
 }
 
 /**
@@ -513,14 +522,31 @@ function buildPgErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function buildMysqlErrorMessage(error: unknown): string {
+  if (error && typeof error === "object") {
+    const maybeError = error as { message?: unknown; sqlMessage?: unknown };
+    if (typeof maybeError.sqlMessage === "string" && maybeError.sqlMessage.length > 0) {
+      return maybeError.sqlMessage;
+    }
+    if (typeof maybeError.message === "string" && maybeError.message.length > 0) {
+      return maybeError.message;
+    }
+  }
+  if (error instanceof Error && typeof error.message === "string" && error.message.length > 0) {
+    return error.message;
+  }
+  return String(error);
+}
+
 /**
- * `POSTGRES_DSN` の設定を利用して PostgreSQL クライアントを作成する。
- *
- * @returns 接続準備済みの `Client` インスタンス。
+ * 与えられた DSN から PostgreSQL クライアントを構築する。
  */
-function createPgClient(): Client {
-  const dsn = requireEnvValue("POSTGRES_DSN");
+function createPgClient(dsn: string): Client {
   return new Client({ connectionString: dsn });
+}
+
+async function createMysqlConnection(dsn: string): Promise<MysqlConnection> {
+  return mysql.createConnection(dsn);
 }
 
 /**
@@ -532,7 +558,18 @@ function createPgClient(): Client {
 async function fetchSqlTableSchema(
   args: SqlFetchTableSchemaArgs = {},
 ): Promise<SqlTableSchemaRow[]> {
-  const client = createPgClient();
+  const env = requireSqlEnvironment();
+  if (env.engine === "postgresql") {
+    return fetchPgTableSchema(env.dsn, args);
+  }
+  return fetchMysqlTableSchema(env.dsn, args);
+}
+
+async function fetchPgTableSchema(
+  dsn: string,
+  args: SqlFetchTableSchemaArgs = {},
+): Promise<SqlTableSchemaRow[]> {
+  const client = createPgClient(dsn);
   await client.connect();
   try {
     const filters = ["table_schema NOT IN ('pg_catalog', 'information_schema')"];
@@ -574,6 +611,56 @@ async function fetchSqlTableSchema(
   }
 }
 
+async function fetchMysqlTableSchema(
+  dsn: string,
+  args: SqlFetchTableSchemaArgs = {},
+): Promise<SqlTableSchemaRow[]> {
+  const connection = await createMysqlConnection(dsn);
+  try {
+    const filters = [
+      "table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+    ];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema IN (?)`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`table_name IN (?)`);
+    }
+
+    const tableTypes = normalizeStringArray(args.table_types, "table_types")?.map((value) =>
+      value.toUpperCase(),
+    );
+    if (tableTypes && tableTypes.length > 0) {
+      params.push(tableTypes);
+      filters.push(`UPPER(table_type) IN (?)`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const [rows] = await connection.execute(
+      `
+        SELECT
+          table_schema,
+          table_name,
+          table_type
+        FROM information_schema.tables
+        ${whereClause}
+        ORDER BY table_schema, table_name
+      `,
+      params,
+    );
+    return rows as SqlTableSchemaRow[];
+  } finally {
+    await connection.end();
+  }
+}
+
 /**
  * information_schema.columns を参照してカラム定義を取得する。
  *
@@ -583,7 +670,18 @@ async function fetchSqlTableSchema(
 async function fetchSqlColumnSchema(
   args: SqlFetchColumnSchemaArgs = {},
 ): Promise<SqlColumnSchemaRow[]> {
-  const client = createPgClient();
+  const env = requireSqlEnvironment();
+  if (env.engine === "postgresql") {
+    return fetchPgColumnSchema(env.dsn, args);
+  }
+  return fetchMysqlColumnSchema(env.dsn, args);
+}
+
+async function fetchPgColumnSchema(
+  dsn: string,
+  args: SqlFetchColumnSchemaArgs = {},
+): Promise<SqlColumnSchemaRow[]> {
+  const client = createPgClient(dsn);
   await client.connect();
   try {
     const filters = ["table_schema NOT IN ('pg_catalog', 'information_schema')"];
@@ -638,6 +736,70 @@ async function fetchSqlColumnSchema(
   }
 }
 
+async function fetchMysqlColumnSchema(
+  dsn: string,
+  args: SqlFetchColumnSchemaArgs = {},
+): Promise<SqlColumnSchemaRow[]> {
+  const connection = await createMysqlConnection(dsn);
+  try {
+    const filters = [
+      "table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+    ];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema IN (?)`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`table_name IN (?)`);
+    }
+
+    const columnNames = normalizeStringArray(args.column_names, "column_names");
+    if (columnNames) {
+      params.push(columnNames);
+      filters.push(`column_name IN (?)`);
+    }
+
+    const tableIdentifiers = normalizeTableIdentifiers(args.tables, "tables");
+    if (tableIdentifiers) {
+      const pairClauses: string[] = [];
+      for (const identifier of tableIdentifiers) {
+        params.push(identifier.schema_name);
+        params.push(identifier.table_name);
+        pairClauses.push(`(table_schema = ? AND table_name = ?)`);
+      }
+      if (pairClauses.length > 0) {
+        filters.push(`(${pairClauses.join(" OR ")})`);
+      }
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const [rows] = await connection.execute(
+      `
+        SELECT
+          table_schema,
+          table_name,
+          column_name,
+          data_type,
+          is_nullable,
+          column_default
+        FROM information_schema.columns
+        ${whereClause}
+        ORDER BY table_schema, table_name, ordinal_position
+      `,
+      params,
+    );
+    return rows as SqlColumnSchemaRow[];
+  } finally {
+    await connection.end();
+  }
+}
+
 /**
  * pg_type/pg_enum を参照して enum ラベルを取得する。
  *
@@ -645,7 +807,18 @@ async function fetchSqlColumnSchema(
  * @returns enum 値の配列。
  */
 async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<SqlEnumValueRow[]> {
-  const client = createPgClient();
+  const env = requireSqlEnvironment();
+  if (env.engine === "postgresql") {
+    return fetchPgEnumValues(env.dsn, args);
+  }
+  return fetchMysqlEnumValues(env.dsn, args);
+}
+
+async function fetchPgEnumValues(
+  dsn: string,
+  args: SqlFetchEnumSchemaArgs = {},
+): Promise<SqlEnumValueRow[]> {
+  const client = createPgClient(dsn);
   await client.connect();
   try {
     const filters = ["n.nspname NOT IN ('pg_catalog', 'information_schema')", "t.typtype = 'e'"];
@@ -685,6 +858,160 @@ async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<Sq
   }
 }
 
+interface MysqlEnumRow {
+  table_schema: string;
+  table_name: string;
+  column_name: string;
+  column_type: string;
+}
+
+function parseMysqlEnumLabels(columnType: string): string[] {
+  const normalized = columnType.trim();
+  if (!/^enum\s*\(/iu.test(normalized)) {
+    return [];
+  }
+  const body = normalized.replace(/^enum\s*\(/iu, "").replace(/\)$/u, "");
+  const labels: string[] = [];
+  let current = "";
+  let inQuote = false;
+  for (let index = 0; index < body.length; index += 1) {
+    const ch = body[index] as string;
+    const next = body[index + 1] as string | undefined;
+    if (!inQuote) {
+      if (ch === "'") {
+        inQuote = true;
+        current = "";
+      }
+      continue;
+    }
+
+    if (ch === "'" && next === "'") {
+      current += "'";
+      index += 1;
+      continue;
+    }
+
+    if (ch === "\\" && next) {
+      current += next;
+      index += 1;
+      continue;
+    }
+
+    if (ch === "'") {
+      labels.push(current);
+      current = "";
+      inQuote = false;
+      continue;
+    }
+
+    current += ch;
+  }
+  if (inQuote) {
+    labels.push(current);
+  }
+  return labels;
+}
+
+async function fetchMysqlEnumValues(
+  dsn: string,
+  args: SqlFetchEnumSchemaArgs = {},
+): Promise<SqlEnumValueRow[]> {
+  const connection = await createMysqlConnection(dsn);
+  try {
+    const filters = [
+      "table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+      "data_type = 'enum'",
+    ];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema IN (?)`);
+    }
+
+    const enumNames = normalizeStringArray(args.enum_names, "enum_names");
+    if (enumNames) {
+      const columnOnlyNames = new Set<string>();
+      const qualifiedConditions: string[] = [];
+      const qualifiedValues: unknown[] = [];
+
+      for (const name of enumNames) {
+        const parts = name
+          .split(".")
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0);
+        if (parts.length === 0) {
+          continue;
+        }
+        const column = parts.pop() as string;
+        if (parts.length === 0) {
+          columnOnlyNames.add(column);
+        }
+        const table = parts.pop();
+        const schema = parts.length > 0 ? parts.join(".") : undefined;
+
+        if (table || schema) {
+          const clauses: string[] = [];
+          if (schema) {
+            clauses.push("table_schema = ?");
+            qualifiedValues.push(schema);
+          }
+          if (table) {
+            clauses.push("table_name = ?");
+            qualifiedValues.push(table);
+          }
+          clauses.push("column_name = ?");
+          qualifiedValues.push(column);
+          qualifiedConditions.push(`(${clauses.join(" AND ")})`);
+        }
+      }
+
+      if (columnOnlyNames.size > 0) {
+        params.push([...columnOnlyNames]);
+        filters.push(`column_name IN (?)`);
+      }
+
+      if (qualifiedConditions.length > 0) {
+        filters.push(`(${qualifiedConditions.join(" OR ")})`);
+        params.push(...qualifiedValues);
+      }
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const [rows] = await connection.execute(
+      `
+        SELECT
+          table_schema,
+          table_name,
+          column_name,
+          column_type
+        FROM information_schema.columns
+        ${whereClause}
+        ORDER BY table_schema, table_name, column_name
+      `,
+      params,
+    );
+    const typedRows = rows as MysqlEnumRow[];
+
+    const results: SqlEnumValueRow[] = [];
+    for (const row of typedRows) {
+      const labels = parseMysqlEnumLabels(row.column_type ?? "");
+      labels.forEach((label, index) => {
+        results.push({
+          schema_name: row.table_schema,
+          enum_name: `${row.table_name}.${row.column_name}`,
+          enum_label: label,
+          sort_order: index + 1,
+        });
+      });
+    }
+    return results;
+  } finally {
+    await connection.end();
+  }
+}
+
 /**
  * pg_indexes を参照してインデックス定義を取得する。
  *
@@ -694,7 +1021,18 @@ async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<Sq
 async function fetchSqlIndexSchema(
   args: SqlFetchIndexSchemaArgs = {},
 ): Promise<SqlIndexSchemaRow[]> {
-  const client = createPgClient();
+  const env = requireSqlEnvironment();
+  if (env.engine === "postgresql") {
+    return fetchPgIndexSchema(env.dsn, args);
+  }
+  return fetchMysqlIndexSchema(env.dsn, args);
+}
+
+async function fetchPgIndexSchema(
+  dsn: string,
+  args: SqlFetchIndexSchemaArgs = {},
+): Promise<SqlIndexSchemaRow[]> {
+  const client = createPgClient(dsn);
   await client.connect();
   try {
     const filters = ["schemaname NOT IN ('pg_catalog', 'information_schema')"];
@@ -738,6 +1076,66 @@ async function fetchSqlIndexSchema(
   }
 }
 
+async function fetchMysqlIndexSchema(
+  dsn: string,
+  args: SqlFetchIndexSchemaArgs = {},
+): Promise<SqlIndexSchemaRow[]> {
+  const connection = await createMysqlConnection(dsn);
+  try {
+    const filters = [
+      "table_schema NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys')",
+    ];
+    const params: unknown[] = [];
+
+    const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
+    if (schemaNames) {
+      params.push(schemaNames);
+      filters.push(`table_schema IN (?)`);
+    }
+
+    const tableNames = normalizeStringArray(args.table_names, "table_names");
+    if (tableNames) {
+      params.push(tableNames);
+      filters.push(`table_name IN (?)`);
+    }
+
+    const indexNames = normalizeStringArray(args.index_names, "index_names");
+    if (indexNames) {
+      params.push(indexNames);
+      filters.push(`index_name IN (?)`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
+    const [rows] = await connection.execute(
+      `
+        SELECT
+          table_schema,
+          table_name,
+          index_name,
+          CONCAT(
+            CASE WHEN index_name = 'PRIMARY' THEN 'PRIMARY KEY' ELSE
+              CONCAT(CASE WHEN non_unique = 0 THEN 'UNIQUE INDEX ' ELSE 'INDEX ' END, index_name)
+            END,
+            ' (',
+            GROUP_CONCAT(
+              CONCAT(column_name, CASE collation WHEN 'A' THEN ' ASC' WHEN 'D' THEN ' DESC' ELSE '' END)
+              ORDER BY seq_in_index SEPARATOR ', '
+            ),
+            ')'
+          ) AS index_definition
+        FROM information_schema.statistics
+        ${whereClause}
+        GROUP BY table_schema, table_name, index_name, non_unique
+        ORDER BY table_schema, table_name, index_name
+      `,
+      params,
+    );
+    return rows as SqlIndexSchemaRow[];
+  } finally {
+    await connection.end();
+  }
+}
+
 /**
  * PREPARE/EXPLAIN を用いて SELECT クエリを検証し、プラン情報を返す。
  *
@@ -745,7 +1143,15 @@ async function fetchSqlIndexSchema(
  * @returns EXPLAIN JSON のプラン。
  */
 async function performSqlDryRun(query: string): Promise<{ plan: unknown }> {
-  const client = createPgClient();
+  const env = requireSqlEnvironment();
+  if (env.engine === "postgresql") {
+    return performPostgresDryRun(env.dsn, query);
+  }
+  return performMysqlDryRun(env.dsn, query);
+}
+
+async function performPostgresDryRun(dsn: string, query: string): Promise<{ plan: unknown }> {
+  const client = createPgClient(dsn);
   await client.connect();
   try {
     await client.query("BEGIN");
@@ -764,6 +1170,24 @@ async function performSqlDryRun(query: string): Promise<{ plan: unknown }> {
     throw new Error(buildPgErrorMessage(error));
   } finally {
     await client.end();
+  }
+}
+
+async function performMysqlDryRun(dsn: string, query: string): Promise<{ plan: unknown }> {
+  const connection = await createMysqlConnection(dsn);
+  try {
+    const [rows] = await connection.query(`EXPLAIN FORMAT=JSON ${query}`);
+    const planRow = Array.isArray(rows) ? rows[0] : undefined;
+    let plan: unknown = planRow;
+    if (planRow && typeof planRow === "object" && planRow !== null && "EXPLAIN" in planRow) {
+      const explainValue = (planRow as Record<string, unknown>).EXPLAIN;
+      plan = explainValue ?? planRow;
+    }
+    return { plan };
+  } catch (error) {
+    throw new Error(buildMysqlErrorMessage(error));
+  } finally {
+    await connection.end();
   }
 }
 

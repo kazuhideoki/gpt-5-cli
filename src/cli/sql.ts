@@ -21,6 +21,7 @@ import {
   SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
+  setSqlEnvironment,
 } from "../core/tools.js";
 import {
   expandLegacyShortFlags,
@@ -36,7 +37,10 @@ import type { HistoryEntry } from "../core/history.js";
 import { runAgentConversation } from "../session/agent-session.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
-const SQL_TOOL_REGISTRATIONS = [
+
+export type SqlEngine = "postgresql" | "mysql";
+
+const POSTGRES_SQL_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FETCH_COLUMN_SCHEMA_TOOL,
@@ -45,6 +49,14 @@ const SQL_TOOL_REGISTRATIONS = [
   SQL_DRY_RUN_TOOL,
   SQL_FORMAT_TOOL,
 ] as const;
+
+// NOTE: MySQL 用ツール実装は今後追加予定。現段階では PostgreSQL 向けツールを暫定で再利用する。
+const MYSQL_SQL_TOOL_REGISTRATIONS = POSTGRES_SQL_TOOL_REGISTRATIONS;
+
+const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATIONS> = {
+  postgresql: POSTGRES_SQL_TOOL_REGISTRATIONS,
+  mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
+};
 
 /** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
@@ -59,6 +71,7 @@ interface SqlConnectionMetadata {
 interface SqlDsnSnapshot {
   dsn: string;
   hash: string;
+  engine: SqlEngine;
   connection: SqlConnectionMetadata;
 }
 
@@ -67,6 +80,7 @@ export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
   maxIterationsExplicit: boolean;
   dsn?: string;
+  engine?: SqlEngine;
 }
 
 const connectionSchema = z
@@ -80,7 +94,7 @@ const connectionSchema = z
 
 const sqlContextSchema = z
   .object({
-    type: z.literal("postgresql").optional(),
+    type: z.enum(["postgresql", "mysql"]).optional(),
     dsn_hash: z.string().optional(),
     dsn: z.string().optional(),
     connection: connectionSchema,
@@ -100,6 +114,7 @@ interface SqlCliHistoryTaskOptions {
   dsnHash: string;
   dsn: string;
   connection: SqlConnectionMetadata;
+  engine: SqlEngine;
 }
 
 const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
@@ -126,6 +141,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     helpRequested: z.boolean(),
     maxIterations: z.number().int().positive(),
     maxIterationsExplicit: z.boolean(),
+    engine: z.enum(["postgresql", "mysql"]).optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -391,6 +407,31 @@ function hashDsn(dsn: string): string {
 }
 
 /** DSN から接続メタデータを抽出し、ホストやデータベースなどを返す。 */
+export function inferSqlEngineFromDsn(dsn: string): SqlEngine {
+  let protocol = "";
+  try {
+    const url = new URL(dsn);
+    protocol = url.protocol.replace(/:$/u, "").toLowerCase();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`--dsn の値の解析に失敗しました: ${message}`);
+  }
+
+  switch (protocol) {
+    case "postgres":
+    case "postgresql":
+    case "pgsql":
+      return "postgresql";
+    case "mysql":
+    case "mariadb":
+      return "mysql";
+    default:
+      throw new Error(
+        `Error: --dsn のスキーム "${protocol || "(不明)"}" は未対応です (postgresql/mysql のみサポート)。`,
+      );
+  }
+}
+
 function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
   try {
     const url = new URL(dsn);
@@ -414,9 +455,11 @@ function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
     throw new Error("Error: --dsn は必須です");
   }
   const trimmed = rawDsn.trim();
+  const engine = inferSqlEngineFromDsn(trimmed);
   return {
     dsn: trimmed,
     hash: hashDsn(trimmed),
+    engine,
     connection: extractConnectionMetadata(trimmed),
   };
 }
@@ -462,6 +505,7 @@ interface SqlInstructionParams {
   connection: SqlConnectionMetadata;
   dsnHash: string;
   maxIterations: number;
+  engine: SqlEngine;
 }
 
 /**
@@ -485,15 +529,28 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
     connectionParts.push(`user=${params.connection.user}`);
   }
   const connectionLine = connectionParts.length > 0 ? connectionParts.join(", ") : "(接続情報なし)";
-  const toolSummary = [
+  const engineLabel = params.engine === "postgresql" ? "PostgreSQL" : "MySQL";
+  const toolSummaryLines: string[] = [
     "利用可能なツール:",
     "- sql_fetch_table_schema: information_schema.tables からテーブル情報を取得する",
     "- sql_fetch_column_schema: information_schema.columns からカラム情報を取得する",
-    "- sql_fetch_enum_schema: PostgreSQL の enum 型と値を取得する",
-    "- sql_fetch_index_schema: pg_indexes からインデックス定義を取得する",
+  ];
+  if (params.engine === "postgresql") {
+    toolSummaryLines.push(
+      "- sql_fetch_enum_schema: PostgreSQL の enum 型と値を取得する",
+      "- sql_fetch_index_schema: pg_indexes からインデックス定義を取得する",
+    );
+  } else {
+    toolSummaryLines.push(
+      "- sql_fetch_enum_schema: ENUM 型の定義と候補値を取得する",
+      "- sql_fetch_index_schema: information_schema.statistics からインデックス定義を構築する",
+    );
+  }
+  toolSummaryLines.push(
     "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
     "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
-  ].join("\n");
+  );
+  const toolSummary = toolSummaryLines.join("\n");
 
   const workflow = [
     "作業手順:",
@@ -505,7 +562,7 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   ].join("\n");
 
   const systemText = [
-    "あなたは PostgreSQL SELECT クエリの専門家です。",
+    `あなたは ${engineLabel} SELECT クエリの専門家です。`,
     "許可されたツール以外は利用せず、ローカルワークスペース外へアクセスしないでください。",
     `接続情報: ${connectionLine} (dsn hash=${params.dsnHash})`,
     `ツール呼び出し上限の目安: ${params.maxIterations} 回`,
@@ -526,12 +583,15 @@ export function buildSqlCliHistoryTask(
   options: SqlCliHistoryTaskOptions,
   previousTask?: SqlCliHistoryTask,
 ): SqlCliHistoryTask | undefined {
+  if (!options.engine) {
+    throw new Error("Error: SQL engine is required to build history task");
+  }
   const task: SqlCliHistoryTask = { mode: options.taskMode };
   const normalizedConnection = Object.fromEntries(
     Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
   );
   const sqlMeta = {
-    type: "postgresql" as const,
+    type: options.engine,
     dsn_hash: options.dsnHash,
     dsn: options.dsn,
     connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
@@ -571,6 +631,8 @@ async function runSqlCli(): Promise<void> {
     const { defaults, options, historyStore, systemPrompt } = bootstrap;
     const client = createOpenAIClient();
 
+    setSqlEnvironment(undefined);
+
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client, LOG_LABEL);
       return;
@@ -603,8 +665,10 @@ async function runSqlCli(): Promise<void> {
     const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
-    process.env.POSTGRES_DSN = sqlEnv.dsn;
+    setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
     options.dsn = sqlEnv.dsn;
+    options.engine = sqlEnv.engine;
+    const toolRegistrations = SQL_TOOL_REGISTRY[sqlEnv.engine];
 
     const imageDataUrl = prepareImageData(options.imagePath, LOG_LABEL);
     const request = buildRequest({
@@ -619,6 +683,7 @@ async function runSqlCli(): Promise<void> {
         connection: sqlEnv.connection,
         dsnHash: sqlEnv.hash,
         maxIterations: options.maxIterations,
+        engine: sqlEnv.engine,
       }),
     });
 
@@ -627,7 +692,7 @@ async function runSqlCli(): Promise<void> {
       request,
       options,
       logLabel: LOG_LABEL,
-      toolRegistrations: SQL_TOOL_REGISTRATIONS,
+      toolRegistrations,
       maxTurns: options.maxIterations,
     });
     const content = agentResult.assistantText;
@@ -643,6 +708,7 @@ async function runSqlCli(): Promise<void> {
           dsnHash: sqlEnv.hash,
           dsn: sqlEnv.dsn,
           connection: sqlEnv.connection,
+          engine: sqlEnv.engine,
         },
         previousTask,
       );

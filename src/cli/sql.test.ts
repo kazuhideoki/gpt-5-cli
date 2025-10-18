@@ -2,7 +2,12 @@
  * @file SQL モード CLI のオプション解析と補助ロジックの単体テスト。
  */
 import { describe, expect, it } from "bun:test";
-import { buildSqlCliHistoryTask, buildSqlInstructionMessages, parseArgs } from "./sql.js";
+import {
+  buildSqlCliHistoryTask,
+  buildSqlInstructionMessages,
+  inferSqlEngineFromDsn,
+  parseArgs,
+} from "./sql.js";
 import type { CliDefaults } from "../core/types.js";
 
 const defaults: CliDefaults = {
@@ -69,13 +74,32 @@ describe("buildSqlInstructionMessages", () => {
       connection: { host: "db.internal", port: 5432, database: "analytics", user: "report" },
       dsnHash: "sha256:abcd",
       maxIterations: 7,
+      engine: "postgresql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
     expect(text).toContain("db.internal");
     expect(text).toContain("sha256:abcd");
     expect(text).toContain("7 回");
+    expect(text).toContain("PostgreSQL SELECT クエリ");
     expect(text).toContain("sql_dry_run");
+  });
+
+  it("MySQL エンジン向けの文言を切り替える", () => {
+    const messages = buildSqlInstructionMessages({
+      connection: { host: "mysql.internal", port: 3306, database: "analytics", user: "report" },
+      dsnHash: "sha256:mysql",
+      maxIterations: 5,
+      engine: "mysql",
+    });
+    expect(messages).toHaveLength(1);
+    const text = messages[0]?.content?.[0]?.text ?? "";
+    expect(text).toContain("MySQL SELECT クエリ");
+    expect(text).toContain("mysql.internal");
+    expect(text).toContain("sha256:mysql");
+    expect(text).toContain("5 回");
+    expect(text).toContain("ENUM 型の定義と候補値を取得する");
+    expect(text).toContain("information_schema.statistics");
   });
 });
 
@@ -87,6 +111,7 @@ describe("buildSqlCliHistoryTask", () => {
         dsnHash: "sha256:new",
         dsn: "postgres://report:pass@db:5432/analytics",
         connection: { host: "db", port: 5432, database: "analytics", user: "report" },
+        engine: "postgresql",
       },
       undefined,
     );
@@ -112,6 +137,7 @@ describe("buildSqlCliHistoryTask", () => {
         dsnHash: "sha256:new",
         dsn: "postgres://next@host/db",
         connection: { host: "next", database: "analytics" },
+        engine: "postgresql",
       },
       existing,
     );
@@ -119,5 +145,22 @@ describe("buildSqlCliHistoryTask", () => {
     expect(updated?.sql?.connection?.host).toBe("next");
     expect(updated?.sql?.connection?.database).toBe("analytics");
     expect(updated?.sql?.dsn).toBe("postgres://next@host/db");
+  });
+});
+
+describe("inferSqlEngineFromDsn", () => {
+  it("PostgreSQL 系スキームを検出する", () => {
+    expect(inferSqlEngineFromDsn("postgres://user@host/db")).toBe("postgresql");
+    expect(inferSqlEngineFromDsn("postgresql://user@host/db")).toBe("postgresql");
+    expect(inferSqlEngineFromDsn("pgsql://user@host/db")).toBe("postgresql");
+  });
+
+  it("MySQL 系スキームを検出する", () => {
+    expect(inferSqlEngineFromDsn("mysql://user@host/db")).toBe("mysql");
+    expect(inferSqlEngineFromDsn("mariadb://user@host/db")).toBe("mysql");
+  });
+
+  it("未対応スキームはエラーを投げる", () => {
+    expect(() => inferSqlEngineFromDsn("sqlserver://host/db")).toThrow("未対応");
   });
 });
