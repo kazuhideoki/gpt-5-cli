@@ -151,6 +151,9 @@ export function extractResponseText(response: Response): string | null {
   return null;
 }
 
+/**
+ * @TODO finalize 層へ performCompact の副作用部分を移すことを検討
+ */
 export async function performCompact<THistoryTask = unknown>(
   options: CliOptions,
   defaults: CliDefaults,

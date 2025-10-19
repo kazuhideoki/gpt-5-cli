@@ -1,4 +1,5 @@
-// runner.ts: 各 CLI エントリーポイントで共通となる初期化と履歴ストア準備をまとめたユーティリティ。
+// cli-bootstrap.ts: 各 CLI で共通となる初期化と履歴ストア準備をまとめたユーティリティ。
+// NOTE(pipeline/input): 将来的には Input パイプラインのエントリポイントから呼び出す想定。
 import type { HistoryEntry } from "../../core/history.js";
 import { HistoryStore } from "../../core/history.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
@@ -78,21 +79,5 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unkn
     systemPrompt,
     promptPath,
     historyStore,
-  };
-}
-
-export function createCliHistoryEntryFilter(
-  cliName: string,
-): <TContext>(entry: HistoryEntry<TContext>) => boolean {
-  return (entry) => {
-    const context = entry.context;
-    if (!context || typeof context !== "object") {
-      return true;
-    }
-    const rawCli = (context as { cli?: unknown }).cli;
-    if (typeof rawCli !== "string") {
-      return true;
-    }
-    return rawCli === cliName;
   };
 }

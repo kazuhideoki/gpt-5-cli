@@ -31,7 +31,8 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
-import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
+import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
+import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import type { HistoryEntry } from "../core/history.js";

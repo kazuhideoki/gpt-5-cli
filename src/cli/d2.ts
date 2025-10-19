@@ -27,7 +27,8 @@ import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
-import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
+import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
+import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 /** d2モードの解析済みCLIオプションを表す型。 */

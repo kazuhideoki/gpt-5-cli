@@ -2,9 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { bootstrapCli } from "./runner.js";
+import { bootstrapCli } from "./cli-bootstrap.js";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "../types.js";
+import type { CliDefaults, CliOptions } from "../../core/types.js";
 
 interface TempResources {
   historyCleanup: () => void;
