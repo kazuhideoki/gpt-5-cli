@@ -57,13 +57,13 @@ describe("CLI integration", () => {
       last_response_id?: string;
       turns?: Array<{ role?: string; text?: string }>;
       request_count?: number;
-      task?: { mode?: string };
+      context?: { cli?: string };
     }>;
     expect(historyData.length).toBe(1);
     const [entry] = historyData;
     expect(entry.last_response_id).toBe("resp-1");
     expect(entry.request_count).toBe(1);
-    expect(entry.task?.mode).toBe("ask");
+    expect(entry.context?.cli).toBe("ask");
     expect(entry.turns?.length).toBe(2);
     expect(entry.turns?.[0]?.role).toBe("user");
     expect(entry.turns?.[0]?.text).toBe("正常テスト");

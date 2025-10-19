@@ -4,10 +4,10 @@ import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js"
 import type { CliDefaults } from "../core/types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
-import type { D2CliHistoryTask } from "./d2.js";
+import type { D2CliHistoryContext } from "./d2.js";
 
-type HistoryStoreLike = HistoryStore<D2CliHistoryTask>;
-type D2HistoryEntry = HistoryEntry<D2CliHistoryTask>;
+type HistoryStoreLike = HistoryStore<D2CliHistoryContext>;
+type D2HistoryEntry = HistoryEntry<D2CliHistoryContext>;
 
 const noopDeps = { printHelp: () => {} };
 
@@ -134,7 +134,7 @@ describe("d2 determineInput", () => {
     const entry: D2HistoryEntry = {
       last_response_id: "resp-d2",
       title: "diagram",
-      task: { mode: "d2", d2: { file_path: "/tmp/out.d2" } },
+      context: { cli: "d2", file_path: "/tmp/out.d2" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({

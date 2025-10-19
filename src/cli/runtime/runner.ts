@@ -1,15 +1,17 @@
 // runner.ts: 各 CLI エントリーポイントで共通となる初期化と履歴ストア準備をまとめたユーティリティ。
+import type { HistoryEntry } from "../../core/history.js";
 import { HistoryStore } from "../../core/history.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
 import type { CliDefaults, CliOptions } from "../../core/types.js";
 import type { z } from "zod";
 
-interface CliBootstrapParams<TOptions extends CliOptions, THistoryTask> {
+interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {
   argv: string[];
   logLabel: string;
   parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
-  historyTaskSchema: z.ZodType<THistoryTask>;
+  historyContextSchema: z.ZodType<THistoryContext>;
+  historyEntryFilter?: (entry: HistoryEntry<THistoryContext>) => boolean;
   envFileSuffix?: string;
 }
 
@@ -21,25 +23,25 @@ interface CliBootstrapHelpResult<TOptions extends CliOptions> {
   promptPath: string;
 }
 
-interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryTask> {
+interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryContext> {
   status: "ready";
   defaults: CliDefaults;
   options: TOptions;
   systemPrompt?: string;
   promptPath: string;
-  historyStore: HistoryStore<THistoryTask>;
+  historyStore: HistoryStore<THistoryContext>;
 }
 
-type CliBootstrapResult<TOptions extends CliOptions, THistoryTask> =
+type CliBootstrapResult<TOptions extends CliOptions, THistoryContext> =
   | CliBootstrapHelpResult<TOptions>
-  | CliBootstrapReadyResult<TOptions, THistoryTask>;
+  | CliBootstrapReadyResult<TOptions, THistoryContext>;
 
 /**
  * CLIエントリーポイントで共通となる初期化処理を実行する。
  */
-export function bootstrapCli<TOptions extends CliOptions, THistoryTask = unknown>(
-  params: CliBootstrapParams<TOptions, THistoryTask>,
-): CliBootstrapResult<TOptions, THistoryTask> {
+export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unknown>(
+  params: CliBootstrapParams<TOptions, THistoryContext>,
+): CliBootstrapResult<TOptions, THistoryContext> {
   loadEnvironment({ envSuffix: params.envFileSuffix });
   const defaults = loadDefaults();
   console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
@@ -64,8 +66,9 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryTask = unknown
     };
   }
 
-  const historyStore = new HistoryStore<THistoryTask>(defaults.historyIndexPath, {
-    taskSchema: params.historyTaskSchema,
+  const historyStore = new HistoryStore<THistoryContext>(defaults.historyIndexPath, {
+    contextSchema: params.historyContextSchema,
+    entryFilter: params.historyEntryFilter,
   });
 
   return {
@@ -75,5 +78,21 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryTask = unknown
     systemPrompt,
     promptPath,
     historyStore,
+  };
+}
+
+export function createCliHistoryEntryFilter(
+  cliName: string,
+): <TContext>(entry: HistoryEntry<TContext>) => boolean {
+  return (entry) => {
+    const context = entry.context;
+    if (!context || typeof context !== "object") {
+      return true;
+    }
+    const rawCli = (context as { cli?: unknown }).cli;
+    if (typeof rawCli !== "string") {
+      return true;
+    }
+    return rawCli === cliName;
   };
 }

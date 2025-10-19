@@ -31,7 +31,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import type { HistoryEntry } from "../core/history.js";
@@ -95,31 +95,29 @@ const connectionSchema = z
   })
   .optional();
 
-const sqlContextSchema = z
-  .object({
-    type: z.enum(["postgresql", "mysql"]).optional(),
-    dsn_hash: z.string().optional(),
-    dsn: z.string().optional(),
-    connection: connectionSchema,
-  })
-  .optional();
-
-const sqlCliHistoryTaskSchema = z.object({
-  mode: z.string().optional(),
+const sqlCliHistoryContextStrictSchema = z.object({
+  cli: z.literal("sql"),
+  engine: z.enum(["postgresql", "mysql"]),
+  dsn_hash: z.string().min(1),
+  dsn: z.string().optional(),
+  connection: connectionSchema,
   output: z
     .object({
       file: z.string(),
       copy: z.boolean().optional(),
     })
     .optional(),
-  sql: sqlContextSchema,
 });
 
-export type SqlCliHistoryTask = z.infer<typeof sqlCliHistoryTaskSchema>;
+const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
 
-/** SQL履歴タスクを構築する際の引数一式。 */
-interface SqlCliHistoryTaskOptions {
-  taskMode: SqlCliOptions["taskMode"];
+export type SqlCliHistoryContext = z.infer<typeof sqlCliHistoryContextStrictSchema>;
+type SqlCliHistoryStoreContext = z.infer<typeof sqlCliHistoryContextSchema>;
+
+/** SQL履歴コンテキストを構築する際の引数一式。 */
+interface SqlCliHistoryContextOptions {
   dsnHash: string;
   dsn: string;
   connection: SqlConnectionMetadata;
@@ -523,12 +521,12 @@ function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
 }
 
 /** 履歴エントリに保存された DSN を抽出し、存在すれば正規化して返す。 */
-function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): string | undefined {
+function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryContext> | undefined): string | undefined {
   if (!entry) {
     return undefined;
   }
-  const task = entry.task as SqlCliHistoryTask | undefined;
-  const candidate = task?.sql?.dsn;
+  const contextData = entry.context as SqlCliHistoryContext | undefined;
+  const candidate = contextData?.dsn;
   if (typeof candidate === "string") {
     const trimmed = candidate.trim();
     if (trimmed.length > 0) {
@@ -541,8 +539,8 @@ function pickHistoryDsn(entry: HistoryEntry<SqlCliHistoryTask> | undefined): str
 /** CLI指定値と履歴情報を突き合わせ、実行に使用する DSN を決定する。 */
 function resolveSqlDsn(
   provided: string | undefined,
-  contextEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
-  determineEntry: HistoryEntry<SqlCliHistoryTask> | undefined,
+  contextEntry: HistoryEntry<SqlCliHistoryContext> | undefined,
+  determineEntry: HistoryEntry<SqlCliHistoryContext> | undefined,
 ): string {
   if (typeof provided === "string" && provided.trim().length > 0) {
     return provided.trim();
@@ -641,35 +639,36 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   ];
 }
 
-/** 履歴へ保存する SQL メタデータを組み立て、既存タスク情報と統合する。 */
-export function buildSqlCliHistoryTask(
-  options: SqlCliHistoryTaskOptions,
-  previousTask?: SqlCliHistoryTask,
-): SqlCliHistoryTask | undefined {
+/** 履歴へ保存する SQL メタデータを組み立て、既存コンテキスト情報と統合する。 */
+export function buildSqlCliHistoryContext(
+  options: SqlCliHistoryContextOptions,
+  previousContext?: SqlCliHistoryContext,
+): SqlCliHistoryContext {
   if (!options.engine) {
-    throw new Error("Error: SQL engine is required to build history task");
+    throw new Error("Error: SQL engine is required to build history context");
   }
-  const task: SqlCliHistoryTask = { mode: options.taskMode };
   const normalizedConnection = Object.fromEntries(
     Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
   );
-  const sqlMeta = {
-    type: options.engine,
+  const nextContext: SqlCliHistoryContext = {
+    cli: "sql",
+    engine: options.engine,
     dsn_hash: options.dsnHash,
-    dsn: options.dsn,
-    connection: Object.keys(normalizedConnection).length > 0 ? normalizedConnection : undefined,
   };
-
-  if (previousTask?.sql) {
-    task.sql = {
-      ...previousTask.sql,
-      ...sqlMeta,
-    };
-  } else {
-    task.sql = sqlMeta;
+  const resolvedDsn = options.dsn ?? previousContext?.dsn;
+  if (resolvedDsn) {
+    nextContext.dsn = resolvedDsn;
   }
-
-  return task;
+  const connectionEntries = Object.keys(normalizedConnection);
+  if (connectionEntries.length > 0) {
+    nextContext.connection = normalizedConnection;
+  } else if (previousContext?.connection) {
+    nextContext.connection = previousContext.connection;
+  }
+  if (previousContext?.output) {
+    nextContext.output = { ...previousContext.output };
+  }
+  return nextContext;
 }
 
 /**
@@ -678,11 +677,12 @@ export function buildSqlCliHistoryTask(
 async function runSqlCli(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
       argv,
       logLabel: LOG_LABEL,
       parseArgs,
-      historyTaskSchema: sqlCliHistoryTaskSchema,
+      historyContextSchema: sqlCliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("sql"),
       envFileSuffix: "sql",
     });
 
@@ -718,13 +718,13 @@ async function runSqlCli(): Promise<void> {
         logLabel: LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
-          const historyTask = activeEntry.task as SqlCliHistoryTask | undefined;
-          if (!nextOptions.outputExplicit && historyTask?.output?.file) {
-            nextOptions.outputPath = historyTask.output.file;
-            nextOptions.sqlFilePath = historyTask.output.file;
+          const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
+          if (!nextOptions.outputExplicit && historyContext?.output?.file) {
+            nextOptions.outputPath = historyContext.output.file;
+            nextOptions.sqlFilePath = historyContext.output.file;
           }
-          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyTask.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.output.copy;
           }
         },
       },
@@ -733,9 +733,11 @@ async function runSqlCli(): Promise<void> {
     const sqlOutputAbsolutePath = ensureSqlOutputPath(options);
 
     const determineActiveEntry = determine.activeEntry as
-      | HistoryEntry<SqlCliHistoryTask>
+      | HistoryEntry<SqlCliHistoryContext>
       | undefined;
-    const contextActiveEntry = context.activeEntry as HistoryEntry<SqlCliHistoryTask> | undefined;
+    const contextActiveEntry = context.activeEntry as
+      | HistoryEntry<SqlCliHistoryContext>
+      | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
@@ -790,24 +792,21 @@ async function runSqlCli(): Promise<void> {
     });
 
     if (agentResult.responseId) {
-      const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
-      const historyTask = buildSqlCliHistoryTask(
+      const previousContext = context.activeEntry?.context as SqlCliHistoryContext | undefined;
+      const historyContext = buildSqlCliHistoryContext(
         {
-          taskMode: options.taskMode,
           dsnHash: sqlEnv.hash,
           dsn: sqlEnv.dsn,
           connection: sqlEnv.connection,
           engine: sqlEnv.engine,
         },
-        previousTask,
+        previousContext,
       );
-      if (historyTask) {
-        const historyOutputFile = summaryOutputPath ?? options.sqlFilePath;
-        historyTask.output = {
-          file: historyOutputFile,
-          copy: options.copyOutput ? true : undefined,
-        };
-      }
+      const historyOutputFile = summaryOutputPath ?? options.sqlFilePath;
+      historyContext.output = {
+        file: historyOutputFile,
+        copy: options.copyOutput ? true : undefined,
+      };
       historyStore.upsertConversation({
         metadata: {
           model: options.model,
@@ -821,12 +820,12 @@ async function runSqlCli(): Promise<void> {
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousTask,
+          previousContext,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
-        task: historyTask,
+        contextData: historyContext,
       });
     }
 

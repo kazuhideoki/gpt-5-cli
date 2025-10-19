@@ -20,11 +20,11 @@ import { prepareImageData } from "../session/image-attachments.js";
 import { buildRequest, performCompact } from "../session/responses-session.js";
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
-const askCliHistoryTaskSchema = z.object({
-  mode: z.string().optional(),
+const askCliHistoryContextStrictSchema = z.object({
+  cli: z.literal("ask"),
   output: z
     .object({
       file: z.string().optional(),
@@ -33,7 +33,12 @@ const askCliHistoryTaskSchema = z.object({
     .optional(),
 });
 
-export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
+const askCliHistoryContextSchema = askCliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
+
+export type AskCliHistoryContext = z.infer<typeof askCliHistoryContextStrictSchema>;
+type AskCliHistoryStoreContext = z.infer<typeof askCliHistoryContextSchema>;
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
@@ -333,11 +338,12 @@ async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
 
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli]",
       parseArgs,
-      historyTaskSchema: askCliHistoryTaskSchema,
+      historyContextSchema: askCliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("ask"),
       envFileSuffix: "ask",
     });
 
@@ -374,12 +380,12 @@ async function main(): Promise<void> {
         logLabel: "[gpt-5-cli]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
-          const historyTask = activeEntry.task as AskCliHistoryTask | undefined;
-          if (!nextOptions.outputExplicit && historyTask?.output?.file) {
-            nextOptions.outputPath = historyTask.output.file;
+          const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
+          if (!nextOptions.outputExplicit && historyContext?.output?.file) {
+            nextOptions.outputPath = historyContext.output.file;
           }
-          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyTask.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.output.copy;
           }
         },
       },
@@ -417,20 +423,23 @@ async function main(): Promise<void> {
     });
 
     if (agentResult.responseId) {
-      const previousTask = context.activeEntry?.task as AskCliHistoryTask | undefined;
-      const historyTask: AskCliHistoryTask = {
-        ...(previousTask ?? {}),
-        mode: options.taskMode,
+      const previousContext = context.activeEntry?.context as AskCliHistoryContext | undefined;
+      const historyContext: AskCliHistoryContext = {
+        cli: "ask",
+        ...(previousContext?.output ? { output: { ...previousContext.output } } : {}),
       };
-      const historyOutputFile = options.outputPath ?? previousTask?.output?.file;
+      const historyOutputFile = options.outputPath ?? previousContext?.output?.file;
       const historyOutputCopy = options.copyOutput ? true : undefined;
-      if (historyOutputFile || historyOutputCopy) {
-        historyTask.output = {
-          file: historyOutputFile,
-          copy: historyOutputCopy,
-        };
-      } else if (historyTask.output) {
-        delete historyTask.output;
+      if (historyOutputFile || typeof historyOutputCopy === "boolean") {
+        historyContext.output = {};
+        if (historyOutputFile) {
+          historyContext.output.file = historyOutputFile;
+        }
+        if (typeof historyOutputCopy === "boolean") {
+          historyContext.output.copy = historyOutputCopy;
+        }
+      } else if (historyContext.output) {
+        delete historyContext.output;
       }
       historyStore.upsertConversation({
         metadata: {
@@ -445,12 +454,12 @@ async function main(): Promise<void> {
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousTask,
+          previousContext,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
-        task: historyTask,
+        contextData: historyContext,
       });
     }
 

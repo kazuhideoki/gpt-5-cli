@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import {
-  buildSqlCliHistoryTask,
+  buildSqlCliHistoryContext,
   buildSqlInstructionMessages,
   inferSqlEngineFromDsn,
   parseArgs,
@@ -128,11 +128,10 @@ describe("buildSqlInstructionMessages", () => {
   });
 });
 
-describe("buildSqlCliHistoryTask", () => {
+describe("buildSqlCliHistoryContext", () => {
   it("新しい接続情報を保存する", () => {
-    const task = buildSqlCliHistoryTask(
+    const context = buildSqlCliHistoryContext(
       {
-        taskMode: "sql",
         dsnHash: "sha256:new",
         dsn: "postgres://report:pass@db:5432/analytics",
         connection: { host: "db", port: 5432, database: "analytics", user: "report" },
@@ -140,25 +139,24 @@ describe("buildSqlCliHistoryTask", () => {
       },
       undefined,
     );
-    expect(task?.mode).toBe("sql");
-    expect(task?.sql?.dsn_hash).toBe("sha256:new");
-    expect(task?.sql?.connection?.host).toBe("db");
-    expect(task?.sql?.dsn).toBe("postgres://report:pass@db:5432/analytics");
+    expect(context.cli).toBe("sql");
+    expect(context.engine).toBe("postgresql");
+    expect(context.dsn_hash).toBe("sha256:new");
+    expect(context.connection?.host).toBe("db");
+    expect(context.connection?.port).toBe(5432);
+    expect(context.dsn).toBe("postgres://report:pass@db:5432/analytics");
   });
 
-  it("既存のタスク情報を上書きする", () => {
+  it("既存のコンテキスト情報を上書きする", () => {
     const existing = {
-      mode: "sql",
-      sql: {
-        type: "postgresql" as const,
-        dsn_hash: "sha256:old",
-        dsn: "postgres://legacy/db",
-        connection: { host: "legacy" },
-      },
+      cli: "sql" as const,
+      engine: "postgresql" as const,
+      dsn_hash: "sha256:old",
+      dsn: "postgres://legacy/db",
+      connection: { host: "legacy" },
     };
-    const updated = buildSqlCliHistoryTask(
+    const updated = buildSqlCliHistoryContext(
       {
-        taskMode: "sql",
         dsnHash: "sha256:new",
         dsn: "postgres://next@host/db",
         connection: { host: "next", database: "analytics" },
@@ -166,10 +164,11 @@ describe("buildSqlCliHistoryTask", () => {
       },
       existing,
     );
-    expect(updated?.sql?.dsn_hash).toBe("sha256:new");
-    expect(updated?.sql?.connection?.host).toBe("next");
-    expect(updated?.sql?.connection?.database).toBe("analytics");
-    expect(updated?.sql?.dsn).toBe("postgres://next@host/db");
+    expect(updated.dsn_hash).toBe("sha256:new");
+    expect(updated.connection?.host).toBe("next");
+    expect(updated.connection?.database).toBe("analytics");
+    expect(updated.dsn).toBe("postgres://next@host/db");
+    expect(updated.engine).toBe("postgresql");
   });
 });
 

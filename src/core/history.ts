@@ -27,7 +27,10 @@ const historyResumeSchema = z.object({
   summary: historySummarySchema.optional(),
 });
 
-/** 履歴エントリ全体を検証するスキーマ。 */
+/**
+ * 履歴エントリ全体を検証するスキーマ。
+ * TODO(gpt-5-cli#history-top-level-cli): Promote CLI discriminator to top-level fields and migrate existing histories.
+ */
 const baseHistoryEntrySchema = z.object({
   title: z.string().optional(),
   model: z.string().optional(),
@@ -54,20 +57,20 @@ const baseHistoryEntrySchema = z.object({
     .optional(),
   resume: historyResumeSchema.optional(),
   turns: z.array(historyTurnSchema).optional(),
-  task: z.unknown().optional(),
+  context: z.unknown().optional(),
 });
 
 type HistoryEntryBase = z.infer<typeof baseHistoryEntrySchema>;
 
-export type HistoryEntry<TTask = unknown> = Omit<HistoryEntryBase, "task"> & {
-  task?: TTask;
+export type HistoryEntry<TContext = unknown> = Omit<HistoryEntryBase, "context"> & {
+  context?: TContext;
 };
 
-function extractOutputInfo(task: unknown): { file?: string; copy?: boolean } | undefined {
-  if (!task || typeof task !== "object") {
+function extractOutputInfo(context: unknown): { file?: string; copy?: boolean } | undefined {
+  if (!context || typeof context !== "object") {
     return undefined;
   }
-  const output = (task as { output?: unknown }).output;
+  const output = (context as { output?: unknown }).output;
   if (!output || typeof output !== "object") {
     return undefined;
   }
@@ -83,21 +86,21 @@ function extractOutputInfo(task: unknown): { file?: string; copy?: boolean } | u
   return { file, copy };
 }
 
-function createHistoryEntrySchema<TTask>(
-  taskSchema?: z.ZodType<TTask>,
-): z.ZodType<HistoryEntry<TTask>> {
-  if (taskSchema) {
+function createHistoryEntrySchema<TContext>(
+  contextSchema?: z.ZodType<TContext>,
+): z.ZodType<HistoryEntry<TContext>> {
+  if (contextSchema) {
     return baseHistoryEntrySchema.extend({
-      task: taskSchema.optional(),
-    }) as z.ZodType<HistoryEntry<TTask>>;
+      context: contextSchema.optional(),
+    }) as z.ZodType<HistoryEntry<TContext>>;
   }
-  return baseHistoryEntrySchema as unknown as z.ZodType<HistoryEntry<TTask>>;
+  return baseHistoryEntrySchema as unknown as z.ZodType<HistoryEntry<TContext>>;
 }
 
-function createHistoryEntriesSchema<TTask>(
-  taskSchema?: z.ZodType<TTask>,
-): z.ZodArray<z.ZodType<HistoryEntry<TTask>>> {
-  return z.array(createHistoryEntrySchema(taskSchema));
+function createHistoryEntriesSchema<TContext>(
+  contextSchema?: z.ZodType<TContext>,
+): z.ZodArray<z.ZodType<HistoryEntry<TContext>>> {
+  return z.array(createHistoryEntrySchema(contextSchema));
 }
 
 interface HistoryEntryMetadata {
@@ -106,40 +109,44 @@ interface HistoryEntryMetadata {
   verbosity: VerbosityLevel;
 }
 
-interface HistoryUpsertContext<TTask> {
+interface HistoryUpsertContext<TContext> {
   isNewConversation: boolean;
   titleToUse: string;
   previousResponseId?: string;
   activeLastResponseId?: string;
   resumeSummaryText?: string;
   resumeSummaryCreatedAt?: string;
-  previousTask?: TTask;
+  previousContext?: TContext;
 }
 
-interface HistoryConversationUpsert<TTask> {
+interface HistoryConversationUpsert<TContext> {
   metadata: HistoryEntryMetadata;
-  context: HistoryUpsertContext<TTask>;
+  context: HistoryUpsertContext<TContext>;
   responseId: string;
   userText: string;
   assistantText: string;
-  task?: TTask;
+  contextData?: TContext;
 }
 
-interface HistoryStoreOptions<TTask> {
-  taskSchema?: z.ZodType<TTask>;
+interface HistoryStoreOptions<TContext> {
+  contextSchema?: z.ZodType<TContext>;
+  entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
 }
 
 /**
  * 履歴インデックスファイルを管理するユーティリティ。
  */
-export class HistoryStore<TTask = unknown> {
-  private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TTask>>>;
+export class HistoryStore<TContext = unknown> {
+  private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TContext>>>;
+
+  private readonly entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
 
   constructor(
     private readonly filePath: string,
-    options: HistoryStoreOptions<TTask> = {},
+    options: HistoryStoreOptions<TContext> = {},
   ) {
-    this.entriesSchema = createHistoryEntriesSchema(options.taskSchema);
+    this.entriesSchema = createHistoryEntriesSchema(options.contextSchema);
+    this.entryFilter = options.entryFilter;
   }
 
   /**
@@ -158,7 +165,7 @@ export class HistoryStore<TTask = unknown> {
    *
    * @returns 検証済みの履歴一覧。
    */
-  loadEntries(): HistoryEntry<TTask>[] {
+  loadEntries(): HistoryEntry<TContext>[] {
     this.ensureInitialized();
     try {
       const raw = fs.readFileSync(this.filePath, "utf8");
@@ -175,14 +182,14 @@ export class HistoryStore<TTask = unknown> {
    *
    * @param entries 保存対象の履歴一覧。
    */
-  saveEntries(entries: HistoryEntry<TTask>[]): void {
+  saveEntries(entries: HistoryEntry<TContext>[]): void {
     this.ensureInitialized();
     const normalized = this.entriesSchema.parse(entries);
     const json = JSON.stringify(normalized, null, 2);
     fs.writeFileSync(this.filePath, `${json}\n`, "utf8");
   }
 
-  private sortByUpdated(entries: HistoryEntry<TTask>[]): HistoryEntry<TTask>[] {
+  private sortByUpdated(entries: HistoryEntry<TContext>[]): HistoryEntry<TContext>[] {
     return [...entries].sort((a, b) => {
       const left = a.updated_at ?? "";
       const right = b.updated_at ?? "";
@@ -191,11 +198,26 @@ export class HistoryStore<TTask = unknown> {
     });
   }
 
+  private loadFilteredEntries(): HistoryEntry<TContext>[] {
+    const sorted = this.sortByUpdated(this.loadEntries());
+    if (!this.entryFilter) {
+      return sorted;
+    }
+    return sorted.filter((entry) => {
+      try {
+        return this.entryFilter!(entry);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`[gpt-5-cli] history filter failed: ${message}`);
+      }
+    });
+  }
+
   /**
    * 履歴一覧を更新日時の降順で表示する。
    */
   listHistory(): void {
-    const entries = this.sortByUpdated(this.loadEntries());
+    const entries = this.loadFilteredEntries();
     if (entries.length === 0) {
       console.log("(履歴なし)");
       return;
@@ -210,7 +232,7 @@ export class HistoryStore<TTask = unknown> {
       const updated = entry.updated_at ?? "(更新日時 未設定)";
       const title = entry.title ?? "(タイトル未設定)";
       let line = `${String(index + 1).padStart(2, " ")}) ${title} [${model}/${effort}/${verbosity} ${requestCount}回] ${updated}`;
-      const outputInfo = extractOutputInfo(entry.task);
+      const outputInfo = extractOutputInfo(entry.context);
       if (outputInfo) {
         const parts: string[] = [];
         if (outputInfo.file) {
@@ -233,8 +255,8 @@ export class HistoryStore<TTask = unknown> {
    * @param index 1始まりの履歴番号。
    * @returns 該当エントリ。
    */
-  selectByNumber(index: number): HistoryEntry<TTask> {
-    const entries = this.sortByUpdated(this.loadEntries());
+  selectByNumber(index: number): HistoryEntry<TContext> {
+    const entries = this.loadFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
@@ -248,11 +270,11 @@ export class HistoryStore<TTask = unknown> {
    * @returns 削除したタイトルとlast_response_id。
    */
   deleteByNumber(index: number): { removedTitle: string; removedId: string } {
-    const entries = this.sortByUpdated(this.loadEntries());
-    if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+    const scopedEntries = this.loadFilteredEntries();
+    if (!Number.isInteger(index) || index < 1 || index > scopedEntries.length) {
+      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${scopedEntries.length}）。: ${index}`);
     }
-    const entry = entries[index - 1];
+    const entry = scopedEntries[index - 1];
     const lastId = entry.last_response_id;
     if (!lastId) {
       throw new Error("[gpt-5-cli] 選択した履歴の last_response_id が無効です。");
@@ -268,8 +290,8 @@ export class HistoryStore<TTask = unknown> {
   /**
    * 対話履歴へ新たなターンを保存する。該当会話が存在すれば更新、無ければ新規作成する。
    */
-  upsertConversation(params: HistoryConversationUpsert<TTask>): void {
-    const { metadata, context, responseId, userText, assistantText, task } = params;
+  upsertConversation(params: HistoryConversationUpsert<TContext>): void {
+    const { metadata, context, responseId, userText, assistantText, contextData } = params;
     const entries = this.loadEntries();
     const tsNow = new Date().toISOString();
     let targetLastId = context.previousResponseId;
@@ -305,11 +327,11 @@ export class HistoryStore<TTask = unknown> {
       response_id: responseId,
     };
 
-    const resolveTask = (previousTask?: TTask, existingTask?: TTask) =>
-      task ?? previousTask ?? existingTask;
+    const resolveContext = (previousContext?: TContext, existingContext?: TContext) =>
+      contextData ?? previousContext ?? existingContext;
 
     if (context.isNewConversation && !targetLastId) {
-      const newEntry: HistoryEntry<TTask> = {
+      const newEntry: HistoryEntry<TContext> = {
         title: context.titleToUse,
         model: metadata.model,
         effort: metadata.effort,
@@ -321,7 +343,7 @@ export class HistoryStore<TTask = unknown> {
         request_count: 1,
         resume,
         turns: [userTurn, assistantTurn],
-        task: resolveTask(context.previousTask),
+        context: resolveContext(context.previousContext),
       };
       entries.push(newEntry);
       this.saveEntries(entries);
@@ -355,7 +377,7 @@ export class HistoryStore<TTask = unknown> {
         if (!resumeSummaryText && nextResume.summary) {
           delete nextResume.summary;
         }
-        return {
+        const nextEntry = {
           ...entry,
           updated_at: tsNow,
           last_response_id: responseId,
@@ -365,8 +387,9 @@ export class HistoryStore<TTask = unknown> {
           request_count: (entry.request_count ?? 0) + 1,
           turns,
           resume: nextResume,
-          task: resolveTask(context.previousTask, entry.task),
+          context: resolveContext(context.previousContext, entry.context),
         };
+        return nextEntry;
       }
       return entry;
     });
@@ -376,7 +399,7 @@ export class HistoryStore<TTask = unknown> {
       return;
     }
 
-    const fallbackEntry: HistoryEntry<TTask> = {
+    const fallbackEntry: HistoryEntry<TContext> = {
       title: context.titleToUse,
       model: metadata.model,
       effort: metadata.effort,
@@ -388,7 +411,7 @@ export class HistoryStore<TTask = unknown> {
       request_count: 1,
       resume,
       turns: [userTurn, assistantTurn],
-      task: resolveTask(context.previousTask),
+      context: resolveContext(context.previousContext),
     };
     nextEntries.push(fallbackEntry);
     this.saveEntries(nextEntries);
@@ -401,7 +424,7 @@ export class HistoryStore<TTask = unknown> {
    * @param noColor カラー出力を禁止するフラグ。
    */
   showByNumber(index: number, noColor: boolean): void {
-    const entries = this.sortByUpdated(this.loadEntries());
+    const entries = this.loadFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
@@ -413,7 +436,7 @@ export class HistoryStore<TTask = unknown> {
       `=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`,
     );
 
-    const outputInfo = extractOutputInfo(entry.task);
+    const outputInfo = extractOutputInfo(entry.context);
     if (outputInfo) {
       const parts: string[] = [];
       if (outputInfo.file) {
@@ -468,10 +491,10 @@ export class HistoryStore<TTask = unknown> {
    *
    * @returns 最新エントリ。存在しない場合はundefined。
    */
-  findLatest(): HistoryEntry<TTask> | undefined {
-    const entries = this.loadEntries();
+  findLatest(): HistoryEntry<TContext> | undefined {
+    const entries = this.loadFilteredEntries();
     if (entries.length === 0) return undefined;
-    return this.sortByUpdated(entries)[0];
+    return entries[0];
   }
 
   /**
@@ -479,7 +502,7 @@ export class HistoryStore<TTask = unknown> {
    *
    * @param entry 保存対象エントリ。
    */
-  upsertEntry(entry: HistoryEntry<TTask>): void {
+  upsertEntry(entry: HistoryEntry<TContext>): void {
     const entries = this.loadEntries();
     const existingIndex = entries.findIndex(
       (item) => item.last_response_id === entry.last_response_id,
