@@ -11,12 +11,14 @@
 以下は本リポジトリの構造と責務です。**推測せず**、必要に応じて該当ファイルを開いて確認してから編集してください。
 
 - `src/cli/` … `default`・`d2`・`mermaid`・`sql` 各モードのエントリーポイント群と共通ランタイム `runtime/` を束ねる。`runtime/` は CLI 初期化・入力分岐などの共通処理。
-- `src/session/` … Responses API を使うチャットセッションの **サービス層**。履歴同期とツール実行のオーケストレーションを担う。Agents SDK 用の `agent-session.ts` もここに並列配置されている。
-- `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/session/` や `src/cli/`）から横並びで組み合わせる設計。
+- `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/pipeline/process/` や `src/cli/`）から横並びで組み合わせる設計。
   - `config.ts` … 設定の読込・検証と API キー解決（`resolveOpenAIApiKey`）。**他 core モジュールに依存しない**。
   - `tools.ts` … 関数ツール定義とランタイム生成。Responses API 用ツール配列 `buildCliToolList` を提供。
   - `options.ts` / `formatting.ts` / `prompts.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
-- `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では結果処理ユーティリティ (`pipeline/finalize/io.ts`) を `core` から移設済みで、今後 `input`・`process` も段階的に切り出す予定。
+- `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では
+  - `finalize/io.ts` に結果処理ユーティリティを移設済み。
+  - `process/` にエージェント実行・リクエスト組み立て・会話コンテキスト生成など `session` から移した共通ロジックを配置。`performCompact` の終端副作用などは TODO コメント付きで finalize への移行を計画中。
+  - 将来的に `input/` も導入予定。
 
 **ビルド/開発コマンド**（よく使う順）
 
@@ -47,8 +49,8 @@
 
 **R4. 参照規律（Biome で強制）**
 
-- `core` から `@session/*`・`@cli/*`・相対 `../**/session/**`・`../**/cli/**` への import を禁止。
-- `session` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
+- `core` から `@pipeline/*`・`@cli/*`・相対 `../**/pipeline/**`・`../**/cli/**` への import を禁止。
+- `pipeline/process` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
 - 例外設定は設けない（`biome.json` の `overrides` で強制）。
 
 **R5. ログ/出力**

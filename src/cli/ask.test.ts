@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildRequest } from "../session/responses-session.js";
+import { buildRequest } from "../pipeline/process/responses.js";
 import { determineInput } from "./runtime/input.js";
 import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";

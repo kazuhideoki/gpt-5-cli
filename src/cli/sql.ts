@@ -8,10 +8,10 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import { computeContext } from "../session/conversation-context.js";
-import { prepareImageData } from "../session/image-attachments.js";
-import { buildRequest, performCompact } from "../session/responses-session.js";
-import { createOpenAIClient } from "../session/openai-client.js";
+import { computeContext } from "../pipeline/process/conversation-context.js";
+import { prepareImageData } from "../pipeline/process/image-attachments.js";
+import { buildRequest, performCompact } from "../pipeline/process/responses.js";
+import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
@@ -35,7 +35,7 @@ import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import type { HistoryEntry } from "../core/history.js";
-import { runAgentConversation } from "../session/agent-session.js";
+import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 

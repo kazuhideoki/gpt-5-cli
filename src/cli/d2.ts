@@ -6,7 +6,7 @@ import { webSearchTool } from "@openai/agents-openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
-import { createOpenAIClient } from "../session/openai-client.js";
+import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   expandLegacyShortFlags,
   parseEffortFlag,
@@ -22,10 +22,10 @@ import {
   buildCliToolList,
 } from "../core/tools.js";
 import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
-import { computeContext } from "../session/conversation-context.js";
-import { prepareImageData } from "../session/image-attachments.js";
-import { buildRequest, performCompact } from "../session/responses-session.js";
-import { runAgentConversation } from "../session/agent-session.js";
+import { computeContext } from "../pipeline/process/conversation-context.js";
+import { prepareImageData } from "../pipeline/process/image-attachments.js";
+import { buildRequest, performCompact } from "../pipeline/process/responses.js";
+import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";

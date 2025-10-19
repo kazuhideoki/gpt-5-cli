@@ -1,4 +1,5 @@
 // image-attachments.ts: CLI から渡された画像パスを検証し Responses API 向けデータ URL を生成する。
+// NOTE(pipeline/process): 入力検証寄りだが、現状はモデル呼び出し準備の一環として process 層に配置。
 import fs from "node:fs";
 import path from "node:path";
 

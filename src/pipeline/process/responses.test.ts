@@ -5,10 +5,10 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../core/types.js";
-import type { HistoryEntry, HistoryStore } from "../core/history.js";
+} from "../../core/types.js";
+import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 import type { Response } from "openai/resources/responses/responses";
-import { buildRequest, extractResponseText, performCompact } from "./responses-session.js";
+import { buildRequest, extractResponseText, performCompact } from "./responses.js";
 
 interface TestHistoryTask {
   label?: string;

@@ -1,13 +1,13 @@
-// agent-session.ts: Agents SDK を利用して CLI からの会話処理を実行するラッパー。
+// agent-conversation.ts: Agents SDK を利用して CLI からの会話処理を実行するラッパー。
 import { Agent, Runner, extractAllTextOutput, setTraceProcessors, user } from "@openai/agents";
 import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type { AgentInputItem, ModelSettings } from "@openai/agents";
 import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import type { CliOptions, OpenAIInputMessage } from "../core/types.js";
-import type { ToolRegistration } from "../core/tools.js";
-import { buildAgentsToolList } from "../core/tools.js";
+import type { CliOptions, OpenAIInputMessage } from "../../core/types.js";
+import type { ToolRegistration } from "../../core/tools.js";
+import { buildAgentsToolList } from "../../core/tools.js";
 
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);

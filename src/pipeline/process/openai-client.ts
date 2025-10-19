@@ -1,7 +1,7 @@
-// openai-client.ts: Session層で利用するOpenAIクライアントのファクトリ。
+// openai-client.ts: Process 層で利用する OpenAI クライアントのファクトリ。
 // 責務: APIキーの解決（configへ委譲）と OpenAI インスタンス生成のみ。
 import OpenAI from "openai";
-import { resolveOpenAIApiKey } from "../core/config.js";
+import { resolveOpenAIApiKey } from "../../core/config.js";
 
 interface CreateOpenAIClientOptions {
   /** 明示的に指定するAPIキー。省略時は環境から解決。 */

@@ -36,8 +36,8 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["@session/*", "@cli/*", "../**/session/**", "../**/cli/**"],
-                    "message": "core から session,cli への依存は禁止です"
+                    "group": ["@pipeline/*", "@cli/*", "../**/pipeline/**", "../**/cli/**"],
+                    "message": "core から pipeline,cli への依存は禁止です"
                   }
                 ]
               }
@@ -47,7 +47,7 @@
       }
     },
     {
-      "includes": ["src/session/**/*.{ts,tsx,js,jsx}"],
+      "includes": ["src/pipeline/process/**/*.{ts,tsx,js,jsx}"],
       "linter": {
         "rules": {
           "style": {
@@ -57,7 +57,7 @@
                 "patterns": [
                   {
                     "group": ["@cli/*", "../**/cli/**"],
-                    "message": "session から cli への依存は禁止です"
+                    "message": "pipeline/process から cli への依存は禁止です"
                   }
                 ]
               }

@@ -1,20 +1,21 @@
-// responses-session.ts: Responses API 向けのリクエスト構築と履歴圧縮処理をまとめたユーティリティ。
+// responses.ts: Responses API 向けのリクエスト構築と履歴圧縮処理をまとめたユーティリティ。
+// NOTE(pipeline/process): finalize 層との責務分割を進行中。履歴保存などの副作用には TODO を付与している。
 import type OpenAI from "openai";
 import type {
   Response,
   ResponseCreateParamsNonStreaming,
   ResponseTextConfig,
 } from "openai/resources/responses/responses";
-import { formatModelValue, formatScaleValue } from "../core/formatting.js";
-import { formatTurnsForSummary } from "../core/history.js";
-import type { HistoryStore } from "../core/history.js";
-import { buildCliToolList } from "../core/tools.js";
+import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
+import { formatTurnsForSummary } from "../../core/history.js";
+import type { HistoryStore } from "../../core/history.js";
+import { buildCliToolList } from "../../core/tools.js";
 import type {
   CliDefaults,
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../core/types.js";
+} from "../../core/types.js";
 
 interface BuildRequestParams {
   options: CliOptions;
@@ -157,6 +158,7 @@ export async function performCompact<THistoryTask = unknown>(
   client: OpenAI,
   logLabel: string,
 ): Promise<void> {
+  // TODO(pipeline/finalize): 履歴の保存と標準出力書き込みは finalize 層へ移す。
   if (typeof options.compactIndex !== "number") {
     throw new Error("Error: --compact の履歴番号は正の整数で指定してください");
   }
@@ -212,6 +214,7 @@ export async function performCompact<THistoryTask = unknown>(
     throw new Error("Error: 選択した履歴の last_response_id が無効です。");
   }
 
+  // TODO(pipeline/finalize): この履歴保存以降の副作用は finalize 層へ委譲する。
   const entries = historyStore.loadEntries();
   const nextEntries = entries.map((item) => {
     if ((item.last_response_id ?? "") === targetId) {

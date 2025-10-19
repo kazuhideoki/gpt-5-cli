@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type OpenAI from "openai";
-import type { CliOptions } from "../core/types.js";
-import { runAgentConversation } from "./agent-session.js";
+import type { CliOptions } from "../../core/types.js";
+import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import type { ToolRegistration } from "../core/tools.js";
+import type { ToolRegistration } from "../../core/tools.js";
 
 class FakeResponsesClient {
   public readonly createCalls: any[] = [];
