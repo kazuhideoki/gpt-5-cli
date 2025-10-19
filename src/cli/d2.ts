@@ -22,12 +22,9 @@ import {
   buildCliToolList,
 } from "../core/tools.js";
 import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
-import {
-  buildRequest,
-  computeContext,
-  performCompact,
-  prepareImageData,
-} from "../session/chat-session.js";
+import { computeContext } from "../session/conversation-context.js";
+import { prepareImageData } from "../session/image-attachments.js";
+import { buildRequest, performCompact } from "../session/responses-session.js";
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";

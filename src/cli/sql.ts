@@ -8,12 +8,9 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import {
-  buildRequest,
-  computeContext,
-  performCompact,
-  prepareImageData,
-} from "../session/chat-session.js";
+import { computeContext } from "../session/conversation-context.js";
+import { prepareImageData } from "../session/image-attachments.js";
+import { buildRequest, performCompact } from "../session/responses-session.js";
 import { createOpenAIClient } from "../session/openai-client.js";
 import {
   READ_FILE_TOOL,
