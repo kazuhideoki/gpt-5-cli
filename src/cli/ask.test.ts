@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../session/chat-session.js";
 import { determineInput } from "./runtime/input.js";
-import { parseArgs } from "./ask.js";
+import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
 import type { AskCliHistoryTask } from "./ask.js";
@@ -303,5 +303,23 @@ describe("determineInput", () => {
       expect(result.code).toBe(1);
     }
     expect(helpCalled).toBe(true);
+  });
+});
+
+describe("ask web search integration", () => {
+  it("web_search ツールを生成して名称を固定する", () => {
+    const tool = createAskWebSearchTool();
+    expect(tool).toBeDefined();
+    if (!tool || typeof tool !== "object") {
+      throw new Error("web_search ツールの生成に失敗しました");
+    }
+    const name = (tool as { name?: unknown }).name;
+    expect(name).toBe("web_search");
+  });
+
+  it("Responses API 用ツールから web_search_preview を除外する", () => {
+    const tools = buildAskResponseTools();
+    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+    expect(hasPreview).toBe(false);
   });
 });
