@@ -92,7 +92,7 @@ describe("bootstrapCli", () => {
       argv: ["質問"],
       logLabel: "[test-cli]",
       parseArgs,
-      historyTaskSchema: z.object({}),
+      historyContextSchema: z.object({}),
     });
 
     expect(result.status).toBe("ready");
@@ -114,7 +114,7 @@ describe("bootstrapCli", () => {
       argv: ["--help"],
       logLabel: "[test-cli]",
       parseArgs,
-      historyTaskSchema: z.object({}),
+      historyContextSchema: z.object({}),
     });
 
     expect(result.status).toBe("help");

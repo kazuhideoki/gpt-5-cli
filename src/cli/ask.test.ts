@@ -4,10 +4,10 @@ import { determineInput } from "./runtime/input.js";
 import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
-import type { AskCliHistoryTask } from "./ask.js";
+import type { AskCliHistoryContext } from "./ask.js";
 
-type TestHistoryEntry = HistoryEntry<AskCliHistoryTask>;
-type HistoryStoreLike = HistoryStore<AskCliHistoryTask>;
+type TestHistoryEntry = HistoryEntry<AskCliHistoryContext>;
+type HistoryStoreLike = HistoryStore<AskCliHistoryContext>;
 
 const noopDeps = { printHelp: () => {} };
 

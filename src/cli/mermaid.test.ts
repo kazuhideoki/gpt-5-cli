@@ -4,10 +4,10 @@ import { parseArgs } from "./mermaid.js";
 import type { CliDefaults } from "../core/types.js";
 import type { MermaidCliOptions } from "./mermaid.js";
 import type { HistoryEntry, HistoryStore } from "../core/history.js";
-import type { MermaidCliHistoryTask } from "./mermaid.js";
+import type { MermaidCliHistoryContext } from "./mermaid.js";
 
-type HistoryStoreLike = HistoryStore<MermaidCliHistoryTask>;
-type MermaidHistoryEntry = HistoryEntry<MermaidCliHistoryTask>;
+type HistoryStoreLike = HistoryStore<MermaidCliHistoryContext>;
+type MermaidHistoryEntry = HistoryEntry<MermaidCliHistoryContext>;
 
 const noopDeps = { printHelp: () => {} };
 
@@ -131,12 +131,12 @@ class StubHistoryStore {
 }
 
 describe("mermaid determineInput", () => {
-  it("履歴番号指定で既存の mermaid タスクを保持したまま返す", async () => {
+  it("履歴番号指定で既存の mermaid コンテキストを保持したまま返す", async () => {
     const defaults = createDefaults();
     const entry: MermaidHistoryEntry = {
       last_response_id: "resp-mermaid",
       title: "diagram",
-      task: { mode: "mermaid", mermaid: { file_path: "/tmp/out.mmd" } },
+      context: { cli: "mermaid", file_path: "/tmp/out.mmd" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({

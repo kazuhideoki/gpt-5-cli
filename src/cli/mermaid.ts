@@ -40,22 +40,18 @@ interface MermaidContextInfo {
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 
-const mermaidCliHistoryTaskSchema = z.object({
-  mode: z.string().optional(),
+const mermaidCliHistoryContextSchema = z.object({
+  cli: z.literal("mermaid"),
   output: z
     .object({
       file: z.string(),
       copy: z.boolean().optional(),
     })
     .optional(),
-  mermaid: z
-    .object({
-      file_path: z.string().optional(),
-    })
-    .optional(),
+  file_path: z.string().optional(),
 });
 
-export type MermaidCliHistoryTask = z.infer<typeof mermaidCliHistoryTaskSchema>;
+export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextSchema>;
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -459,7 +455,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       argv,
       logLabel: "[gpt-5-cli-mermaid]",
       parseArgs,
-      historyTaskSchema: mermaidCliHistoryTaskSchema,
+      historyContextSchema: mermaidCliHistoryContextSchema,
       envFileSuffix: "mermaid",
     });
 
@@ -495,17 +491,17 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         logLabel: "[gpt-5-cli-mermaid]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "mermaid";
-          const historyTask = activeEntry.task as MermaidCliHistoryTask | undefined;
+          const historyContext = activeEntry.context as MermaidCliHistoryContext | undefined;
 
           if (!nextOptions.outputExplicit) {
-            const historyFile = historyTask?.mermaid?.file_path ?? historyTask?.output?.file;
+            const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
               nextOptions.mermaidFilePath = historyFile;
             }
           }
-          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyTask.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.output.copy;
           }
         },
       },
@@ -556,23 +552,21 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
     });
 
     if (agentResult.responseId) {
-      const previousTask = context.activeEntry?.task as MermaidCliHistoryTask | undefined;
-      const historyTask: MermaidCliHistoryTask = { mode: options.taskMode };
-      let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
+      const previousContext = context.activeEntry?.context as MermaidCliHistoryContext | undefined;
+      const historyContext: MermaidCliHistoryContext = { cli: "mermaid" };
       const contextPath = mermaidContext?.absolutePath;
-      const filePath = contextPath ?? options.mermaidFilePath;
+      const filePath = contextPath ?? options.mermaidFilePath ?? previousContext?.file_path;
       if (contextPath) {
-        mermaidMeta = { ...mermaidMeta, file_path: contextPath };
+        historyContext.file_path = contextPath;
       } else if (filePath) {
-        mermaidMeta = { ...mermaidMeta, file_path: filePath };
+        historyContext.file_path = filePath;
       }
       const historyOutputFile = summaryOutputPath ?? options.mermaidFilePath;
-      historyTask.output = {
-        file: historyOutputFile,
-        copy: options.copyOutput ? true : undefined,
-      };
-      if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
-        historyTask.mermaid = mermaidMeta;
+      if (historyOutputFile || options.copyOutput) {
+        historyContext.output = { file: historyOutputFile };
+        if (options.copyOutput) {
+          historyContext.output.copy = true;
+        }
       }
       historyStore.upsertConversation({
         metadata: {
@@ -587,12 +581,12 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousTask,
+          previousContext,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
-        task: historyTask,
+        contextData: historyContext,
       });
     }
 

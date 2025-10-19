@@ -66,14 +66,12 @@ describe("sql CLI integration", () => {
     const historyRaw = fs.readFileSync(historyPath, "utf8");
     const historyData = JSON.parse(historyRaw) as Array<{
       last_response_id?: string;
-      task?: {
-        mode?: string;
-        sql?: {
-          type?: string;
-          dsn?: string;
-          dsn_hash?: string;
-          connection?: Record<string, unknown>;
-        };
+      context?: {
+        cli?: string;
+        engine?: string;
+        dsn?: string;
+        dsn_hash?: string;
+        connection?: Record<string, unknown>;
       };
       turns?: Array<{ role?: string; text?: string }>;
       request_count?: number;
@@ -82,11 +80,11 @@ describe("sql CLI integration", () => {
     const [entry] = historyData;
     expect(entry.last_response_id).toBe("resp-sql");
     expect(entry.request_count).toBe(1);
-    expect(entry.task?.mode).toBe("sql");
-    expect(entry.task?.sql?.type).toBe("postgresql");
-    expect(entry.task?.sql?.dsn_hash).toBe(expectedHash);
-    expect(entry.task?.sql?.dsn).toBe(testDsn);
-    expect(entry.task?.sql?.connection).toEqual({
+    expect(entry.context?.cli).toBe("sql");
+    expect(entry.context?.engine).toBe("postgresql");
+    expect(entry.context?.dsn_hash).toBe(expectedHash);
+    expect(entry.context?.dsn).toBe(testDsn);
+    expect(entry.context?.connection).toEqual({
       host: "127.0.0.1",
       port: 6543,
       database: "analytics",
@@ -160,8 +158,8 @@ describe("sql CLI integration", () => {
     const historyAfterFirst = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterFirst.length).toBe(1);
     const firstEntry = historyAfterFirst[0];
-    expect(firstEntry.task?.sql?.dsn_hash).toBe(expectedHash);
-    expect(firstEntry.task?.sql?.connection).toEqual({
+    expect(firstEntry.context?.dsn_hash).toBe(expectedHash);
+    expect(firstEntry.context?.connection).toEqual({
       host: "127.0.0.1",
       port: 6543,
       database: "analytics",
@@ -178,8 +176,8 @@ describe("sql CLI integration", () => {
     expect(historyAfterSecond.length).toBe(1);
     const secondEntry = historyAfterSecond[0];
     expect(secondEntry.request_count).toBe(2);
-    expect(secondEntry.task?.sql?.dsn_hash).toBe(expectedHash);
-    expect(secondEntry.task?.sql?.dsn).toBe(testDsn);
+    expect(secondEntry.context?.dsn_hash).toBe(expectedHash);
+    expect(secondEntry.context?.dsn).toBe(testDsn);
 
     const third = await runSqlCli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
@@ -190,8 +188,8 @@ describe("sql CLI integration", () => {
     expect(historyAfterThird.length).toBe(1);
     const thirdEntry = historyAfterThird[0];
     expect(thirdEntry.request_count).toBe(3);
-    expect(thirdEntry.task?.sql?.dsn_hash).toBe(expectedHash);
-    expect(thirdEntry.task?.sql?.dsn).toBe(testDsn);
+    expect(thirdEntry.context?.dsn_hash).toBe(expectedHash);
+    expect(thirdEntry.context?.dsn).toBe(testDsn);
 
     const summary = await runSqlCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
@@ -201,8 +199,8 @@ describe("sql CLI integration", () => {
     const historyAfterSummary = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;
     expect(historyAfterSummary.length).toBe(1);
     const summaryEntry = historyAfterSummary[0];
-    expect(summaryEntry.task?.sql?.dsn_hash).toBe(expectedHash);
-    expect(summaryEntry.task?.sql?.dsn).toBe(testDsn);
+    expect(summaryEntry.context?.dsn_hash).toBe(expectedHash);
+    expect(summaryEntry.context?.dsn).toBe(testDsn);
     expect(summaryEntry.turns?.length).toBe(1);
     expect(summaryEntry.turns?.[0]?.role).toBe("system");
     expect(summaryEntry.turns?.[0]?.text).toBe("SQL Summary");

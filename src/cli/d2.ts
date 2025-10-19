@@ -75,22 +75,18 @@ export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"
   return tools.filter((tool) => tool.type !== "web_search_preview");
 }
 
-const d2CliHistoryTaskSchema = z.object({
-  mode: z.string().optional(),
+const d2CliHistoryContextSchema = z.object({
+  cli: z.literal("d2"),
   output: z
     .object({
       file: z.string(),
       copy: z.boolean().optional(),
     })
     .optional(),
-  d2: z
-    .object({
-      file_path: z.string().optional(),
-    })
-    .optional(),
+  file_path: z.string().optional(),
 });
 
-export type D2CliHistoryTask = z.infer<typeof d2CliHistoryTaskSchema>;
+export type D2CliHistoryContext = z.infer<typeof d2CliHistoryContextSchema>;
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -500,7 +496,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       argv,
       logLabel: "[gpt-5-cli-d2]",
       parseArgs,
-      historyTaskSchema: d2CliHistoryTaskSchema,
+      historyContextSchema: d2CliHistoryContextSchema,
       envFileSuffix: "d2",
     });
 
@@ -536,17 +532,17 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         logLabel: "[gpt-5-cli-d2]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
-          const historyTask = activeEntry.task as D2CliHistoryTask | undefined;
+          const historyContext = activeEntry.context as D2CliHistoryContext | undefined;
 
           if (!nextOptions.outputExplicit) {
-            const historyFile = historyTask?.d2?.file_path ?? historyTask?.output?.file;
+            const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
               nextOptions.d2FilePath = historyFile;
             }
           }
-          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyTask.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.output.copy;
           }
         },
       },
@@ -597,23 +593,21 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
     });
 
     if (agentResult.responseId) {
-      const previousTask = context.activeEntry?.task as D2CliHistoryTask | undefined;
-      const historyTask: D2CliHistoryTask = { mode: options.taskMode };
-      let d2Meta = previousTask?.d2 ? { ...previousTask.d2 } : undefined;
+      const previousContext = context.activeEntry?.context as D2CliHistoryContext | undefined;
+      const historyContext: D2CliHistoryContext = { cli: "d2" };
       const contextPath = d2Context?.absolutePath;
-      const filePath = contextPath ?? options.d2FilePath;
+      const filePath = contextPath ?? options.d2FilePath ?? previousContext?.file_path;
       if (contextPath) {
-        d2Meta = { ...d2Meta, file_path: contextPath };
+        historyContext.file_path = contextPath;
       } else if (filePath) {
-        d2Meta = { ...d2Meta, file_path: filePath };
+        historyContext.file_path = filePath;
       }
       const historyOutputFile = summaryOutputPath ?? options.d2FilePath;
-      historyTask.output = {
-        file: historyOutputFile,
-        copy: options.copyOutput ? true : undefined,
-      };
-      if (d2Meta && Object.keys(d2Meta).length > 0) {
-        historyTask.d2 = d2Meta;
+      if (historyOutputFile || options.copyOutput) {
+        historyContext.output = { file: historyOutputFile };
+        if (options.copyOutput) {
+          historyContext.output.copy = true;
+        }
       }
       historyStore.upsertConversation({
         metadata: {
@@ -628,12 +622,12 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousTask,
+          previousContext,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
-        task: historyTask,
+        contextData: historyContext,
       });
     }
 
