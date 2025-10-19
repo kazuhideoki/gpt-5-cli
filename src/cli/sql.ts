@@ -31,7 +31,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import type { HistoryEntry } from "../core/history.js";
@@ -95,7 +95,7 @@ const connectionSchema = z
   })
   .optional();
 
-const sqlCliHistoryContextSchema = z.object({
+const sqlCliHistoryContextStrictSchema = z.object({
   cli: z.literal("sql"),
   engine: z.enum(["postgresql", "mysql"]),
   dsn_hash: z.string().min(1),
@@ -109,7 +109,12 @@ const sqlCliHistoryContextSchema = z.object({
     .optional(),
 });
 
-export type SqlCliHistoryContext = z.infer<typeof sqlCliHistoryContextSchema>;
+const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
+
+export type SqlCliHistoryContext = z.infer<typeof sqlCliHistoryContextStrictSchema>;
+type SqlCliHistoryStoreContext = z.infer<typeof sqlCliHistoryContextSchema>;
 
 /** SQL履歴コンテキストを構築する際の引数一式。 */
 interface SqlCliHistoryContextOptions {
@@ -672,11 +677,12 @@ export function buildSqlCliHistoryContext(
 async function runSqlCli(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
       argv,
       logLabel: LOG_LABEL,
       parseArgs,
       historyContextSchema: sqlCliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("sql"),
       envFileSuffix: "sql",
     });
 

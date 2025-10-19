@@ -27,7 +27,7 @@ import { prepareImageData } from "../session/image-attachments.js";
 import { buildRequest, performCompact } from "../session/responses-session.js";
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
@@ -75,7 +75,7 @@ export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"
   return tools.filter((tool) => tool.type !== "web_search_preview");
 }
 
-const d2CliHistoryContextSchema = z.object({
+const d2CliHistoryContextStrictSchema = z.object({
   cli: z.literal("d2"),
   output: z
     .object({
@@ -86,7 +86,12 @@ const d2CliHistoryContextSchema = z.object({
   file_path: z.string().optional(),
 });
 
-export type D2CliHistoryContext = z.infer<typeof d2CliHistoryContextSchema>;
+const d2CliHistoryContextSchema = d2CliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
+
+export type D2CliHistoryContext = z.infer<typeof d2CliHistoryContextStrictSchema>;
+type D2CliHistoryStoreContext = z.infer<typeof d2CliHistoryContextSchema>;
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -492,11 +497,12 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
  */
 export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<void> {
   try {
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-d2]",
       parseArgs,
       historyContextSchema: d2CliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("d2"),
       envFileSuffix: "d2",
     });
 

@@ -1,4 +1,5 @@
 // runner.ts: 各 CLI エントリーポイントで共通となる初期化と履歴ストア準備をまとめたユーティリティ。
+import type { HistoryEntry } from "../../core/history.js";
 import { HistoryStore } from "../../core/history.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
 import { loadPrompt, resolvePromptPath } from "../../core/prompts.js";
@@ -10,6 +11,7 @@ interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {
   logLabel: string;
   parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
   historyContextSchema: z.ZodType<THistoryContext>;
+  historyEntryFilter?: (entry: HistoryEntry<THistoryContext>) => boolean;
   envFileSuffix?: string;
 }
 
@@ -66,6 +68,7 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unkn
 
   const historyStore = new HistoryStore<THistoryContext>(defaults.historyIndexPath, {
     contextSchema: params.historyContextSchema,
+    entryFilter: params.historyEntryFilter,
   });
 
   return {
@@ -75,5 +78,21 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unkn
     systemPrompt,
     promptPath,
     historyStore,
+  };
+}
+
+export function createCliHistoryEntryFilter(
+  cliName: string,
+): <TContext>(entry: HistoryEntry<TContext>) => boolean {
+  return (entry) => {
+    const context = entry.context;
+    if (!context || typeof context !== "object") {
+      return true;
+    }
+    const rawCli = (context as { cli?: unknown }).cli;
+    if (typeof rawCli !== "string") {
+      return true;
+    }
+    return rawCli === cliName;
   };
 }

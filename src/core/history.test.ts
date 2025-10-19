@@ -114,6 +114,46 @@ describe("HistoryStore", () => {
     expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
   });
 
+  it("entryFilter で別 CLI の履歴を除外できる", () => {
+    const scopedStore = new HistoryStore<TestContext>(historyPath, {
+      contextSchema: testContextSchema,
+      entryFilter: (entry) => {
+        const cli = entry.context?.cli;
+        if (typeof cli !== "string") {
+          return true;
+        }
+        return cli === "ask";
+      },
+    });
+    const entries: HistoryEntry<TestContext>[] = [
+      {
+        last_response_id: "ask-old",
+        updated_at: "2024-06-01T00:00:00Z",
+        context: { cli: "ask" },
+      },
+      {
+        last_response_id: "d2-entry",
+        updated_at: "2024-06-04T00:00:00Z",
+        context: { cli: "d2" },
+      },
+      {
+        last_response_id: "ask-latest",
+        updated_at: "2024-06-05T00:00:00Z",
+        context: { cli: "ask" },
+      },
+    ];
+    scopedStore.saveEntries(entries);
+
+    expect(scopedStore.selectByNumber(1).last_response_id).toBe("ask-latest");
+    expect(scopedStore.selectByNumber(2).last_response_id).toBe("ask-old");
+    expect(() => scopedStore.selectByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
+
+    const result = scopedStore.deleteByNumber(2);
+    expect(result.removedId).toBe("ask-old");
+    const remainingIds = scopedStore.loadEntries().map((entry) => entry.last_response_id);
+    expect(remainingIds).toEqual(["d2-entry", "ask-latest"]);
+  });
+
   it("upsertConversation が新規エントリを追加する", () => {
     store.upsertConversation({
       metadata: {

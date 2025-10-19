@@ -20,10 +20,10 @@ import { prepareImageData } from "../session/image-attachments.js";
 import { buildRequest, performCompact } from "../session/responses-session.js";
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
-const askCliHistoryContextSchema = z.object({
+const askCliHistoryContextStrictSchema = z.object({
   cli: z.literal("ask"),
   output: z
     .object({
@@ -33,7 +33,12 @@ const askCliHistoryContextSchema = z.object({
     .optional(),
 });
 
-export type AskCliHistoryContext = z.infer<typeof askCliHistoryContextSchema>;
+const askCliHistoryContextSchema = askCliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
+
+export type AskCliHistoryContext = z.infer<typeof askCliHistoryContextStrictSchema>;
+type AskCliHistoryStoreContext = z.infer<typeof askCliHistoryContextSchema>;
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
@@ -333,11 +338,12 @@ async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
 
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli]",
       parseArgs,
       historyContextSchema: askCliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("ask"),
       envFileSuffix: "ask",
     });
 

@@ -20,7 +20,7 @@ import { prepareImageData } from "../session/image-attachments.js";
 import { buildRequest, performCompact } from "../session/responses-session.js";
 import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
-import { bootstrapCli } from "./runtime/runner.js";
+import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
@@ -40,7 +40,7 @@ interface MermaidContextInfo {
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 
-const mermaidCliHistoryContextSchema = z.object({
+const mermaidCliHistoryContextStrictSchema = z.object({
   cli: z.literal("mermaid"),
   output: z
     .object({
@@ -51,7 +51,12 @@ const mermaidCliHistoryContextSchema = z.object({
   file_path: z.string().optional(),
 });
 
-export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextSchema>;
+const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
+  .or(z.object({}).passthrough())
+  .or(z.null());
+
+export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
+type MermaidCliHistoryStoreContext = z.infer<typeof mermaidCliHistoryContextSchema>;
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -451,11 +456,12 @@ function buildMermaidInstructionMessages(mermaidContext: MermaidContextInfo): Op
  */
 export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Promise<void> {
   try {
-    const bootstrap = bootstrapCli({
+    const bootstrap = bootstrapCli<MermaidCliOptions, MermaidCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-mermaid]",
       parseArgs,
       historyContextSchema: mermaidCliHistoryContextSchema,
+      historyEntryFilter: createCliHistoryEntryFilter("mermaid"),
       envFileSuffix: "mermaid",
     });
 

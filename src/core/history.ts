@@ -27,7 +27,10 @@ const historyResumeSchema = z.object({
   summary: historySummarySchema.optional(),
 });
 
-/** 履歴エントリ全体を検証するスキーマ。 */
+/**
+ * 履歴エントリ全体を検証するスキーマ。
+ * TODO(gpt-5-cli#history-top-level-cli): Promote CLI discriminator to top-level fields and migrate existing histories.
+ */
 const baseHistoryEntrySchema = z.object({
   title: z.string().optional(),
   model: z.string().optional(),
@@ -127,6 +130,7 @@ interface HistoryConversationUpsert<TContext> {
 
 interface HistoryStoreOptions<TContext> {
   contextSchema?: z.ZodType<TContext>;
+  entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
 }
 
 /**
@@ -135,11 +139,14 @@ interface HistoryStoreOptions<TContext> {
 export class HistoryStore<TContext = unknown> {
   private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TContext>>>;
 
+  private readonly entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
+
   constructor(
     private readonly filePath: string,
     options: HistoryStoreOptions<TContext> = {},
   ) {
     this.entriesSchema = createHistoryEntriesSchema(options.contextSchema);
+    this.entryFilter = options.entryFilter;
   }
 
   /**
@@ -191,11 +198,26 @@ export class HistoryStore<TContext = unknown> {
     });
   }
 
+  private loadFilteredEntries(): HistoryEntry<TContext>[] {
+    const sorted = this.sortByUpdated(this.loadEntries());
+    if (!this.entryFilter) {
+      return sorted;
+    }
+    return sorted.filter((entry) => {
+      try {
+        return this.entryFilter!(entry);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`[gpt-5-cli] history filter failed: ${message}`);
+      }
+    });
+  }
+
   /**
    * 履歴一覧を更新日時の降順で表示する。
    */
   listHistory(): void {
-    const entries = this.sortByUpdated(this.loadEntries());
+    const entries = this.loadFilteredEntries();
     if (entries.length === 0) {
       console.log("(履歴なし)");
       return;
@@ -234,7 +256,7 @@ export class HistoryStore<TContext = unknown> {
    * @returns 該当エントリ。
    */
   selectByNumber(index: number): HistoryEntry<TContext> {
-    const entries = this.sortByUpdated(this.loadEntries());
+    const entries = this.loadFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
@@ -248,11 +270,11 @@ export class HistoryStore<TContext = unknown> {
    * @returns 削除したタイトルとlast_response_id。
    */
   deleteByNumber(index: number): { removedTitle: string; removedId: string } {
-    const entries = this.sortByUpdated(this.loadEntries());
-    if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
+    const scopedEntries = this.loadFilteredEntries();
+    if (!Number.isInteger(index) || index < 1 || index > scopedEntries.length) {
+      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${scopedEntries.length}）。: ${index}`);
     }
-    const entry = entries[index - 1];
+    const entry = scopedEntries[index - 1];
     const lastId = entry.last_response_id;
     if (!lastId) {
       throw new Error("[gpt-5-cli] 選択した履歴の last_response_id が無効です。");
@@ -402,7 +424,7 @@ export class HistoryStore<TContext = unknown> {
    * @param noColor カラー出力を禁止するフラグ。
    */
   showByNumber(index: number, noColor: boolean): void {
-    const entries = this.sortByUpdated(this.loadEntries());
+    const entries = this.loadFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
