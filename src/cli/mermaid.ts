@@ -14,7 +14,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { MERMAID_CHECK_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
-import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
+import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
 import { computeContext } from "../session/conversation-context.js";
 import { prepareImageData } from "../session/image-attachments.js";
 import { buildRequest, performCompact } from "../session/responses-session.js";

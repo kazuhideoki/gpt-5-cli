@@ -16,6 +16,7 @@
   - `config.ts` … 設定の読込・検証と API キー解決（`resolveOpenAIApiKey`）。**他 core モジュールに依存しない**。
   - `tools.ts` … 関数ツール定義とランタイム生成。Responses API 用ツール配列 `buildCliToolList` を提供。
   - `options.ts` / `formatting.ts` / `prompts.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
+- `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では結果処理ユーティリティ (`pipeline/finalize/io.ts`) を `core` から移設済みで、今後 `input`・`process` も段階的に切り出す予定。
 
 **ビルド/開発コマンド**（よく使う順）
 

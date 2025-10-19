@@ -30,7 +30,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
+import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
 import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";

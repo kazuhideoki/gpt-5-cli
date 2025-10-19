@@ -13,7 +13,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import { deliverOutput } from "../core/output.js";
+import { deliverOutput } from "../pipeline/finalize/io.js";
 import { READ_FILE_TOOL, buildCliToolList } from "../core/tools.js";
 import { computeContext } from "../session/conversation-context.js";
 import { prepareImageData } from "../session/image-attachments.js";
