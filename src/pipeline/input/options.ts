@@ -1,8 +1,12 @@
+/**
+ * CLI フラグの正規化と検証を提供するユーティリティ。
+ * pipeline/input 層から履歴番号やモデル指定などの入力解析を統一する。
+ */
 import { InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, EffortLevel, VerbosityLevel } from "./types.js";
+import type { CliDefaults, EffortLevel, VerbosityLevel } from "../../core/types.js";
 
-/** CLI履歴番号フラグを数値に変換するスキーマ。 */
+/** CLI 履歴番号フラグを数値に変換するスキーマ。 */
 const historyIndexSchema = z
   .string()
   .regex(/^\d+$/u, "Error: 履歴番号は正の整数で指定してください")
@@ -20,7 +24,7 @@ interface HistoryFlagParseResult {
 /**
  * 履歴操作フラグの入力を解析し、番号と一覧表示フラグを抽出する。
  *
- * @param raw CLI引数から得た履歴指定。
+ * @param raw CLI 引数から得た履歴指定。
  * @returns 履歴番号または一覧表示フラグ。
  */
 export function parseHistoryFlag(raw: string | boolean | undefined): HistoryFlagParseResult {
@@ -42,7 +46,7 @@ export function parseHistoryFlag(raw: string | boolean | undefined): HistoryFlag
 }
 
 /**
- * 旧形式の短縮フラグ固まりをCommanderが解析できる形へ正規化する。
+ * 旧形式の短縮フラグ固まりを Commander が解析できる形へ正規化する。
  *
  * @param argv 元の引数配列。
  * @returns 正規化済みの引数配列。

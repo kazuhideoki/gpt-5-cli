@@ -13,7 +13,7 @@ import {
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
+} from "../pipeline/input/options.js";
 import {
   D2_CHECK_TOOL,
   D2_FMT_TOOL,

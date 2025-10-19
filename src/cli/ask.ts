@@ -12,7 +12,7 @@ import {
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
+} from "../pipeline/input/options.js";
 import { deliverOutput } from "../pipeline/finalize/io.js";
 import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";

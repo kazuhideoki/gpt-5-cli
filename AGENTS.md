@@ -13,12 +13,12 @@
 - `src/cli/` … `default`・`d2`・`mermaid`・`sql` 各モードのエントリーポイント群と共通ランタイム `runtime/` を束ねる。`runtime/` は CLI 初期化・入力分岐などの共通処理。
 - `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/pipeline/process/` や `src/cli/`）から横並びで組み合わせる設計。
   - `config.ts` … 設定の読込・検証と API キー解決（`resolveOpenAIApiKey`）。**他 core モジュールに依存しない**。
-  - `options.ts` / `formatting.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
+  - `formatting.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
 - `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では
   - `finalize/io.ts` に結果処理ユーティリティを移設済み。
   - `process/` にエージェント実行・リクエスト組み立て・会話コンテキスト生成など `session` から移した共通ロジックを配置。`performCompact` の終端副作用などは TODO コメント付きで finalize への移行を計画中。
     - `tools/` … 旧 `core/tools.ts` を分割移設した Function Tool 定義と実行ランタイム。`runtime.ts` が `buildCliToolList` / `buildAgentsToolList` を公開し、`filesystem.ts`・`d2.ts`・`mermaid.ts`・`sql.ts` で機能別ツールを管理する。リファクタ移行中につき TODO が残存。
-  - `input/` に CLI 共通の入力判定 (`determineInput`) やプロンプト解決 (`prompts.ts`) を移設済み。モード固有の前処理は CLI 層に TODO コメント付きで残してある。
+  - `input/` に CLI 共通の入力判定 (`determineInput`)、フラグ解析 (`options.ts`)、プロンプト解決 (`prompts.ts`) を移設済み。モード固有の前処理は CLI 層に TODO コメント付きで残してある。
   - 将来的に `input/` も導入予定。
 
 **ビルド/開発コマンド**（よく使う順）

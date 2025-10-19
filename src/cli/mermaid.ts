@@ -12,7 +12,7 @@ import {
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
+} from "../pipeline/input/options.js";
 import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,

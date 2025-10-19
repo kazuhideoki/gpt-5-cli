@@ -29,7 +29,7 @@ import {
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
+} from "../pipeline/input/options.js";
 import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
