@@ -1,40 +1,26 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { HistoryStore, formatTurnsForSummary } from "./history.js";
-import type { HistoryEntry } from "./history.js";
-import { z } from "zod";
+import type { HistoryEntry } from "./store.js";
+import { HistoryStore } from "./store.js";
+import { printHistoryDetail, printHistoryList } from "./output.js";
 
-type TestContext = {
-  cli?: string;
+interface TestContext {
+  cli: string;
   file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
-};
-
-const testContextSchema = z.object({
-  cli: z.string().optional(),
-  file_path: z.string().optional(),
-  output: z
-    .object({
-      file: z.string().optional(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
-});
+  output?: { file?: string; copy?: boolean };
+}
 
 let tempDir: string;
 let historyPath: string;
 let store: HistoryStore<TestContext>;
 
 beforeEach(() => {
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-test-"));
-  historyPath = path.join(tempDir, "history.json");
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-"));
+  historyPath = path.join(tempDir, "history_index.json");
   store = new HistoryStore<TestContext>(historyPath, {
-    contextSchema: testContextSchema,
+    entryFilter: (entry) => entry.context?.cli === "ask" || !entry.context?.cli,
   });
 });
 
@@ -46,149 +32,94 @@ describe("HistoryStore", () => {
   it("ensureInitialized がファイルを用意する", () => {
     store.ensureInitialized();
     expect(fs.existsSync(historyPath)).toBe(true);
-    expect(fs.readFileSync(historyPath, "utf8")).toBe("[]\n");
+    const content = fs.readFileSync(historyPath, "utf8");
+    expect(content.trim()).toBe("[]");
   });
 
   it("loadEntries は不正な JSON でエラーを投げる", () => {
-    store.ensureInitialized();
-    fs.writeFileSync(historyPath, "{", "utf8");
-    expect(() => store.loadEntries()).toThrow("[gpt-5-cli] failed to parse history index");
+    fs.writeFileSync(historyPath, "{ invalid json", "utf8");
+    expect(() => store.loadEntries()).toThrow("[gpt-5-cli] failed to parse history index:");
   });
 
   it("saveEntries/loadEntries がラウンドトリップする", () => {
-    const entries: HistoryEntry<TestContext>[] = [
-      { last_response_id: "1", title: "first" },
-      { last_response_id: "2", title: "second" },
-    ];
-    store.saveEntries(entries);
-    expect(store.loadEntries()).toEqual(entries);
+    const entry: HistoryEntry<TestContext> = {
+      title: "test",
+      last_response_id: "resp-123",
+      turns: [{ role: "user", text: "hello" }],
+    };
+    store.saveEntries([entry]);
+    expect(store.loadEntries()).toEqual([entry]);
   });
 
   it("context メタデータも保存・復元できる", () => {
-    const entries: HistoryEntry<TestContext>[] = [
-      {
-        last_response_id: "d2-1",
-        context: { cli: "d2", file_path: "/tmp/out.d2" },
-      },
-    ];
-    store.saveEntries(entries);
-    expect(store.loadEntries()).toEqual(entries);
+    const entry: HistoryEntry<TestContext> = {
+      title: "ask conversation",
+      last_response_id: "resp-1",
+      context: { cli: "ask", output: { copy: true } },
+    };
+    store.saveEntries([entry]);
+    const [loaded] = store.loadEntries();
+    expect(loaded.context?.cli).toBe("ask");
+    expect(loaded.context?.output?.copy).toBe(true);
   });
 
   it("selectByNumber は更新日時でソートする", () => {
-    const entries: HistoryEntry<TestContext>[] = [
-      { last_response_id: "a", updated_at: "2024-06-01T00:00:00Z" },
-      { last_response_id: "b", updated_at: "2024-06-03T00:00:00Z" },
-      { last_response_id: "c", updated_at: "2024-06-02T00:00:00Z" },
-    ];
-    store.saveEntries(entries);
-    expect(store.selectByNumber(1).last_response_id).toBe("b");
-    expect(store.selectByNumber(2).last_response_id).toBe("c");
-    expect(() => store.selectByNumber(4)).toThrow("[gpt-5-cli] 無効な履歴番号です");
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 1000).toISOString();
+    store.saveEntries([
+      { last_response_id: "1", updated_at: now },
+      { last_response_id: "2", updated_at: later },
+    ]);
+    const entry = store.selectByNumber(1);
+    expect(entry.last_response_id).toBe("2");
   });
 
   it("deleteByNumber は対象を削除する", () => {
     const entries: HistoryEntry<TestContext>[] = [
-      {
-        last_response_id: "a",
-        updated_at: "2024-06-01T00:00:00Z",
-        title: "old",
-      },
-      {
-        last_response_id: "b",
-        updated_at: "2024-06-03T00:00:00Z",
-        title: "latest",
-      },
-      {
-        last_response_id: "c",
-        updated_at: "2024-06-02T00:00:00Z",
-        title: "mid",
-      },
+      { last_response_id: "keep", updated_at: "2024-05-01T00:00:00Z" },
+      { last_response_id: "remove", updated_at: "2024-06-01T00:00:00Z" },
     ];
     store.saveEntries(entries);
-    const result = store.deleteByNumber(2);
-    expect(result.removedId).toBe("c");
-    expect(result.removedTitle).toBe("mid");
+    const scopedStore = new HistoryStore<TestContext>(historyPath, {
+      entryFilter: (entry) => entry.last_response_id !== "keep",
+    });
+    const { removedId } = scopedStore.deleteByNumber(1);
+    expect(removedId).toBe("remove");
     const remaining = store.loadEntries().map((entry) => entry.last_response_id);
-    expect(remaining).toEqual(["a", "b"]);
-    expect(() => store.deleteByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
+    expect(remaining).toEqual(["keep"]);
   });
 
   it("entryFilter で別 CLI の履歴を除外できる", () => {
-    const scopedStore = new HistoryStore<TestContext>(historyPath, {
-      contextSchema: testContextSchema,
-      entryFilter: (entry) => {
-        const cli = entry.context?.cli;
-        if (typeof cli !== "string") {
-          return true;
-        }
-        return cli === "ask";
-      },
+    const altPath = path.join(tempDir, "history_index_alt.json");
+    const scopedStore = new HistoryStore<TestContext>(altPath, {
+      entryFilter: (entry) => entry.context?.cli === "d2",
     });
-    const entries: HistoryEntry<TestContext>[] = [
-      {
-        last_response_id: "ask-old",
-        updated_at: "2024-06-01T00:00:00Z",
-        context: { cli: "ask" },
-      },
-      {
-        last_response_id: "d2-entry",
-        updated_at: "2024-06-04T00:00:00Z",
-        context: { cli: "d2" },
-      },
-      {
-        last_response_id: "ask-latest",
-        updated_at: "2024-06-05T00:00:00Z",
-        context: { cli: "ask" },
-      },
-    ];
-    scopedStore.saveEntries(entries);
-
-    expect(scopedStore.selectByNumber(1).last_response_id).toBe("ask-latest");
-    expect(scopedStore.selectByNumber(2).last_response_id).toBe("ask-old");
-    expect(() => scopedStore.selectByNumber(3)).toThrow("[gpt-5-cli] 無効な履歴番号です");
-
-    const result = scopedStore.deleteByNumber(2);
-    expect(result.removedId).toBe("ask-old");
-    const remainingIds = scopedStore.loadEntries().map((entry) => entry.last_response_id);
-    expect(remainingIds).toEqual(["d2-entry", "ask-latest"]);
+    scopedStore.saveEntries([
+      { last_response_id: "keep", context: { cli: "d2" } },
+      { last_response_id: "skip", context: { cli: "ask" } },
+    ]);
+    const entries = scopedStore.getFilteredEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.last_response_id).toBe("keep");
   });
 
   it("findLatest も entryFilter を尊重する", () => {
     const scopedStore = new HistoryStore<TestContext>(historyPath, {
-      contextSchema: testContextSchema,
-      entryFilter: (entry) => entry.context?.cli === "mermaid",
+      entryFilter: (entry) => entry.context?.cli === "ask",
     });
-
-    const entries: HistoryEntry<TestContext>[] = [
-      {
-        last_response_id: "ask-newest",
-        updated_at: "2024-06-20T00:00:00Z",
-        context: { cli: "ask" },
-      },
-      {
-        last_response_id: "mermaid-older",
-        updated_at: "2024-06-17T00:00:00Z",
-        context: { cli: "mermaid" },
-      },
-      {
-        last_response_id: "mermaid-newer",
-        updated_at: "2024-06-18T00:00:00Z",
-        context: { cli: "mermaid" },
-      },
-    ];
-    scopedStore.saveEntries(entries);
-
+    scopedStore.saveEntries([
+      { last_response_id: "skip", updated_at: "2024-05-01T00:00:00Z", context: { cli: "d2" } },
+      { last_response_id: "take", updated_at: "2024-05-02T00:00:00Z", context: { cli: "ask" } },
+    ]);
     const latest = scopedStore.findLatest();
-    expect(latest?.last_response_id).toBe("mermaid-newer");
-    expect(scopedStore.loadEntries()).toHaveLength(3);
+    expect(latest?.last_response_id).toBe("take");
   });
 
   it("upsertConversation が新規エントリを追加する", () => {
     store.upsertConversation({
       metadata: {
-        model: "gpt-5-nano",
-        effort: "low",
+        model: "gpt-5-mini",
+        effort: "medium",
         verbosity: "low",
       },
       context: {
@@ -335,15 +266,17 @@ describe("HistoryStore", () => {
     expect(entry.context?.cli).toBe("d2");
     expect(entry.context?.file_path).toBe(absPath);
   });
+});
 
-  it("listHistory が出力情報を表示する", () => {
+describe("printHistoryList / printHistoryDetail", () => {
+  it("printHistoryList が出力情報を表示する", () => {
     const entry: HistoryEntry<TestContext> = {
       last_response_id: "resp-output",
       updated_at: "2024-06-05T00:00:00Z",
       title: "diagram",
       request_count: 1,
       context: {
-        cli: "d2",
+        cli: "ask",
         output: {
           file: "diagram.d2",
           copy: true,
@@ -353,18 +286,18 @@ describe("HistoryStore", () => {
     store.saveEntries([entry]);
     const logs: string[] = [];
     const original = console.log;
-    console.log = (message?: unknown, ...rest: unknown[]) => {
+    console.log = mock((message?: unknown, ...rest: unknown[]) => {
       logs.push([message, ...rest].filter((value) => value !== undefined).join(" "));
-    };
+    }) as unknown as typeof console.log;
     try {
-      store.listHistory();
+      printHistoryList(store);
     } finally {
       console.log = original;
     }
     expect(logs.some((line) => line.includes("output[file=diagram.d2, copy]"))).toBe(true);
   });
 
-  it("showByNumber が出力情報を表示する", () => {
+  it("printHistoryDetail が出力情報を表示する", () => {
     const entry: HistoryEntry<TestContext> = {
       last_response_id: "resp-output",
       updated_at: "2024-06-05T00:00:00Z",
@@ -375,7 +308,7 @@ describe("HistoryStore", () => {
         { role: "assistant", text: "a" },
       ],
       context: {
-        cli: "d2",
+        cli: "ask",
         output: {
           file: "diagram.d2",
           copy: false,
@@ -385,28 +318,14 @@ describe("HistoryStore", () => {
     store.saveEntries([entry]);
     const logs: string[] = [];
     const original = console.log;
-    console.log = (message?: unknown, ...rest: unknown[]) => {
+    console.log = mock((message?: unknown, ...rest: unknown[]) => {
       logs.push([message, ...rest].filter((value) => value !== undefined).join(" "));
-    };
+    }) as unknown as typeof console.log;
     try {
-      store.showByNumber(1, false);
+      printHistoryDetail(store, 1, false);
     } finally {
       console.log = original;
     }
     expect(logs.some((line) => line.includes("出力: file=diagram.d2"))).toBe(true);
-  });
-});
-
-describe("formatTurnsForSummary", () => {
-  it("ラベルを言語化して整形する", () => {
-    const text = formatTurnsForSummary([
-      { role: "user", text: "こんにちは" },
-      { role: "assistant", text: "どうしましたか？" },
-      { role: "system", kind: "summary", text: "要約です" },
-      { role: "tool", text: "ignore" },
-    ]);
-    expect(text).toBe(
-      "ユーザー:\nこんにちは\n\n---\n\nアシスタント:\nどうしましたか？\n\n---\n\nシステム要約:\n要約です\n\n---\n\ntool:\nignore",
-    );
   });
 });

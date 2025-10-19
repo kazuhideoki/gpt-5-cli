@@ -7,8 +7,8 @@ import type {
   ResponseTextConfig,
 } from "openai/resources/responses/responses";
 import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
-import { formatTurnsForSummary } from "../../core/history.js";
-import type { HistoryStore } from "../../core/history.js";
+import { formatTurnsForSummary } from "./history-summary.js";
+import type { HistoryStore } from "../history/store.js";
 import { buildCliToolList } from "./tools/index.js";
 import type {
   CliDefaults,

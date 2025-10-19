@@ -1,7 +1,16 @@
+/**
+ * 履歴インデックスの読み書きを担うストレージモジュール。
+ * CLI やパイプライン各層から共有されるデータアクセスを提供する。
+ */
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { EffortLevel, VerbosityLevel } from "./types.js";
+import type {
+  EffortLevel,
+  HistoryEntry as CoreHistoryEntry,
+  HistoryTurn as CoreHistoryTurn,
+  VerbosityLevel,
+} from "../../core/types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
 const historyTurnSchema = z.object({
@@ -11,8 +20,6 @@ const historyTurnSchema = z.object({
   response_id: z.string().optional(),
   kind: z.string().optional(),
 });
-
-type HistoryTurn = z.infer<typeof historyTurnSchema>;
 
 /** 要約エントリの構造を検証するスキーマ。 */
 const historySummarySchema = z.object({
@@ -60,31 +67,9 @@ const baseHistoryEntrySchema = z.object({
   context: z.unknown().optional(),
 });
 
-type HistoryEntryBase = z.infer<typeof baseHistoryEntrySchema>;
+export type HistoryTurn = CoreHistoryTurn;
 
-export type HistoryEntry<TContext = unknown> = Omit<HistoryEntryBase, "context"> & {
-  context?: TContext;
-};
-
-function extractOutputInfo(context: unknown): { file?: string; copy?: boolean } | undefined {
-  if (!context || typeof context !== "object") {
-    return undefined;
-  }
-  const output = (context as { output?: unknown }).output;
-  if (!output || typeof output !== "object") {
-    return undefined;
-  }
-  const file =
-    typeof (output as { file?: unknown }).file === "string"
-      ? (output as { file?: string }).file
-      : undefined;
-  const copyRaw = (output as { copy?: unknown }).copy;
-  const copy = typeof copyRaw === "boolean" ? copyRaw : undefined;
-  if (!file && !copy) {
-    return undefined;
-  }
-  return { file, copy };
-}
+export type HistoryEntry<TContext = unknown> = CoreHistoryEntry<TContext>;
 
 function createHistoryEntrySchema<TContext>(
   contextSchema?: z.ZodType<TContext>,
@@ -198,7 +183,10 @@ export class HistoryStore<TContext = unknown> {
     });
   }
 
-  private loadFilteredEntries(): HistoryEntry<TContext>[] {
+  /**
+   * フィルタ済みの履歴一覧を更新日時降順で取得する。
+   */
+  getFilteredEntries(): HistoryEntry<TContext>[] {
     const sorted = this.sortByUpdated(this.loadEntries());
     if (!this.entryFilter) {
       return sorted;
@@ -214,49 +202,13 @@ export class HistoryStore<TContext = unknown> {
   }
 
   /**
-   * 履歴一覧を更新日時の降順で表示する。
-   */
-  listHistory(): void {
-    const entries = this.loadFilteredEntries();
-    if (entries.length === 0) {
-      console.log("(履歴なし)");
-      return;
-    }
-
-    console.log("=== 履歴一覧（新しい順） ===");
-    entries.forEach((entry, index) => {
-      const model = entry.model ?? "(model 未設定)";
-      const effort = entry.effort ?? "(effort 未設定)";
-      const verbosity = entry.verbosity ?? "(verbosity 未設定)";
-      const requestCount = entry.request_count ?? 0;
-      const updated = entry.updated_at ?? "(更新日時 未設定)";
-      const title = entry.title ?? "(タイトル未設定)";
-      let line = `${String(index + 1).padStart(2, " ")}) ${title} [${model}/${effort}/${verbosity} ${requestCount}回] ${updated}`;
-      const outputInfo = extractOutputInfo(entry.context);
-      if (outputInfo) {
-        const parts: string[] = [];
-        if (outputInfo.file) {
-          parts.push(`file=${outputInfo.file}`);
-        }
-        if (outputInfo.copy) {
-          parts.push("copy");
-        }
-        if (parts.length > 0) {
-          line = `${line} output[${parts.join(", ")}]`;
-        }
-      }
-      console.log(line);
-    });
-  }
-
-  /**
    * 指定番号の履歴エントリを取得する。
    *
    * @param index 1始まりの履歴番号。
    * @returns 該当エントリ。
    */
   selectByNumber(index: number): HistoryEntry<TContext> {
-    const entries = this.loadFilteredEntries();
+    const entries = this.getFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > entries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
     }
@@ -270,7 +222,7 @@ export class HistoryStore<TContext = unknown> {
    * @returns 削除したタイトルとlast_response_id。
    */
   deleteByNumber(index: number): { removedTitle: string; removedId: string } {
-    const scopedEntries = this.loadFilteredEntries();
+    const scopedEntries = this.getFilteredEntries();
     if (!Number.isInteger(index) || index < 1 || index > scopedEntries.length) {
       throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${scopedEntries.length}）。: ${index}`);
     }
@@ -418,81 +370,12 @@ export class HistoryStore<TContext = unknown> {
   }
 
   /**
-   * 指定番号の履歴詳細を標準出力へ表示する。
-   *
-   * @param index 1始まりの履歴番号。
-   * @param noColor カラー出力を禁止するフラグ。
-   */
-  showByNumber(index: number, noColor: boolean): void {
-    const entries = this.loadFilteredEntries();
-    if (!Number.isInteger(index) || index < 1 || index > entries.length) {
-      throw new Error(`[gpt-5-cli] 無効な履歴番号です（1〜${entries.length}）。: ${index}`);
-    }
-    const entry = entries[index - 1];
-    const title = entry.title ?? "(タイトル未設定)";
-    const updated = entry.updated_at ?? "(更新日時 未設定)";
-    const requestCount = entry.request_count ?? 0;
-    console.log(
-      `=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`,
-    );
-
-    const outputInfo = extractOutputInfo(entry.context);
-    if (outputInfo) {
-      const parts: string[] = [];
-      if (outputInfo.file) {
-        parts.push(`file=${outputInfo.file}`);
-      }
-      if (outputInfo.copy) {
-        parts.push("copy");
-      }
-      if (parts.length > 0) {
-        console.log(`出力: ${parts.join(", ")}`);
-        console.log("");
-      }
-    }
-
-    const turns = entry.turns ?? [];
-    if (turns.length === 0) {
-      console.log("(この履歴には保存された対話メッセージがありません)");
-      return;
-    }
-
-    const useColor = !noColor && Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-    const colors = {
-      user: useColor ? "\u001b[36m" : "",
-      assistant: useColor ? "\u001b[34m" : "",
-      summary: useColor ? "\u001b[33m" : "",
-      reset: useColor ? "\u001b[0m" : "",
-    };
-
-    const printable = turns.filter((turn) => {
-      if (turn.role === "user" || turn.role === "assistant") return true;
-      if (turn.role === "system" && turn.kind === "summary") return true;
-      return false;
-    });
-
-    printable.forEach((turn) => {
-      let label = `${turn.role}:`;
-      if (turn.role === "user") {
-        label = `${colors.user}user:${colors.reset}`;
-      } else if (turn.role === "assistant") {
-        label = `${colors.assistant}assistant:${colors.reset}`;
-      } else if (turn.role === "system" && turn.kind === "summary") {
-        label = `${colors.summary}summary:${colors.reset}`;
-      }
-      console.log(label);
-      console.log(turn.text ?? "");
-      console.log("");
-    });
-  }
-
-  /**
    * 最も新しい履歴エントリを取得する。
    *
    * @returns 最新エントリ。存在しない場合はundefined。
    */
   findLatest(): HistoryEntry<TContext> | undefined {
-    const entries = this.loadFilteredEntries();
+    const entries = this.getFilteredEntries();
     if (entries.length === 0) return undefined;
     return entries[0];
   }
@@ -514,26 +397,4 @@ export class HistoryStore<TContext = unknown> {
     }
     this.saveEntries(entries);
   }
-}
-
-/**
- * 履歴ターンを要約用のテキストへ整形する。
- *
- * @param turns 履歴ターン一覧。
- * @returns 要約用に整形した文字列。
- */
-export function formatTurnsForSummary(turns: HistoryTurn[]): string {
-  return turns
-    .map((turn) => {
-      let speaker = turn.role ?? "";
-      if (turn.role === "user") {
-        speaker = "ユーザー";
-      } else if (turn.role === "assistant") {
-        speaker = "アシスタント";
-      } else if (turn.role === "system" && turn.kind === "summary") {
-        speaker = "システム要約";
-      }
-      return `${speaker}:\n${turn.text ?? ""}`;
-    })
-    .join("\n\n---\n\n");
 }

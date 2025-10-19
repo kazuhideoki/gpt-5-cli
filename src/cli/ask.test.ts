@@ -3,7 +3,7 @@ import { buildRequest } from "../pipeline/process/responses.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
 import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";
-import type { HistoryEntry, HistoryStore } from "../core/history.js";
+import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { AskCliHistoryContext } from "./ask.js";
 
 type TestHistoryEntry = HistoryEntry<AskCliHistoryContext>;
@@ -230,13 +230,15 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ showIndex: 5 });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStoreLike,
-      defaults,
-      noopDeps,
-    );
-    expect(store.shownIndex).toBe(5);
+    const printDetail = (historyStore: HistoryStoreLike, index: number, noColor: boolean) => {
+      expect(historyStore).toBe(store);
+      expect(index).toBe(5);
+      expect(noColor).toBe(Boolean(process.env.NO_COLOR));
+    };
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
+      ...noopDeps,
+      printHistoryDetail: printDetail,
+    });
     expect(result.kind).toBe("exit");
   });
 
@@ -244,13 +246,13 @@ describe("determineInput", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ resumeListOnly: true });
-    const result = await determineInput(
-      options,
-      store as unknown as HistoryStoreLike,
-      defaults,
-      noopDeps,
-    );
-    expect(store.listCalled).toBe(true);
+    const printList = (historyStore: HistoryStoreLike) => {
+      expect(historyStore).toBe(store);
+    };
+    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
+      ...noopDeps,
+      printHistoryList: printList,
+    });
     expect(result.kind).toBe("exit");
   });
 

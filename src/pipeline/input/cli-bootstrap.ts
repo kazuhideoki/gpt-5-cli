@@ -1,7 +1,7 @@
 // cli-bootstrap.ts: 各 CLI で共通となる初期化と履歴ストア準備をまとめたユーティリティ。
 // NOTE(pipeline/input): 将来的には Input パイプラインのエントリポイントから呼び出す想定。
-import type { HistoryEntry } from "../../core/history.js";
-import { HistoryStore } from "../../core/history.js";
+import type { HistoryEntry } from "../history/store.js";
+import { HistoryStore } from "../history/store.js";
 import { loadDefaults, loadEnvironment } from "../../core/config.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";
 import type { CliDefaults, CliOptions } from "../../core/types.js";

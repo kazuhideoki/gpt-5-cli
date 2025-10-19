@@ -1,5 +1,5 @@
 // history-filter.ts: CLI 用履歴ストアから特定モードの履歴だけを抽出するユーティリティ。
-import type { HistoryEntry } from "../../core/history.js";
+import type { HistoryEntry } from "../history/store.js";
 
 export function createCliHistoryEntryFilter(
   cliName: string,

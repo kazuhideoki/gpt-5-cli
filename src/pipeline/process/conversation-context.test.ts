@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { CliOptions } from "../../core/types.js";
-import type { HistoryEntry, HistoryStore } from "../../core/history.js";
+import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { computeContext } from "./conversation-context.js";
 
 interface TestHistoryTask {

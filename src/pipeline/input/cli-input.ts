@@ -3,7 +3,8 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions } from "../../core/types.js";
-import type { HistoryEntry, HistoryStore } from "../../core/history.js";
+import type { HistoryEntry, HistoryStore } from "../history/store.js";
+import { printHistoryDetail, printHistoryList } from "../history/output.js";
 
 interface DetermineInputExit {
   kind: "exit";
@@ -22,8 +23,13 @@ type DetermineResult<THistoryTask = unknown> =
   | DetermineInputExit
   | DetermineInputResult<THistoryTask>;
 
-export interface DetermineInputDependencies<TOptions extends CliOptions = CliOptions> {
+export interface DetermineInputDependencies<
+  TOptions extends CliOptions = CliOptions,
+  THistoryTask = unknown,
+> {
   printHelp: (defaults: CliDefaults, options: TOptions) => void;
+  printHistoryList?: (store: HistoryStore<THistoryTask>) => void;
+  printHistoryDetail?: (store: HistoryStore<THistoryTask>, index: number, noColor: boolean) => void;
 }
 
 async function promptForInput(): Promise<string> {
@@ -49,8 +55,11 @@ export async function determineInput<TOptions extends CliOptions, THistoryTask =
   options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
   defaults: CliDefaults,
-  deps: DetermineInputDependencies<TOptions>,
+  deps: DetermineInputDependencies<TOptions, THistoryTask>,
 ): Promise<DetermineResult<THistoryTask>> {
+  const renderHistoryList = deps.printHistoryList ?? printHistoryList;
+  const renderHistoryDetail = deps.printHistoryDetail ?? printHistoryDetail;
+
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
     console.log(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
@@ -58,12 +67,12 @@ export async function determineInput<TOptions extends CliOptions, THistoryTask =
   }
 
   if (typeof options.showIndex === "number") {
-    historyStore.showByNumber(options.showIndex, Boolean(process.env.NO_COLOR));
+    renderHistoryDetail(historyStore, options.showIndex, Boolean(process.env.NO_COLOR));
     return { kind: "exit", code: 0 };
   }
 
   if (options.resumeListOnly) {
-    historyStore.listHistory();
+    renderHistoryList(historyStore);
     return { kind: "exit", code: 0 };
   }
 

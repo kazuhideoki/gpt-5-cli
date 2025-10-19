@@ -35,7 +35,7 @@ import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
-import type { HistoryEntry } from "../core/history.js";
+import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { CliDefaults, CliOptions } from "../../core/types.js";
 import type { DetermineInputDependencies } from "./cli-input.js";
-import type { HistoryEntry, HistoryStore } from "../../core/history.js";
+import type { HistoryEntry, HistoryStore } from "../history/store.js";
 
 const promptAnswers: string[] = [];
 const promptQuestions: string[] = [];
@@ -32,10 +32,7 @@ const defaults: CliDefaults = {
   maxIterations: 6,
 };
 
-type HistoryStoreMethods = Pick<
-  HistoryStore<unknown>,
-  "deleteByNumber" | "showByNumber" | "listHistory" | "selectByNumber"
->;
+type HistoryStoreMethods = Pick<HistoryStore<unknown>, "deleteByNumber" | "selectByNumber">;
 
 function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
   return {
@@ -67,12 +64,6 @@ function createHistoryStore(overrides: Partial<HistoryStoreMethods> = {}): Histo
     deleteByNumber: () => {
       throw new Error("deleteByNumber should not be called");
     },
-    showByNumber: () => {
-      throw new Error("showByNumber should not be called");
-    },
-    listHistory: () => {
-      throw new Error("listHistory should not be called");
-    },
     selectByNumber: () => {
       throw new Error("selectByNumber should not be called");
     },
@@ -81,14 +72,16 @@ function createHistoryStore(overrides: Partial<HistoryStoreMethods> = {}): Histo
 }
 
 function createDeps(
-  printHelp?: DetermineInputDependencies["printHelp"],
-): DetermineInputDependencies {
+  overrides: Partial<DetermineInputDependencies<CliOptions, unknown>> = {},
+): DetermineInputDependencies<CliOptions, unknown> {
   return {
     printHelp:
-      printHelp ??
+      overrides.printHelp ??
       (() => {
         throw new Error("printHelp should not be called");
       }),
+    printHistoryList: overrides.printHistoryList,
+    printHistoryDetail: overrides.printHistoryDetail,
   };
 }
 
@@ -114,13 +107,13 @@ describe("determineInput", () => {
       return { removedTitle: "古い会話", removedId: "res-1" };
     });
     const historyStore = createHistoryStore({ deleteByNumber });
-    const deps = createDeps(
-      mock((defaultsArg: CliDefaults, optionsArg: CliOptions) => {
+    const deps = createDeps({
+      printHelp: mock((defaultsArg: CliDefaults, optionsArg: CliOptions) => {
         throw new Error(
           `printHelp should not be called: ${defaultsArg.modelMain} ${optionsArg.model}`,
         );
       }),
-    );
+    });
 
     try {
       const result = await determineInput(
@@ -140,12 +133,13 @@ describe("determineInput", () => {
   it("showIndexが指定されたとき履歴を表示して終了する", async () => {
     const originalNoColor = process.env.NO_COLOR;
     process.env.NO_COLOR = "1";
-    const showByNumber = mock((index: number, noColor: boolean) => {
+    const showDetail = mock((storeArg: HistoryStore<unknown>, index: number, noColor: boolean) => {
+      expect(storeArg).toBe(historyStore);
       expect(index).toBe(3);
       expect(noColor).toBe(true);
     });
-    const historyStore = createHistoryStore({ showByNumber });
-    const deps = createDeps();
+    const historyStore = createHistoryStore();
+    const deps = createDeps({ printHistoryDetail: showDetail });
 
     try {
       const result = await determineInput(
@@ -155,7 +149,7 @@ describe("determineInput", () => {
         deps,
       );
       expect(result).toEqual({ kind: "exit", code: 0 });
-      expect(showByNumber).toHaveBeenCalledTimes(1);
+      expect(showDetail).toHaveBeenCalledTimes(1);
     } finally {
       if (originalNoColor === undefined) {
         delete process.env.NO_COLOR;
@@ -166,9 +160,11 @@ describe("determineInput", () => {
   });
 
   it("resumeListOnlyが設定されていると履歴一覧を出力して終了する", async () => {
-    const listHistory = mock(() => {});
-    const historyStore = createHistoryStore({ listHistory });
-    const deps = createDeps();
+    const listHistory = mock((storeArg: HistoryStore<unknown>) => {
+      expect(storeArg).toBe(historyStore);
+    });
+    const historyStore = createHistoryStore();
+    const deps = createDeps({ printHistoryList: listHistory });
 
     const result = await determineInput(
       createOptions({ resumeListOnly: true }),
@@ -258,7 +254,7 @@ describe("determineInput", () => {
       expect(receivedDefaults).toBe(defaults);
       expect(options.args).toEqual([]);
     });
-    const deps = createDeps(printHelp);
+    const deps = createDeps({ printHelp });
     const historyStore = createHistoryStore();
 
     const result = await determineInput(createOptions(), historyStore, defaults, deps);

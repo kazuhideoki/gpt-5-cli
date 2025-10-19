@@ -21,7 +21,40 @@ export interface CliDefaults {
 
 // 以降は CLI/Session 双方から参照される共通型
 import type { EasyInputMessage } from "openai/resources/responses/responses";
-import type { HistoryEntry } from "./history.js";
+
+export interface HistoryTurn {
+  role: string;
+  text?: string;
+  at?: string;
+  response_id?: string;
+  kind?: string;
+}
+
+export interface HistorySummary {
+  text?: string;
+  created_at?: string;
+}
+
+export interface HistoryResume {
+  mode?: string;
+  previous_response_id?: string;
+  summary?: HistorySummary;
+}
+
+export interface HistoryEntry<TContext = unknown> {
+  title?: string;
+  model?: string;
+  effort?: string;
+  verbosity?: string;
+  created_at?: string;
+  updated_at?: string;
+  first_response_id?: string;
+  last_response_id?: string;
+  request_count?: number;
+  resume?: HistoryResume;
+  turns?: HistoryTurn[];
+  context?: TContext;
+}
 
 /** ユーザー入力を解析して得たCLI実行時オプション。 */
 export interface CliOptions {

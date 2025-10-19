@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { HistoryEntry } from "../../core/history.js";
+import type { HistoryEntry } from "../history/store.js";
 import { createCliHistoryEntryFilter } from "./history-filter.js";
 
 describe("createCliHistoryEntryFilter", () => {
