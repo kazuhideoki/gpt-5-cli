@@ -1,14 +1,18 @@
+/**
+ * モード別の system プロンプトファイルを解決して読み込むユーティリティ。
+ * CLI 起動時の入力整形における共通処理を提供する。
+ */
 import fs from "node:fs";
 import path from "node:path";
-import type { TaskMode } from "./types.js";
+import type { TaskMode } from "../../core/types.js";
 
 /** プロンプトテンプレートとして扱うファイル拡張子。 */
 const PROMPT_EXTENSION = ".md";
 
 /**
- * モード文字列を正規化し、未指定時は`ask`を返す。
+ * モード文字列を正規化し、未指定時は `ask` を返す。
  *
- * @param mode CLIオプションで指定されたモード。
+ * @param mode CLI オプションで指定されたモード。
  * @returns 正規化されたモード名。
  */
 function normalizeMode(mode?: string | TaskMode): string {
@@ -23,10 +27,10 @@ function normalizeMode(mode?: string | TaskMode): string {
 }
 
 /**
- * 指定パスのプロンプトファイルを読み込み、空ならundefinedを返す。
+ * 指定パスのプロンプトファイルを読み込み、空なら `undefined` を返す。
  *
  * @param filePath 読み込み対象パス。
- * @returns 読み込んだ文字列、またはundefined。
+ * @returns 読み込んだ文字列、または `undefined`。
  */
 function readPromptFile(filePath: string): string | undefined {
   if (!fs.existsSync(filePath)) {
@@ -41,7 +45,7 @@ function readPromptFile(filePath: string): string | undefined {
 
 /**
  * 指定したモードに対応するプロンプトファイルを読み込む。
- * 存在しない、もしくは空の場合は undefined を返す。
+ * 存在しない、もしくは空の場合は `undefined` を返す。
  */
 export function loadPrompt(
   mode: string | TaskMode | undefined,
