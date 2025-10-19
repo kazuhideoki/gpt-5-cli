@@ -1,10 +1,9 @@
 export {
   buildAgentsToolList,
   buildCliToolList,
-  createToolRuntime,
   type ToolRegistration,
   type ToolResult,
-  type ToolRuntime,
+  type ToolExecutionContext,
 } from "./runtime.js";
 export { READ_FILE_TOOL, WRITE_FILE_TOOL, resolveWorkspacePath } from "./filesystem.js";
 export { D2_CHECK_TOOL, D2_FMT_TOOL } from "./d2.js";

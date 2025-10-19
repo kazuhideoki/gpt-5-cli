@@ -7,7 +7,6 @@ import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type {
   FunctionTool,
   ResponseCreateParamsNonStreaming,
-  ResponseFunctionToolCall,
 } from "openai/resources/responses/responses";
 
 export interface ToolExecutionContext {
@@ -45,69 +44,6 @@ export interface ToolRegistration<
 > {
   definition: FunctionTool;
   handler: ToolHandler<TArgs, TResult, TContext>;
-}
-
-export interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
-  tools: FunctionTool[];
-  execute(call: ResponseFunctionToolCall, context: TContext): Promise<string>;
-}
-
-/**
- * 任意のツール定義集合から実行ランタイムを構築する。
- *
- * @param registrations ツール定義とハンドラの配列。
- * @returns ツール一覧と実行メソッド。
- */
-export function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
-  registrations: Iterable<ToolRegistration<any, any, TContext>>,
-): ToolRuntime<TContext> {
-  const entries = Array.from(registrations);
-  const handlerMap = new Map<string, ToolHandler<any, ToolResult, TContext>>();
-  for (const entry of entries) {
-    if (handlerMap.has(entry.definition.name)) {
-      throw new Error(`Duplicate tool name detected: ${entry.definition.name}`);
-    }
-    handlerMap.set(entry.definition.name, entry.handler);
-  }
-
-  async function execute(call: ResponseFunctionToolCall, context: TContext): Promise<string> {
-    const { log } = context;
-    const toolName = call.name;
-    let parsedArgs: any = {};
-    if (call.arguments) {
-      try {
-        parsedArgs = JSON.parse(call.arguments);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const payload = {
-          success: false,
-          message: `Failed to parse arguments for ${toolName}: ${message}`,
-        } satisfies ToolResult;
-        return JSON.stringify(payload);
-      }
-    }
-
-    log(`[tool] ${toolName} invoked`);
-    const handler = handlerMap.get(toolName);
-    if (!handler) {
-      const payload = { success: false, message: `Unknown tool: ${toolName}` } satisfies ToolResult;
-      return JSON.stringify(payload);
-    }
-
-    try {
-      const result = await handler(parsedArgs, context);
-      return JSON.stringify(result);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const payload = { success: false, message } satisfies ToolResult;
-      return JSON.stringify(payload);
-    }
-  }
-
-  return {
-    tools: entries.map((entry) => entry.definition),
-    execute,
-  };
 }
 
 interface BuildAgentsToolListOptions {
