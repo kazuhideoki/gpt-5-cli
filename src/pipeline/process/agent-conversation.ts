@@ -6,8 +6,8 @@ import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { CliOptions, OpenAIInputMessage } from "../../core/types.js";
-import type { ToolRegistration } from "../../core/tools.js";
-import { buildAgentsToolList } from "../../core/tools.js";
+import type { ToolRegistration } from "./tools/index.js";
+import { buildAgentsToolList } from "./tools/index.js";
 
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);

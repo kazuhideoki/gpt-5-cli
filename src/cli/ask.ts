@@ -14,7 +14,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { deliverOutput } from "../pipeline/finalize/io.js";
-import { READ_FILE_TOOL, buildCliToolList } from "../core/tools.js";
+import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";

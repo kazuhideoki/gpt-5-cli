@@ -1,51 +1,15 @@
+/**
+ * SQL 関連ツールをまとめたモジュール。
+ */
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import { createRequire } from "node:module";
-import { tool as defineAgentTool } from "@openai/agents";
-import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { Client } from "pg";
 import mysql, { type Connection as MysqlConnection } from "mysql2/promise";
-import type {
-  FunctionTool,
-  ResponseCreateParamsNonStreaming,
-  ResponseFunctionToolCall,
-} from "openai/resources/responses/responses";
 
-/** ツール実行時に利用する作業ディレクトリとロガーを保持する。 */
-interface ToolExecutionContext {
-  cwd: string;
-  log: (message: string) => void;
-}
-
-/**
- * ツール実行結果の基本形。CLI固有の拡張フィールドも許容する。
- */
-export interface ToolResult {
-  success: boolean;
-  message?: string;
-  [key: string]: unknown;
-}
-
-interface ReadFileResult extends ToolResult {
-  path?: string;
-  content?: string;
-  encoding?: string;
-}
-
-interface WriteFileResult extends ToolResult {
-  path?: string;
-  bytes_written?: number;
-}
-
-interface CommandResult extends ToolResult {
-  command: string;
-  args: string[];
-  exit_code: number;
-  stdout: string;
-  stderr: string;
-}
+import type { ToolExecutionContext } from "./runtime.js";
+import type { ToolRegistration, ToolResult } from "./runtime.js";
+import { runCommand } from "./command.js";
 
 type SqlEngineKind = "postgresql" | "mysql";
 
@@ -58,125 +22,6 @@ let activeSqlEnvironment: SqlEnvironment | undefined;
 
 export function setSqlEnvironment(environment: SqlEnvironment | undefined): void {
   activeSqlEnvironment = environment;
-}
-
-type ToolHandler<
-  TArgs = unknown,
-  TResult extends ToolResult = ToolResult,
-  TContext extends ToolExecutionContext = ToolExecutionContext,
-> = (args: TArgs, context: TContext) => Promise<TResult>;
-
-export interface ToolRegistration<
-  TArgs = unknown,
-  TResult extends ToolResult = ToolResult,
-  TContext extends ToolExecutionContext = ToolExecutionContext,
-> {
-  definition: FunctionTool;
-  handler: ToolHandler<TArgs, TResult, TContext>;
-}
-
-export interface ToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext> {
-  tools: FunctionTool[];
-  execute(call: ResponseFunctionToolCall, context: TContext): Promise<string>;
-}
-
-/**
- * ワークスペース内の安全なパスへ正規化し、外部アクセスを防ぐ。
- *
- * @param rawPath ユーザーから指定されたパス。
- * @param cwd ワークスペースのルート。
- * @returns 絶対パス。
- */
-export function resolveWorkspacePath(rawPath: string, cwd: string): string {
-  if (!rawPath || rawPath.trim().length === 0) {
-    throw new Error("path must be a non-empty string");
-  }
-  const normalizedRoot = path.resolve(cwd);
-  const candidate = path.resolve(normalizedRoot, rawPath);
-  const relative = path.relative(normalizedRoot, candidate);
-  const isInsideWorkspace =
-    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-  if (!isInsideWorkspace) {
-    throw new Error(`Access to path outside workspace is not allowed: ${rawPath}`);
-  }
-  return candidate;
-}
-
-interface ReadFileArgs {
-  path: string;
-}
-
-async function readFileTool(
-  args: ReadFileArgs,
-  context: ToolExecutionContext,
-): Promise<ReadFileResult> {
-  const { cwd } = context;
-  const resolvedPath = resolveWorkspacePath(args.path, cwd);
-  const buffer = await fs.readFile(resolvedPath, { encoding: "utf8" });
-  return {
-    success: true,
-    path: path.relative(cwd, resolvedPath),
-    content: buffer,
-    encoding: "utf8",
-  };
-}
-
-interface WriteFileArgs {
-  path: string;
-  content: string;
-}
-
-async function writeFileTool(
-  args: WriteFileArgs,
-  context: ToolExecutionContext,
-): Promise<WriteFileResult> {
-  const { cwd } = context;
-  const resolvedPath = resolveWorkspacePath(args.path, cwd);
-  await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
-  await fs.writeFile(resolvedPath, args.content, { encoding: "utf8" });
-  return {
-    success: true,
-    path: path.relative(cwd, resolvedPath),
-    bytes_written: Buffer.byteLength(args.content, "utf8"),
-  };
-}
-
-async function runCommand(
-  command: string,
-  commandArgs: string[],
-  cwd: string,
-): Promise<CommandResult> {
-  return new Promise<CommandResult>((resolve) => {
-    const proc = spawn(command, commandArgs, { cwd, stdio: ["ignore", "pipe", "pipe"] });
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-
-    proc.stdout.on("data", (chunk) => stdoutChunks.push(Buffer.from(chunk)));
-    proc.stderr.on("data", (chunk) => stderrChunks.push(Buffer.from(chunk)));
-
-    proc.on("error", (error) => {
-      resolve({
-        success: false,
-        command,
-        args: commandArgs,
-        exit_code: -1,
-        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
-        stderr: `${Buffer.concat(stderrChunks).toString("utf8")}${error.message}`,
-        message: error.message,
-      });
-    });
-
-    proc.on("close", (code) => {
-      resolve({
-        success: (code ?? 1) === 0,
-        command,
-        args: commandArgs,
-        exit_code: code ?? -1,
-        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
-        stderr: Buffer.concat(stderrChunks).toString("utf8"),
-      });
-    });
-  });
 }
 
 interface SqlTableSchemaRow {
@@ -801,10 +646,10 @@ async function fetchMysqlColumnSchema(
 }
 
 /**
- * pg_type/pg_enum を参照して enum ラベルを取得する。
+ * pg_type/pg_enum を参照して ENUM 値を取得する。
  *
- * @param args スキーマ・enum 名フィルタ。
- * @returns enum 値の配列。
+ * @param args フィルタ条件。
+ * @returns ENUM ラベル一覧。
  */
 async function fetchSqlEnumValues(args: SqlFetchEnumSchemaArgs = {}): Promise<SqlEnumValueRow[]> {
   const env = requireSqlEnvironment();
@@ -821,34 +666,34 @@ async function fetchPgEnumValues(
   const client = createPgClient(dsn);
   await client.connect();
   try {
-    const filters = ["n.nspname NOT IN ('pg_catalog', 'information_schema')", "t.typtype = 'e'"];
+    const filters = ["nspname NOT IN ('pg_catalog', 'information_schema')"];
     const params: unknown[] = [];
 
     const schemaNames = normalizeStringArray(args.schema_names, "schema_names");
     if (schemaNames) {
       params.push(schemaNames);
-      filters.push(`n.nspname = ANY($${params.length}::text[])`);
+      filters.push(`nspname = ANY($${params.length}::text[])`);
     }
 
     const enumNames = normalizeStringArray(args.enum_names, "enum_names");
     if (enumNames) {
       params.push(enumNames);
-      filters.push(`t.typname = ANY($${params.length}::text[])`);
+      filters.push(`typname = ANY($${params.length}::text[])`);
     }
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join("\n          AND ")}` : "";
     const result = await client.query<SqlEnumValueRow>(
       `
         SELECT
-          n.nspname AS schema_name,
-          t.typname AS enum_name,
-          e.enumlabel AS enum_label,
-          e.enumsortorder AS sort_order
-        FROM pg_type t
-        JOIN pg_enum e ON e.enumtypid = t.oid
-        JOIN pg_namespace n ON n.oid = t.typnamespace
+          nspname AS schema_name,
+          typname AS enum_name,
+          enumlabel AS enum_label,
+          enumsortorder AS sort_order
+        FROM pg_type
+        JOIN pg_enum ON pg_enum.enumtypid = pg_type.oid
+        JOIN pg_namespace ON pg_namespace.oid = pg_type.typnamespace
         ${whereClause}
-        ORDER BY n.nspname, t.typname, e.enumsortorder
+        ORDER BY nspname, typname, enumsortorder
       `,
       params,
     );
@@ -862,12 +707,12 @@ interface MysqlEnumRow {
   table_schema: string;
   table_name: string;
   column_name: string;
-  column_type: string;
+  column_type?: string | null;
 }
 
 function parseMysqlEnumLabels(columnType: string): string[] {
   const normalized = columnType.trim();
-  if (!/^enum\s*\(/iu.test(normalized)) {
+  if (!normalized.startsWith("enum(") || !normalized.endsWith(")")) {
     return [];
   }
   const body = normalized.replace(/^enum\s*\(/iu, "").replace(/\)$/u, "");
@@ -1013,7 +858,7 @@ async function fetchMysqlEnumValues(
 }
 
 /**
- * pg_indexes を参照してインデックス定義を取得する。
+ * pg_indexes / information_schema.statistics を参照してインデックス定義を取得する。
  *
  * @param args スキーマ・テーブル・インデックス名フィルタ。
  * @returns インデックス情報の配列。
@@ -1362,209 +1207,6 @@ async function sqlFormatTool(
   }
 }
 
-interface D2Args {
-  file_path: string;
-}
-
-interface MermaidArgs {
-  file_path: string;
-}
-
-async function d2CheckTool(args: D2Args, context: ToolExecutionContext): Promise<CommandResult> {
-  const { cwd } = context;
-  const resolvedPath = resolveWorkspacePath(args.file_path, cwd);
-  return runCommand("d2", [resolvedPath], cwd);
-}
-
-async function d2FmtTool(args: D2Args, context: ToolExecutionContext): Promise<CommandResult> {
-  const { cwd } = context;
-  const resolvedPath = resolveWorkspacePath(args.file_path, cwd);
-  return runCommand("d2", ["fmt", resolvedPath], cwd);
-}
-
-export const READ_FILE_TOOL: ToolRegistration<ReadFileArgs, ReadFileResult> = {
-  definition: {
-    type: "function",
-    strict: true,
-    name: "read_file",
-    description: "Read a UTF-8 text file from the local workspace.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "File path relative to the workspace root.",
-        },
-      },
-      required: ["path"],
-      additionalProperties: false,
-    },
-  },
-  handler: readFileTool,
-};
-
-export const WRITE_FILE_TOOL: ToolRegistration<WriteFileArgs, WriteFileResult> = {
-  definition: {
-    type: "function",
-    strict: true,
-    name: "write_file",
-    description:
-      "Overwrite a text file in the local workspace using UTF-8. Creates the file if it does not exist.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "Target file path relative to the workspace root.",
-        },
-        content: {
-          type: "string",
-          description: "Text content to write into the file.",
-        },
-      },
-      required: ["path", "content"],
-      additionalProperties: false,
-    },
-  },
-  handler: writeFileTool,
-};
-
-export const D2_CHECK_TOOL: ToolRegistration<D2Args, CommandResult> = {
-  definition: {
-    type: "function",
-    strict: true,
-    name: "d2_check",
-    description: "Run `d2` to validate a diagram file without modifying it.",
-    parameters: {
-      type: "object",
-      properties: {
-        file_path: {
-          type: "string",
-          description: "Path to the D2 file relative to the workspace root.",
-        },
-      },
-      required: ["file_path"],
-      additionalProperties: false,
-    },
-  },
-  handler: d2CheckTool,
-};
-
-export const D2_FMT_TOOL: ToolRegistration<D2Args, CommandResult> = {
-  definition: {
-    type: "function",
-    strict: true,
-    name: "d2_fmt",
-    description: "Run `d2 fmt` to format a diagram file in-place.",
-    parameters: {
-      type: "object",
-      properties: {
-        file_path: {
-          type: "string",
-          description: "Path to the D2 file relative to the workspace root.",
-        },
-      },
-      required: ["file_path"],
-      additionalProperties: false,
-    },
-  },
-  handler: d2FmtTool,
-};
-
-const MERMAID_BIN_NAME = process.platform === "win32" ? "mmdc.cmd" : "mmdc";
-
-interface ResolvedMermaidCommand {
-  command: string;
-  args: string[];
-}
-
-interface MermaidPackageJsonShape {
-  bin?: string | Record<string, string>;
-}
-
-export async function resolveMermaidCommand(): Promise<ResolvedMermaidCommand> {
-  const requireFromHere = createRequire(import.meta.url);
-
-  try {
-    const packageJsonPath = requireFromHere.resolve("@mermaid-js/mermaid-cli/package.json");
-    const packageDirectory = path.dirname(packageJsonPath);
-    const packageJsonContent = await fs.readFile(packageJsonPath, { encoding: "utf8" });
-    const packageJson = JSON.parse(packageJsonContent) as MermaidPackageJsonShape;
-    const binField = packageJson.bin;
-
-    let scriptRelative: string | undefined;
-
-    if (typeof binField === "string") {
-      scriptRelative = binField;
-    } else if (binField && typeof binField === "object") {
-      const record = binField as Record<string, unknown>;
-      const prioritizedKeys = ["mmdc", "mermaid"];
-      for (const key of prioritizedKeys) {
-        const candidate = record[key];
-        if (typeof candidate === "string" && candidate.length > 0) {
-          scriptRelative = candidate;
-          break;
-        }
-      }
-      if (!scriptRelative) {
-        const fallback = Object.values(record).find(
-          (entry): entry is string => typeof entry === "string" && entry.length > 0,
-        );
-        scriptRelative = fallback;
-      }
-    }
-
-    if (typeof scriptRelative === "string" && scriptRelative.length > 0) {
-      const scriptAbsolute = path.resolve(packageDirectory, scriptRelative);
-      await fs.access(scriptAbsolute);
-      return { command: process.execPath, args: [scriptAbsolute] };
-    }
-  } catch {
-    // ignore and fall through to PATH lookup
-  }
-
-  return { command: MERMAID_BIN_NAME, args: [] };
-}
-
-async function mermaidCheckTool(
-  args: MermaidArgs,
-  context: ToolExecutionContext,
-): Promise<CommandResult> {
-  const { cwd } = context;
-  const resolvedPath = resolveWorkspacePath(args.file_path, cwd);
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-5-mermaid-check-"));
-  const outputPath = path.join(tempDir, "mermaid-output.svg");
-  const { command, args: commandArgs } = await resolveMermaidCommand();
-  const argsWithTargets = [...commandArgs, "-i", resolvedPath, "-o", outputPath, "--quiet"];
-  try {
-    return await runCommand(command, argsWithTargets, cwd);
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-}
-
-export const MERMAID_CHECK_TOOL: ToolRegistration<MermaidArgs, CommandResult> = {
-  definition: {
-    type: "function",
-    strict: true,
-    name: "mermaid_check",
-    description:
-      "Run mermaid-cli to validate a Mermaid diagram file. When using Markdown, wrap the diagram in a ```mermaid``` block.",
-    parameters: {
-      type: "object",
-      properties: {
-        file_path: {
-          type: "string",
-          description: "Path to the Mermaid file relative to the workspace root.",
-        },
-      },
-      required: ["file_path"],
-      additionalProperties: false,
-    },
-  },
-  handler: mermaidCheckTool,
-};
-
 export const SQL_FETCH_TABLE_SCHEMA_TOOL: ToolRegistration<SqlFetchTableSchemaArgs, ToolResult> = {
   definition: {
     type: "function",
@@ -1743,181 +1385,3 @@ export const SQL_FORMAT_TOOL: ToolRegistration<SqlFormatArgs, SqlFormatResult> =
   },
   handler: sqlFormatTool,
 };
-
-/**
- * 任意のツール定義集合から実行ランタイムを構築する。
- *
- * @param registrations ツール定義とハンドラの配列。
- * @returns ツール一覧と実行メソッド。
- */
-export function createToolRuntime<TContext extends ToolExecutionContext = ToolExecutionContext>(
-  registrations: Iterable<ToolRegistration<any, any, TContext>>,
-): ToolRuntime<TContext> {
-  const entries = Array.from(registrations);
-  const handlerMap = new Map<string, ToolHandler<any, ToolResult, TContext>>();
-  for (const entry of entries) {
-    if (handlerMap.has(entry.definition.name)) {
-      throw new Error(`Duplicate tool name detected: ${entry.definition.name}`);
-    }
-    handlerMap.set(entry.definition.name, entry.handler);
-  }
-
-  async function execute(call: ResponseFunctionToolCall, context: TContext): Promise<string> {
-    const { log } = context;
-    const toolName = call.name;
-    let parsedArgs: any = {};
-    if (call.arguments) {
-      try {
-        parsedArgs = JSON.parse(call.arguments);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const payload = {
-          success: false,
-          message: `Failed to parse arguments for ${toolName}: ${message}`,
-        } satisfies ToolResult;
-        return JSON.stringify(payload);
-      }
-    }
-
-    log(`[tool] ${toolName} invoked`);
-    const handler = handlerMap.get(toolName);
-    if (!handler) {
-      const payload = { success: false, message: `Unknown tool: ${toolName}` } satisfies ToolResult;
-      return JSON.stringify(payload);
-    }
-
-    try {
-      const result = await handler(parsedArgs, context);
-      return JSON.stringify(result);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const payload = { success: false, message } satisfies ToolResult;
-      return JSON.stringify(payload);
-    }
-  }
-
-  return {
-    tools: entries.map((entry) => entry.definition),
-    execute,
-  };
-}
-
-interface BuildAgentsToolListOptions {
-  createExecutionContext?: () => ToolExecutionContext;
-  debugLog?: (message: string) => void;
-  logLabel?: string;
-}
-
-/**
- * Agents SDK で利用可能なツール配列を構築する。
- *
- * @param registrations CLI 向けに登録済みのツール定義。
- * @param options 実行時ログやデバッグ出力の設定。
- * @returns Agents SDK で利用可能なツール配列。
- */
-export function buildAgentsToolList(
-  registrations: Iterable<ToolRegistration<any, any>>,
-  options: BuildAgentsToolListOptions = {},
-): AgentsSdkTool[] {
-  const entries = Array.from(registrations).filter(
-    (registration) => registration.definition.type === "function",
-  );
-  const logPrefix = options.logLabel ? `${options.logLabel} ` : "";
-  const defaultExecutionContext =
-    options.createExecutionContext ??
-    (() => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${logPrefix}${message}`);
-      },
-    }));
-
-  const formatJsonSnippet = (value: unknown, limit = 600): string => {
-    try {
-      const pretty = JSON.stringify(value, null, 2);
-      if (pretty.length <= limit) {
-        return pretty;
-      }
-      return `${pretty.slice(0, limit)}…(+${pretty.length - limit} chars)`;
-    } catch {
-      const serialized = String(value ?? "");
-      if (serialized.length <= limit) {
-        return serialized;
-      }
-      return `${serialized.slice(0, limit)}…(+${serialized.length - limit} chars)`;
-    }
-  };
-
-  const formatPlainSnippet = (raw: string, limit = 600): string => {
-    const text = raw.trim();
-    if (text.length <= limit) {
-      return text;
-    }
-    return `${text.slice(0, limit)}…(+${text.length - limit} chars)`;
-  };
-
-  type AgentExecutionDetails = { toolCall?: { call_id?: string; id?: string } };
-
-  return entries.map((registration) => {
-    const { definition, handler } = registration;
-    return defineAgentTool({
-      name: definition.name,
-      description: definition.description ?? "",
-      parameters: definition.parameters as any,
-      strict: definition.strict ?? false,
-      execute: async (
-        input: unknown,
-        _runContext: unknown,
-        details?: AgentExecutionDetails,
-      ): Promise<string> => {
-        const context = defaultExecutionContext();
-        const callId = details?.toolCall?.call_id ?? details?.toolCall?.id ?? "";
-        const label = callId ? `${definition.name} (${callId})` : definition.name;
-        context.log(`tool handling ${label}`);
-        if (options.debugLog) {
-          options.debugLog(`tool_call ${label} arguments:\n${formatJsonSnippet(input ?? {})}`);
-        }
-
-        let result: ToolResult | string;
-        try {
-          const args = (input ?? {}) as Record<string, unknown>;
-          result = await handler(args, context);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          context.log(`tool error ${label}: ${message}`);
-          if (options.debugLog) {
-            options.debugLog(`tool_call ${label} failed: ${message}`);
-          }
-          return JSON.stringify({ success: false, message });
-        }
-
-        const serialized = typeof result === "string" ? result : JSON.stringify(result);
-        if (options.debugLog) {
-          options.debugLog(`tool_call ${label} output:\n${formatPlainSnippet(serialized)}`);
-        }
-        return serialized;
-      },
-    });
-  });
-}
-
-export function buildCliToolList(
-  registrations: Iterable<ToolRegistration<any, any>>,
-): ResponseCreateParamsNonStreaming["tools"] {
-  const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
-  const seen = new Set<string>();
-
-  for (const registration of registrations) {
-    const { definition } = registration;
-    if (definition.type !== "function") {
-      continue;
-    }
-    if (seen.has(definition.name)) {
-      continue;
-    }
-    functionTools.push(definition);
-    seen.add(definition.name);
-  }
-
-  return [...functionTools, { type: "web_search_preview" as const }];
-}

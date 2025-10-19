@@ -9,7 +9,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
 import { formatTurnsForSummary } from "../../core/history.js";
 import type { HistoryStore } from "../../core/history.js";
-import { buildCliToolList } from "../../core/tools.js";
+import { buildCliToolList } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,

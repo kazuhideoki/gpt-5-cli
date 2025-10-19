@@ -22,7 +22,7 @@ import {
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   setSqlEnvironment,
-} from "../core/tools.js";
+} from "../pipeline/process/tools/index.js";
 import {
   expandLegacyShortFlags,
   parseEffortFlag,

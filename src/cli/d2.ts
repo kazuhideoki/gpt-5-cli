@@ -20,7 +20,7 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
   buildCliToolList,
-} from "../core/tools.js";
+} from "../pipeline/process/tools/index.js";
 import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
