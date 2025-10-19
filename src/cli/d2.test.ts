@@ -62,8 +62,8 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.d2FilePath).toBe("diagram.d2");
-    expect(options.outputPath).toBe("diagram.d2");
+    expect(options.d2FilePath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
+    expect(options.outputPath).toBe(options.d2FilePath);
   });
 
   it("--d2-iterations でツール呼び出し上限を設定できる", () => {

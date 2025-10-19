@@ -29,7 +29,7 @@
     "lint:fix": "bunx @biomejs/biome lint --write .",
     "knip:exports": "bunx knip --exports",
     "knip:fix-exports": "bunx knip --fix --fix-type exports",
-    "ci": "bun run knip:fix-exports && bun run lint && bun run format:check && bun run build && bun run test"
+    "ci": "bun run knip:exports && bun run lint && bun run format:check && bun run build && bun run test"
   },
   "dependencies": {
     "@mermaid-js/mermaid-cli": "^11.12.0",

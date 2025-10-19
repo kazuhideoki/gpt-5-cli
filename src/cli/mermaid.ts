@@ -14,7 +14,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { MERMAID_CHECK_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
-import { deliverOutput } from "../core/output.js";
+import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
 import {
   buildRequest,
   computeContext,
@@ -42,8 +42,6 @@ interface MermaidContextInfo {
 }
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
-
-const DEFAULT_MERMAID_FILE = "diagram.mmd";
 
 const mermaidCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -300,7 +298,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   const maxIterations =
     typeof opts.mermaidIterations === "number" ? opts.mermaidIterations : defaults.maxIterations;
   if (!outputPath) {
-    outputPath = DEFAULT_MERMAID_FILE;
+    outputPath = generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
   }
   const mermaidFilePath = outputPath;
 
@@ -599,6 +597,12 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         assistantText: content,
         task: historyTask,
       });
+    }
+
+    const artifactAbsolutePath =
+      mermaidContext?.absolutePath ?? path.resolve(process.cwd(), options.mermaidFilePath);
+    if (fs.existsSync(artifactAbsolutePath)) {
+      console.log(`[gpt-5-cli-mermaid] output file: ${options.mermaidFilePath}`);
     }
 
     process.stdout.write(`${content}\n`);

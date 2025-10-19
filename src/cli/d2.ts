@@ -21,7 +21,7 @@ import {
   WRITE_FILE_TOOL,
   buildCliToolList,
 } from "../core/tools.js";
-import { deliverOutput } from "../core/output.js";
+import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
 import {
   buildRequest,
   computeContext,
@@ -48,8 +48,6 @@ interface D2ContextInfo {
   absolutePath: string;
   exists: boolean;
 }
-
-const DEFAULT_D2_FILE = "diagram.d2";
 
 const D2_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
@@ -330,7 +328,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const maxIterations =
     typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.maxIterations;
   if (!outputPath) {
-    outputPath = DEFAULT_D2_FILE;
+    outputPath = generateDefaultOutputPath({ mode: "d2", extension: "d2" }).relativePath;
   }
   const d2FilePath = outputPath;
 
@@ -640,6 +638,12 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         assistantText: content,
         task: historyTask,
       });
+    }
+
+    const artifactAbsolutePath =
+      d2Context?.absolutePath ?? path.resolve(process.cwd(), options.d2FilePath);
+    if (fs.existsSync(artifactAbsolutePath)) {
+      console.log(`[gpt-5-cli-d2] output file: ${options.d2FilePath}`);
     }
 
     process.stdout.write(`${content}\n`);

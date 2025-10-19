@@ -28,8 +28,8 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
-    expect(options.sqlFilePath).toBe("query.sql");
-    expect(options.outputPath).toBe("query.sql");
+    expect(options.sqlFilePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
+    expect(options.outputPath).toBe(options.sqlFilePath);
   });
 
   it("--sql-iterations を検証する", () => {

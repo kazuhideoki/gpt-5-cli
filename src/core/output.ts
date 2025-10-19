@@ -2,6 +2,7 @@
  * @file CLI 応答の出力先（標準出力以外）を束ねるユーティリティ。
  * 結果テキストのファイル保存やクリップボードコピーを共通化する。
  */
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -15,6 +16,24 @@ type CopySource =
       type: "file";
       filePath: string;
     };
+
+export interface DefaultOutputPathParams {
+  /** CLI モード名（例: "d2"、"mermaid"、"sql"）。 */
+  mode: string;
+  /** 生成するファイル名の拡張子。ドットを含めない。 */
+  extension: string;
+  /** 生成の基準となるカレントディレクトリ。既定は `process.cwd()`。 */
+  cwd?: string;
+}
+
+export interface DefaultOutputPathResult {
+  /** ワークスペース基準の相対パス。 */
+  relativePath: string;
+  /** 絶対パス。 */
+  absolutePath: string;
+}
+
+export const DEFAULT_OUTPUT_DIR_ENV = "GPT_5_CLI_OUTPUT_DIR";
 
 interface DeliverOutputParams {
   /** 書き出す本文。 */
@@ -49,6 +68,50 @@ function ensureWorkspacePath(rawPath: string, cwd: string): string {
     throw new Error(`Error: 出力パスはワークスペース配下に指定してください: ${rawPath}`);
   }
   return resolved;
+}
+
+function formatTimestamp(date: Date): string {
+  const yyyy = date.getFullYear().toString().padStart(4, "0");
+  const mm = (date.getMonth() + 1).toString().padStart(2, "0");
+  const dd = date.getDate().toString().padStart(2, "0");
+  const hh = date.getHours().toString().padStart(2, "0");
+  const mi = date.getMinutes().toString().padStart(2, "0");
+  const ss = date.getSeconds().toString().padStart(2, "0");
+  return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
+}
+
+function resolveBaseDirectory(mode: string, cwd: string): string {
+  const envDirRaw = process.env[DEFAULT_OUTPUT_DIR_ENV]?.trim();
+  const normalizedRoot = path.resolve(cwd);
+  if (envDirRaw && envDirRaw.length > 0) {
+    const candidate = path.resolve(normalizedRoot, envDirRaw);
+    const relative = path.relative(normalizedRoot, candidate);
+    const isInsideWorkspace =
+      relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    if (!isInsideWorkspace) {
+      throw new Error(
+        `Error: ${DEFAULT_OUTPUT_DIR_ENV} はワークスペース配下のディレクトリを指定してください: ${envDirRaw}`,
+      );
+    }
+    return candidate;
+  }
+  return path.join(normalizedRoot, "output", mode);
+}
+
+/**
+ * CLI モードに応じた一意の出力ファイルパスを生成する。
+ */
+export function generateDefaultOutputPath(
+  params: DefaultOutputPathParams,
+): DefaultOutputPathResult {
+  const cwd = params.cwd ? path.resolve(params.cwd) : process.cwd();
+  const baseDir = resolveBaseDirectory(params.mode, cwd);
+  const timestamp = formatTimestamp(new Date());
+  const randomSuffix = crypto.randomBytes(2).toString("hex");
+  const fileName = `${params.mode}-${timestamp}-${randomSuffix}.${params.extension}`;
+  const absolutePath = path.join(baseDir, fileName);
+  const relativePath = path.relative(cwd, absolutePath) || path.basename(absolutePath);
+  return { relativePath, absolutePath };
 }
 
 async function writeToFile(resolvedPath: string, content: string): Promise<number> {

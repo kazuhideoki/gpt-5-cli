@@ -62,8 +62,10 @@ describe("mermaid parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.mermaidFilePath).toBe("diagram.mmd");
-    expect(options.outputPath).toBe("diagram.mmd");
+    expect(options.mermaidFilePath).toMatch(
+      /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
+    );
+    expect(options.outputPath).toBe(options.mermaidFilePath);
   });
 
   it("--mermaid-iterations でツール呼び出し上限を設定できる", () => {

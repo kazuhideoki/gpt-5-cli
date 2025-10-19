@@ -89,7 +89,7 @@ d2 モード固有のレンダリングやフラグ構成を持ちます。履�
 
 主な追加フラグ:
 
-- `-o, --output <path>`: 生成した D2 コードを保存するファイルパス。指定しない場合は `diagram.d2` をワークスペース直下に用意します。
+- `-o, --output <path>`: 生成した D2 コードを保存するファイルパス。未指定時は `GPT_5_CLI_OUTPUT_DIR` で示した場所（未設定なら `output/d2/`）にタイムスタンプ付きファイルを自動生成します。
 - `--copy`: 生成した D2 コードの内容をクリップボードへコピー（macOS の `pbcopy` が必要）。
 
 ### Mermaid CLI
@@ -107,7 +107,7 @@ Mermaid CLI では `mermaid_check` ツールを通じて `@mermaid-js/mermaid-cl
 
 主な追加フラグ:
 
-- `-o, --output <path>`: 生成・修正した Mermaid ソースを保存するファイルパス。未指定時は `diagram.mmd` を利用します。
+- `-o, --output <path>`: 生成・修正した Mermaid ソースを保存するファイルパス。未指定時は `GPT_5_CLI_OUTPUT_DIR` または `output/mermaid/` 配下にタイムスタンプ付きファイルを自動生成します。
 - `--copy`: 生成した Mermaid ソースの内容をクリップボードへコピー（macOS の `pbcopy` が必要）。
 
 ### SQL CLI
@@ -123,7 +123,7 @@ SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追�
 
 主な追加フラグ:
 
-- `-o, --output <path>`: 応答した SQL を保存するファイルパス。未指定時は `query.sql` を既定として使用します。
+- `-o, --output <path>`: 応答した SQL を保存するファイルパス。未指定時は `GPT_5_CLI_OUTPUT_DIR` または `output/sql/` 配下にタイムスタンプ付きファイルを自動生成します。
 - `--copy`: 生成した SQL ファイルの内容をクリップボードへコピー（macOS の `pbcopy` が必要）。
 
 ## 依存関係

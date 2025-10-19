@@ -33,7 +33,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
-import { deliverOutput } from "../core/output.js";
+import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
@@ -88,8 +88,6 @@ export interface SqlCliOptions extends CliOptions {
   engine?: SqlEngine;
   sqlFilePath: string;
 }
-
-const DEFAULT_SQL_FILE = "query.sql";
 
 const connectionSchema = z
   .object({
@@ -316,7 +314,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const maxIterations =
     typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.maxIterations;
   if (!outputPath) {
-    outputPath = DEFAULT_SQL_FILE;
+    outputPath = generateDefaultOutputPath({ mode: "sql", extension: "sql" }).relativePath;
   }
   const sqlFilePath = outputPath;
 
@@ -735,7 +733,7 @@ async function runSqlCli(): Promise<void> {
       },
     );
 
-    ensureSqlOutputPath(options);
+    const sqlOutputAbsolutePath = ensureSqlOutputPath(options);
 
     const determineActiveEntry = determine.activeEntry as
       | HistoryEntry<SqlCliHistoryTask>
@@ -833,6 +831,10 @@ async function runSqlCli(): Promise<void> {
         assistantText: content,
         task: historyTask,
       });
+    }
+
+    if (fs.existsSync(sqlOutputAbsolutePath)) {
+      console.log(`[gpt-5-cli-sql] output file: ${options.sqlFilePath}`);
     }
 
     process.stdout.write(`${content}\n`);
