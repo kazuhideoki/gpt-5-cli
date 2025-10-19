@@ -19,7 +19,7 @@ import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
@@ -486,6 +486,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       return;
     }
 
+    // TODO(pipeline/input): mermaid モード特有のファイル推論も将来的に input 層へ寄せる。
     const context = computeContext(
       options,
       historyStore,

@@ -1,4 +1,5 @@
-// input.ts: CLI がユーザー入力を受け取る際の履歴操作とフロー分岐を提供する共通ユーティリティ。
+// cli-input.ts: CLI がユーザー入力を受け取る際の履歴操作とフロー分岐を提供する共通ユーティリティ。
+// NOTE(pipeline/input): 各 CLI 固有の入力前処理は現状 CLI 側に残しており、共通化できる箇所には TODO を付与予定。
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions } from "../../core/types.js";

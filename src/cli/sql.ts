@@ -32,7 +32,7 @@ import {
 } from "../core/options.js";
 import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
 import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
 import type { HistoryEntry } from "../core/history.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
@@ -707,6 +707,7 @@ async function runSqlCli(): Promise<void> {
       return;
     }
 
+    // TODO(pipeline/input): SQL モード固有の DSN / 出力初期化の一部を input 層へ昇格させるか検討する。
     const context = computeContext(
       options,
       historyStore,

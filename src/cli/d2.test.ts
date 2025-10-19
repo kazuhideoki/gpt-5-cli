@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js";
 import type { CliDefaults } from "../core/types.js";
 import type { D2CliOptions } from "./d2.js";

@@ -19,7 +19,7 @@ import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
@@ -369,6 +369,7 @@ async function main(): Promise<void> {
       return;
     }
 
+    // TODO(pipeline/input): ask モードの履歴出力設定を input 層で共有できるよう整理する。
     const context = computeContext(
       options,
       historyStore,

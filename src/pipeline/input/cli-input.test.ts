@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import type { CliDefaults, CliOptions } from "../types.js";
-import type { DetermineInputDependencies } from "./input.js";
+import type { CliDefaults, CliOptions } from "../../core/types.js";
+import type { DetermineInputDependencies } from "./cli-input.js";
 import type { HistoryEntry, HistoryStore } from "../../core/history.js";
 
 const promptAnswers: string[] = [];
@@ -19,7 +19,7 @@ mock.module("node:readline/promises", () => ({
   }),
 }));
 
-const { determineInput } = await import("./input.js");
+const { determineInput } = await import("./cli-input.js");
 
 const defaults: CliDefaults = {
   modelMain: "gpt-5-main",

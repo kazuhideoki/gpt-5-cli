@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import { parseArgs } from "./mermaid.js";
 import type { CliDefaults } from "../core/types.js";
 import type { MermaidCliOptions } from "./mermaid.js";

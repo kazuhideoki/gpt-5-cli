@@ -65,6 +65,26 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/pipeline/input/**/*.{ts,tsx,js,jsx}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@cli/*", "../**/cli/**"],
+                    "message": "pipeline/input から cli への依存は禁止です"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

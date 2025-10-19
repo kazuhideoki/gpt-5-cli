@@ -167,5 +167,5 @@ CI でも同じチェックを行うため、未使用 export が残っている
 
 ## レイヤー境界のLint
 
-- 依存方向は `core <- pipeline/process <- cli` を基本とし、`biome.json` の `noRestrictedImports` で `core` から上位層 (`pipeline/*` や `cli`) への参照を禁止しています。
-- 同じ設定で `pipeline/process` から `cli` への参照も禁止済みです。詳細な運用ルールは `AGENTS.md` の行動規範（R4）を参照してください。
+- 依存方向は `core <- pipeline/{input,process} <- cli` を基本とし、`biome.json` の `noRestrictedImports` で `core` から上位層 (`pipeline/*` や `cli`) への参照を禁止しています。
+- 同じ設定で `pipeline/input`・`pipeline/process` から `cli` への参照も禁止済みです。詳細な運用ルールは `AGENTS.md` の行動規範（R4）を参照してください。
