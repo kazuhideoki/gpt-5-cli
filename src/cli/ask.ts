@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 // ask.ts: 一問一答型の標準チャット CLI エントリーポイント。
+import type { Tool as AgentsSdkTool } from "@openai/agents";
+import { webSearchTool } from "@openai/agents-openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../core/types.js";
@@ -12,17 +14,14 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { deliverOutput } from "../core/output.js";
-import { READ_FILE_TOOL, buildCliToolList, createToolRuntime } from "../core/tools.js";
-import {
-  buildRequest,
-  computeContext,
-  executeWithTools,
-  extractResponseText,
-  performCompact,
-  prepareImageData,
-} from "../session/chat-session.js";
+import { READ_FILE_TOOL, buildCliToolList } from "../core/tools.js";
+import { computeContext } from "../session/conversation-context.js";
+import { prepareImageData } from "../session/image-attachments.js";
+import { buildRequest, performCompact } from "../session/responses-session.js";
+import { runAgentConversation } from "../session/agent-session.js";
 import { determineInput } from "./runtime/input.js";
 import { bootstrapCli } from "./runtime/runner.js";
+import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 const askCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
@@ -37,8 +36,18 @@ const askCliHistoryTaskSchema = z.object({
 export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
-const ASK_TOOL_RUNTIME = createToolRuntime(ASK_TOOL_REGISTRATIONS);
-const ASK_FUNCTION_TOOLS = buildCliToolList(ASK_TOOL_REGISTRATIONS);
+
+export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
+  const tools = buildCliToolList(ASK_TOOL_REGISTRATIONS) ?? [];
+  return tools.filter((tool) => tool.type !== "web_search_preview");
+}
+
+export function createAskWebSearchTool(): AgentsSdkTool {
+  return webSearchTool({
+    name: "web_search",
+    searchContextSize: "medium",
+  });
+}
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -385,16 +394,18 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
-      tools: ASK_FUNCTION_TOOLS,
+      tools: buildAskResponseTools(),
     });
-    const response = await executeWithTools(
+    const agentResult = await runAgentConversation({
       client,
       request,
       options,
-      "[gpt-5-cli]",
-      ASK_TOOL_RUNTIME,
-    );
-    const content = extractResponseText(response);
+      logLabel: "[gpt-5-cli]",
+      toolRegistrations: ASK_TOOL_REGISTRATIONS,
+      maxTurns: defaults.maxIterations,
+      additionalAgentTools: [createAskWebSearchTool()],
+    });
+    const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
@@ -405,7 +416,7 @@ async function main(): Promise<void> {
       copy: options.copyOutput,
     });
 
-    if (response.id) {
+    if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as AskCliHistoryTask | undefined;
       const historyTask: AskCliHistoryTask = {
         ...(previousTask ?? {}),
@@ -436,7 +447,7 @@ async function main(): Promise<void> {
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
           previousTask,
         },
-        responseId: response.id,
+        responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         task: historyTask,
