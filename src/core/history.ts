@@ -492,9 +492,9 @@ export class HistoryStore<TContext = unknown> {
    * @returns 最新エントリ。存在しない場合はundefined。
    */
   findLatest(): HistoryEntry<TContext> | undefined {
-    const entries = this.loadEntries();
+    const entries = this.loadFilteredEntries();
     if (entries.length === 0) return undefined;
-    return this.sortByUpdated(entries)[0];
+    return entries[0];
   }
 
   /**

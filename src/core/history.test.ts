@@ -154,6 +154,36 @@ describe("HistoryStore", () => {
     expect(remainingIds).toEqual(["d2-entry", "ask-latest"]);
   });
 
+  it("findLatest も entryFilter を尊重する", () => {
+    const scopedStore = new HistoryStore<TestContext>(historyPath, {
+      contextSchema: testContextSchema,
+      entryFilter: (entry) => entry.context?.cli === "mermaid",
+    });
+
+    const entries: HistoryEntry<TestContext>[] = [
+      {
+        last_response_id: "ask-newest",
+        updated_at: "2024-06-20T00:00:00Z",
+        context: { cli: "ask" },
+      },
+      {
+        last_response_id: "mermaid-older",
+        updated_at: "2024-06-17T00:00:00Z",
+        context: { cli: "mermaid" },
+      },
+      {
+        last_response_id: "mermaid-newer",
+        updated_at: "2024-06-18T00:00:00Z",
+        context: { cli: "mermaid" },
+      },
+    ];
+    scopedStore.saveEntries(entries);
+
+    const latest = scopedStore.findLatest();
+    expect(latest?.last_response_id).toBe("mermaid-newer");
+    expect(scopedStore.loadEntries()).toHaveLength(3);
+  });
+
   it("upsertConversation が新規エントリを追加する", () => {
     store.upsertConversation({
       metadata: {
