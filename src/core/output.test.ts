@@ -126,6 +126,51 @@ describe("generateDefaultOutputPath", () => {
     expect(absolutePath.startsWith(path.join(tempDir, "custom", "dir"))).toBe(true);
   });
 
+  test("チルダ始まりのディレクトリを展開する", async () => {
+    const originalHome = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "gpt5-home-"));
+    process.env.HOME = fakeHome;
+    const workspace = await fs.mkdtemp(path.join(fakeHome, "workspace-"));
+    try {
+      const relativeFromHome = path.relative(fakeHome, workspace);
+      process.env[DEFAULT_OUTPUT_DIR_ENV] = `~/${relativeFromHome}/artifacts`;
+      const { relativePath, absolutePath } = generateDefaultOutputPath({
+        mode: "mermaid",
+        extension: "mmd",
+        cwd: workspace,
+      });
+      expect(relativePath.startsWith(`artifacts${path.sep}`)).toBe(true);
+      expect(absolutePath.startsWith(path.join(workspace, "artifacts"))).toBe(true);
+    } finally {
+      await fs.rm(workspace, { recursive: true, force: true });
+      process.env.HOME = originalHome;
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  test("チルダ単体のディレクトリも展開する", async () => {
+    const originalHome = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "gpt5-home-"));
+    process.env.HOME = fakeHome;
+    process.env[DEFAULT_OUTPUT_DIR_ENV] = "~";
+    try {
+      const { relativePath, absolutePath } = generateDefaultOutputPath({
+        mode: "ask",
+        extension: "txt",
+        cwd: fakeHome,
+      });
+      expect(relativePath.startsWith(`output${path.sep}ask${path.sep}`)).toBe(false);
+      expect(absolutePath.startsWith(fakeHome)).toBe(true);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    }
+  });
+
   test("ワークスペース外を指す環境変数はエラーにする", () => {
     process.env[DEFAULT_OUTPUT_DIR_ENV] = path.join("..", "outside");
     expect(() =>
