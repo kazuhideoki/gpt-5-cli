@@ -542,7 +542,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
           const historyTask = activeEntry.task as D2CliHistoryTask | undefined;
 
           if (!nextOptions.outputExplicit) {
-            const historyFile = historyTask?.output?.file ?? historyTask?.d2?.file_path;
+            const historyFile = historyTask?.d2?.file_path ?? historyTask?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
               nextOptions.d2FilePath = historyFile;

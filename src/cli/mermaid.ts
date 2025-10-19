@@ -501,7 +501,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           const historyTask = activeEntry.task as MermaidCliHistoryTask | undefined;
 
           if (!nextOptions.outputExplicit) {
-            const historyFile = historyTask?.output?.file ?? historyTask?.mermaid?.file_path;
+            const historyFile = historyTask?.mermaid?.file_path ?? historyTask?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
               nextOptions.mermaidFilePath = historyFile;
