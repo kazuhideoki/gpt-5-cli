@@ -11,6 +11,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
+import { deliverOutput } from "../core/output.js";
 import { READ_FILE_TOOL, buildCliToolList, createToolRuntime } from "../core/tools.js";
 import {
   buildRequest,
@@ -25,6 +26,12 @@ import { bootstrapCli } from "./runtime/runner.js";
 
 const askCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string().optional(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type AskCliHistoryTask = z.infer<typeof askCliHistoryTaskSchema>;
@@ -55,6 +62,8 @@ function printHelp(defaults: CliDefaults, options: CliOptions): void {
   console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
   console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）");
   console.log("  --debug     : デバッグログを有効化");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
   console.log("");
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
@@ -96,6 +105,10 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    outputPath: z.string().min(1).optional(),
+    outputExplicit: z.boolean(),
+    copyOutput: z.boolean(),
+    copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     args: z.array(z.string()),
@@ -176,6 +189,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 
   program.argument("[input...]", "ユーザー入力");
@@ -201,6 +216,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
     delete?: string | boolean;
     show?: string | boolean;
     debug?: boolean;
+    output?: string;
+    copy?: boolean;
     image?: string;
     compact?: number;
   }>();
@@ -218,6 +235,11 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   let showIndex: number | undefined;
   let hasExplicitHistory = false;
   const imagePath = opts.image;
+  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (outputPath && outputPath.length === 0) {
+    outputPath = undefined;
+  }
+  const copyOutput = Boolean(opts.copy);
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: CliOptions["taskMode"] = "ask";
@@ -256,6 +278,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
+  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const helpRequested = Boolean(opts.help);
 
   try {
@@ -270,6 +294,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
       showIndex,
       imagePath,
       debug,
+      outputPath,
+      outputExplicit,
+      copyOutput,
+      copyExplicit,
       operation,
       compactIndex,
       taskMode,
@@ -335,8 +363,15 @@ async function main(): Promise<void> {
       determine.previousTitle,
       {
         logLabel: "[gpt-5-cli]",
-        synchronizeWithHistory: ({ options: nextOptions }) => {
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
+          const historyTask = activeEntry.task as AskCliHistoryTask | undefined;
+          if (!nextOptions.outputExplicit && historyTask?.output?.file) {
+            nextOptions.outputPath = historyTask.output.file;
+          }
+          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyTask.output.copy;
+          }
         },
       },
     );
@@ -364,12 +399,28 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    await deliverOutput({
+      content,
+      filePath: options.outputPath,
+      copy: options.copyOutput,
+    });
+
     if (response.id) {
       const previousTask = context.activeEntry?.task as AskCliHistoryTask | undefined;
       const historyTask: AskCliHistoryTask = {
         ...(previousTask ?? {}),
         mode: options.taskMode,
       };
+      const historyOutputFile = options.outputPath ?? previousTask?.output?.file;
+      const historyOutputCopy = options.copyOutput ? true : undefined;
+      if (historyOutputFile || historyOutputCopy) {
+        historyTask.output = {
+          file: historyOutputFile,
+          copy: historyOutputCopy,
+        };
+      } else if (historyTask.output) {
+        delete historyTask.output;
+      }
       historyStore.upsertConversation({
         metadata: {
           model: options.model,

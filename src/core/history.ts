@@ -63,6 +63,26 @@ export type HistoryEntry<TTask = unknown> = Omit<HistoryEntryBase, "task"> & {
   task?: TTask;
 };
 
+function extractOutputInfo(task: unknown): { file?: string; copy?: boolean } | undefined {
+  if (!task || typeof task !== "object") {
+    return undefined;
+  }
+  const output = (task as { output?: unknown }).output;
+  if (!output || typeof output !== "object") {
+    return undefined;
+  }
+  const file =
+    typeof (output as { file?: unknown }).file === "string"
+      ? (output as { file?: string }).file
+      : undefined;
+  const copyRaw = (output as { copy?: unknown }).copy;
+  const copy = typeof copyRaw === "boolean" ? copyRaw : undefined;
+  if (!file && !copy) {
+    return undefined;
+  }
+  return { file, copy };
+}
+
 function createHistoryEntrySchema<TTask>(
   taskSchema?: z.ZodType<TTask>,
 ): z.ZodType<HistoryEntry<TTask>> {
@@ -189,9 +209,21 @@ export class HistoryStore<TTask = unknown> {
       const requestCount = entry.request_count ?? 0;
       const updated = entry.updated_at ?? "(更新日時 未設定)";
       const title = entry.title ?? "(タイトル未設定)";
-      console.log(
-        `${String(index + 1).padStart(2, " ")}) ${title} [${model}/${effort}/${verbosity} ${requestCount}回] ${updated}`,
-      );
+      let line = `${String(index + 1).padStart(2, " ")}) ${title} [${model}/${effort}/${verbosity} ${requestCount}回] ${updated}`;
+      const outputInfo = extractOutputInfo(entry.task);
+      if (outputInfo) {
+        const parts: string[] = [];
+        if (outputInfo.file) {
+          parts.push(`file=${outputInfo.file}`);
+        }
+        if (outputInfo.copy) {
+          parts.push("copy");
+        }
+        if (parts.length > 0) {
+          line = `${line} output[${parts.join(", ")}]`;
+        }
+      }
+      console.log(line);
     });
   }
 
@@ -380,6 +412,21 @@ export class HistoryStore<TTask = unknown> {
     console.log(
       `=== 履歴 #${index}: ${title} (更新: ${updated}, リクエスト:${requestCount}回) ===`,
     );
+
+    const outputInfo = extractOutputInfo(entry.task);
+    if (outputInfo) {
+      const parts: string[] = [];
+      if (outputInfo.file) {
+        parts.push(`file=${outputInfo.file}`);
+      }
+      if (outputInfo.copy) {
+        parts.push("copy");
+      }
+      if (parts.length > 0) {
+        console.log(`出力: ${parts.join(", ")}`);
+        console.log("");
+      }
+    }
 
     const turns = entry.turns ?? [];
     if (turns.length === 0) {

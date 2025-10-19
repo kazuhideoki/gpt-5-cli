@@ -3,6 +3,8 @@
  * @file SQL モードの CLI エントリーポイント。PostgreSQL と連携した SELECT クエリ編集を
  * OpenAI Responses API のエージェントと SQL 専用ツールで実現する。
  */
+import fs from "node:fs";
+import path from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
@@ -21,6 +23,7 @@ import {
   SQL_FETCH_INDEX_SCHEMA_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
+  WRITE_FILE_TOOL,
   setSqlEnvironment,
 } from "../core/tools.js";
 import {
@@ -30,6 +33,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../core/options.js";
+import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
 import { bootstrapCli } from "./runtime/runner.js";
 import { determineInput } from "./runtime/input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
@@ -42,6 +46,7 @@ export type SqlEngine = "postgresql" | "mysql";
 
 const POSTGRES_SQL_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FETCH_COLUMN_SCHEMA_TOOL,
   SQL_FETCH_ENUM_SCHEMA_TOOL,
@@ -81,6 +86,7 @@ export interface SqlCliOptions extends CliOptions {
   maxIterationsExplicit: boolean;
   dsn?: string;
   engine?: SqlEngine;
+  sqlFilePath: string;
 }
 
 const connectionSchema = z
@@ -103,6 +109,12 @@ const sqlContextSchema = z
 
 const sqlCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
   sql: sqlContextSchema,
 });
 
@@ -130,9 +142,14 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    outputPath: z.string().min(1).optional(),
+    outputExplicit: z.boolean(),
+    copyOutput: z.boolean(),
+    copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
+    sqlFilePath: z.string().min(1),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -219,6 +236,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     .option("--debug", "デバッグログを有効化します")
     .option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します")
     .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
     .option(
       "-I, --sql-iterations <count>",
       "SQLモード時のツール呼び出し上限を指定します",
@@ -256,6 +275,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     show?: string | boolean;
     debug?: boolean;
     image?: string;
+    output?: string;
+    copy?: boolean;
     sqlIterations?: number;
     compact?: number;
     dsn: string;
@@ -285,8 +306,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: SqlCliOptions["taskMode"] = "sql";
+  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (outputPath && outputPath.length === 0) {
+    outputPath = undefined;
+  }
+  const copyOutput = Boolean(opts.copy);
   const maxIterations =
     typeof opts.sqlIterations === "number" ? opts.sqlIterations : defaults.maxIterations;
+  if (!outputPath) {
+    outputPath = generateDefaultOutputPath({ mode: "sql", extension: "sql" }).relativePath;
+  }
+  const sqlFilePath = outputPath;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -322,6 +352,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
+  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("sqlIterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
@@ -331,6 +363,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       effort,
       verbosity,
       continueConversation,
+      outputPath,
+      outputExplicit,
+      copyOutput,
+      copyExplicit,
       taskMode,
       resumeIndex,
       resumeListOnly,
@@ -338,6 +374,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       showIndex,
       imagePath,
       debug,
+      sqlFilePath,
       dsn,
       operation,
       compactIndex,
@@ -383,6 +420,8 @@ function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
   console.log("  --debug     : デバッグログを有効化");
   console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
   console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
   console.log("  -i <path>   : 入力に画像を添付");
   console.log("");
   console.log("環境変数(.env):");
@@ -449,6 +488,28 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
   }
 }
 
+function ensureSqlOutputPath(options: SqlCliOptions): string {
+  const cwd = process.cwd();
+  const rawPath = options.sqlFilePath;
+  const absolutePath = path.resolve(cwd, rawPath);
+  const normalizedRoot = path.resolve(cwd);
+  const relative = path.relative(normalizedRoot, absolutePath);
+  const isInsideWorkspace =
+    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  if (!isInsideWorkspace) {
+    throw new Error(
+      `Error: SQL出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
+    );
+  }
+  if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+    throw new Error(`Error: 指定した出力パスはディレクトリです: ${rawPath}`);
+  }
+  const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  options.sqlFilePath = relativePath;
+  options.outputPath = relativePath;
+  return absolutePath;
+}
+
 /** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
 function createSqlSnapshot(rawDsn: string): SqlDsnSnapshot {
   if (typeof rawDsn !== "string" || rawDsn.trim().length === 0) {
@@ -506,6 +567,7 @@ interface SqlInstructionParams {
   dsnHash: string;
   maxIterations: number;
   engine: SqlEngine;
+  filePath: string;
 }
 
 /**
@@ -549,6 +611,8 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   toolSummaryLines.push(
     "- sql_dry_run: SELECT 文を PREPARE/EXPLAIN で検証し、実行計画 (FORMAT JSON) を取得する",
     "- sql_format: sqruff fix で SQL を整形し、整形済みテキストを取得する",
+    "- write_file: 整形済み SQL を対象ファイルへ上書き保存する",
+    "- read_file: 既存の SQL ファイルを確認する",
   );
   const toolSummary = toolSummaryLines.join("\n");
 
@@ -557,13 +621,15 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
     "1. 必要に応じて sql_fetch_table_schema で対象テーブルを把握し、sql_fetch_column_schema・sql_fetch_enum_schema・sql_fetch_index_schema で必要な詳細を取得する",
     "2. 修正案の作成時は SELECT/WITH ... SELECT のみ扱う",
     "3. 提案 SQL が用意できたら必ず sql_format で整形し、その直後に sql_dry_run を実行して成功するまで繰り返す（成功する前にユーザーへ最終回答しない）",
-    "4. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜3 を実施する",
-    "5. sql_dry_run が成功したら最終応答を行い、整形済み SQL を ```sql コードブロックで提示しつつ、dry run の結果や確認事項を日本語でまとめる",
+    "4. 検証が完了した SQL は write_file で対象ファイルへ保存し、必要に応じて read_file で差分を確認する",
+    "5. sql_dry_run が失敗した場合は原因を説明し、必要に応じて再度 1〜4 を実施する",
+    "6. sql_dry_run が成功したら最終応答を行い、整形済み SQL を ```sql コードブロックで提示しつつ、dry run の結果や確認事項を日本語でまとめる",
   ].join("\n");
 
   const systemText = [
     `あなたは ${engineLabel} SELECT クエリの専門家です。`,
     "許可されたツール以外は利用せず、ローカルワークスペース外へアクセスしないでください。",
+    `成果物ファイル: ${params.filePath} (ワークスペース相対パス)`,
     `接続情報: ${connectionLine} (dsn hash=${params.dsnHash})`,
     `ツール呼び出し上限の目安: ${params.maxIterations} 回`,
     toolSummary,
@@ -653,11 +719,21 @@ async function runSqlCli(): Promise<void> {
       determine.previousTitle,
       {
         logLabel: LOG_LABEL,
-        synchronizeWithHistory: ({ options: nextOptions }) => {
+        synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
+          const historyTask = activeEntry.task as SqlCliHistoryTask | undefined;
+          if (!nextOptions.outputExplicit && historyTask?.output?.file) {
+            nextOptions.outputPath = historyTask.output.file;
+            nextOptions.sqlFilePath = historyTask.output.file;
+          }
+          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyTask.output.copy;
+          }
         },
       },
     );
+
+    const sqlOutputAbsolutePath = ensureSqlOutputPath(options);
 
     const determineActiveEntry = determine.activeEntry as
       | HistoryEntry<SqlCliHistoryTask>
@@ -684,6 +760,7 @@ async function runSqlCli(): Promise<void> {
         dsnHash: sqlEnv.hash,
         maxIterations: options.maxIterations,
         engine: sqlEnv.engine,
+        filePath: options.sqlFilePath,
       }),
     });
 
@@ -700,6 +777,21 @@ async function runSqlCli(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath =
+      options.outputExplicit && options.outputPath && options.outputPath !== options.sqlFilePath
+        ? options.outputPath
+        : undefined;
+
+    await deliverOutput({
+      content,
+      filePath: summaryOutputPath,
+      copy: options.copyOutput,
+      copySource: {
+        type: "file",
+        filePath: options.sqlFilePath,
+      },
+    });
+
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as SqlCliHistoryTask | undefined;
       const historyTask = buildSqlCliHistoryTask(
@@ -712,6 +804,13 @@ async function runSqlCli(): Promise<void> {
         },
         previousTask,
       );
+      if (historyTask) {
+        const historyOutputFile = summaryOutputPath ?? options.sqlFilePath;
+        historyTask.output = {
+          file: historyOutputFile,
+          copy: options.copyOutput ? true : undefined,
+        };
+      }
       historyStore.upsertConversation({
         metadata: {
           model: options.model,
@@ -732,6 +831,10 @@ async function runSqlCli(): Promise<void> {
         assistantText: content,
         task: historyTask,
       });
+    }
+
+    if (fs.existsSync(sqlOutputAbsolutePath)) {
+      console.log(`[gpt-5-cli-sql] output file: ${options.sqlFilePath}`);
     }
 
     process.stdout.write(`${content}\n`);

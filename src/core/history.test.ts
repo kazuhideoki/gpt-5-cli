@@ -11,10 +11,20 @@ type TestTask = {
   d2?: {
     file_path?: string;
   };
+  output?: {
+    file?: string;
+    copy?: boolean;
+  };
 };
 
 const testTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string().optional(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
   d2: z
     .object({
       file_path: z.string().optional(),
@@ -260,6 +270,66 @@ describe("HistoryStore", () => {
     const entry = store.loadEntries()[0];
     expect(entry.task?.mode).toBe("d2");
     expect(entry.task?.d2?.file_path).toBe(absPath);
+  });
+
+  it("listHistory が出力情報を表示する", () => {
+    const entry: HistoryEntry<TestTask> = {
+      last_response_id: "resp-output",
+      updated_at: "2024-06-05T00:00:00Z",
+      title: "diagram",
+      request_count: 1,
+      task: {
+        mode: "d2",
+        output: {
+          file: "diagram.d2",
+          copy: true,
+        },
+      },
+    };
+    store.saveEntries([entry]);
+    const logs: string[] = [];
+    const original = console.log;
+    console.log = (message?: unknown, ...rest: unknown[]) => {
+      logs.push([message, ...rest].filter((value) => value !== undefined).join(" "));
+    };
+    try {
+      store.listHistory();
+    } finally {
+      console.log = original;
+    }
+    expect(logs.some((line) => line.includes("output[file=diagram.d2, copy]"))).toBe(true);
+  });
+
+  it("showByNumber が出力情報を表示する", () => {
+    const entry: HistoryEntry<TestTask> = {
+      last_response_id: "resp-output",
+      updated_at: "2024-06-05T00:00:00Z",
+      title: "diagram",
+      request_count: 1,
+      turns: [
+        { role: "user", text: "u" },
+        { role: "assistant", text: "a" },
+      ],
+      task: {
+        mode: "d2",
+        output: {
+          file: "diagram.d2",
+          copy: false,
+        },
+      },
+    };
+    store.saveEntries([entry]);
+    const logs: string[] = [];
+    const original = console.log;
+    console.log = (message?: unknown, ...rest: unknown[]) => {
+      logs.push([message, ...rest].filter((value) => value !== undefined).join(" "));
+    };
+    try {
+      store.showByNumber(1, false);
+    } finally {
+      console.log = original;
+    }
+    expect(logs.some((line) => line.includes("出力: file=diagram.d2"))).toBe(true);
   });
 });
 

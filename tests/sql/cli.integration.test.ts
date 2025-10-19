@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
-import { createBaseEnv, createTempHistoryPath, extractUserLines, runSqlCli } from "../helpers/cli";
+import {
+  createBaseEnv,
+  createTempHistoryPath,
+  extractUserLines,
+  projectRoot,
+  runSqlCli,
+} from "../helpers/cli";
 
 describe("sql CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;
@@ -201,5 +208,42 @@ describe("sql CLI integration", () => {
     expect(summaryEntry.turns?.[0]?.text).toBe("SQL Summary");
     expect(summaryEntry.resume?.summary?.text).toBe("SQL Summary");
     expect(callIndex).toBe(responses.length);
+  });
+
+  test("既存の SQL ファイルを最終応答で上書きしない", async () => {
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        const body = { id: "resp-sql", output_text: ["SQL OK"] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const uniqueDir = path.join("tmp", "sql-tests", randomUUID());
+    const relativePath = path.join(uniqueDir, "query.sql");
+    const absolutePath = path.resolve(projectRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    const sentinel = "select 1;\n";
+    fs.writeFileSync(absolutePath, sentinel, "utf8");
+
+    const result = await runSqlCli(
+      ["--dsn", testDsn, "-o", relativePath, "既存ファイルテスト"],
+      env,
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[gpt-5-cli-sql]");
+    expect(extractUserLines(result.stdout).at(-1)).toBe("SQL OK");
+
+    const persisted = fs.readFileSync(absolutePath, "utf8");
+    expect(persisted).toBe(sentinel);
+
+    fs.rmSync(path.dirname(absolutePath), { recursive: true, force: true });
   });
 });

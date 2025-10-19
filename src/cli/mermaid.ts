@@ -14,6 +14,7 @@ import {
   parseVerbosityFlag,
 } from "../core/options.js";
 import { MERMAID_CHECK_TOOL, READ_FILE_TOOL, WRITE_FILE_TOOL } from "../core/tools.js";
+import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
 import {
   buildRequest,
   computeContext,
@@ -26,8 +27,7 @@ import { bootstrapCli } from "./runtime/runner.js";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
-  mermaidFilePath?: string;
-  mermaidFileExplicit: boolean;
+  mermaidFilePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
 }
@@ -45,6 +45,12 @@ const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHE
 
 const mermaidCliHistoryTaskSchema = z.object({
   mode: z.string().optional(),
+  output: z
+    .object({
+      file: z.string(),
+      copy: z.boolean().optional(),
+    })
+    .optional(),
   mermaid: z
     .object({
       file_path: z.string().optional(),
@@ -80,7 +86,8 @@ function printHelp(defaults: CliDefaults, options: MermaidCliOptions): void {
   console.log(
     "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
   );
-  console.log("  -F <path>   : Mermaid出力ファイルパスを指定 (--mermaid-file)");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
   console.log("  -I <count>  : Mermaidモード時のツール呼び出し上限 (--mermaid-iterations)");
   console.log(
     "  ※ `.mmd` など純粋な Mermaid ファイルを推奨。Markdown に埋め込む場合は必ず ```mermaid``` ブロック内に記述してください。",
@@ -126,16 +133,19 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    outputPath: z.string().min(1).optional(),
+    outputExplicit: z.boolean(),
+    copyOutput: z.boolean(),
+    copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    mermaidFilePath: z.string().min(1).optional(),
+    mermaidFilePath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
     verbosityExplicit: z.boolean(),
-    mermaidFileExplicit: z.boolean(),
     hasExplicitHistory: z.boolean(),
     helpRequested: z.boolean(),
   })
@@ -224,7 +234,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     .option("-s, --show [index]", "指定した番号の履歴を表示します")
     .option("--debug", "デバッグログを有効化します")
     .option("-i, --image <path>", "画像ファイルを添付します")
-    .option("-F, --mermaid-file <path>", "Mermaid出力を保存するファイルパスを指定します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
     .option(
       "-I, --mermaid-iterations <count>",
       "Mermaidモード時のツール呼び出し上限を指定します",
@@ -257,7 +268,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     show?: string | boolean;
     debug?: boolean;
     image?: string;
-    mermaidFile?: string;
+    output?: string;
+    copy?: boolean;
     mermaidIterations?: number;
     compact?: number;
   }>();
@@ -278,12 +290,17 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   let operation: "ask" | "compact" = "ask";
   let compactIndex: number | undefined;
   const taskMode: MermaidCliOptions["taskMode"] = "mermaid";
-  const mermaidFilePath =
-    typeof opts.mermaidFile === "string" && opts.mermaidFile.length > 0
-      ? opts.mermaidFile
-      : undefined;
+  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (outputPath && outputPath.length === 0) {
+    outputPath = undefined;
+  }
+  const copyOutput = Boolean(opts.copy);
   const maxIterations =
     typeof opts.mermaidIterations === "number" ? opts.mermaidIterations : defaults.maxIterations;
+  if (!outputPath) {
+    outputPath = generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
+  }
+  const mermaidFilePath = outputPath;
 
   const parsedResume = parseHistoryFlag(opts.resume);
   if (parsedResume.listOnly) {
@@ -319,7 +336,8 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const mermaidFileExplicit = program.getOptionValueSource("mermaidFile") === "cli";
+  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("mermaidIterations") === "cli";
   const helpRequested = Boolean(opts.help);
 
@@ -335,6 +353,10 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
       showIndex,
       imagePath,
       debug,
+      outputPath,
+      outputExplicit,
+      copyOutput,
+      copyExplicit,
       operation,
       compactIndex,
       taskMode,
@@ -343,7 +365,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
       modelExplicit,
       effortExplicit,
       verbosityExplicit,
-      mermaidFileExplicit,
       maxIterations,
       maxIterationsExplicit,
       hasExplicitHistory,
@@ -369,13 +390,13 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo | 
     return undefined;
   }
   const cwd = process.cwd();
-  const rawPath =
-    options.mermaidFilePath && options.mermaidFilePath.trim().length > 0
-      ? options.mermaidFilePath
-      : "diagram.mmd";
+  const rawPath = options.mermaidFilePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
-  if (!absolutePath.startsWith(`${normalizedRoot}${path.sep}`) && absolutePath !== normalizedRoot) {
+  const relative = path.relative(normalizedRoot, absolutePath);
+  const isInsideWorkspace =
+    relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  if (!isInsideWorkspace) {
     throw new Error(
       `Error: Mermaid出力の保存先はカレントディレクトリ配下に指定してください: ${rawPath}`,
     );
@@ -385,6 +406,7 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo | 
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
   options.mermaidFilePath = relativePath;
+  options.outputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
 }
@@ -476,10 +498,17 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         logLabel: "[gpt-5-cli-mermaid]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "mermaid";
+          const historyTask = activeEntry.task as MermaidCliHistoryTask | undefined;
 
-          if (!nextOptions.mermaidFileExplicit) {
-            const historyFile = activeEntry.task?.mermaid?.file_path;
-            nextOptions.mermaidFilePath = historyFile ?? nextOptions.mermaidFilePath;
+          if (!nextOptions.outputExplicit) {
+            const historyFile = historyTask?.mermaid?.file_path ?? historyTask?.output?.file;
+            if (historyFile) {
+              nextOptions.outputPath = historyFile;
+              nextOptions.mermaidFilePath = historyFile;
+            }
+          }
+          if (!nextOptions.copyExplicit && typeof historyTask?.output?.copy === "boolean") {
+            nextOptions.copyOutput = historyTask.output.copy;
           }
         },
       },
@@ -514,20 +543,37 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath =
+      options.outputExplicit && options.outputPath && options.outputPath !== options.mermaidFilePath
+        ? options.outputPath
+        : undefined;
+
+    await deliverOutput({
+      content,
+      filePath: summaryOutputPath,
+      copy: options.copyOutput,
+      copySource: {
+        type: "file",
+        filePath: options.mermaidFilePath,
+      },
+    });
+
     if (agentResult.responseId) {
       const previousTask = context.activeEntry?.task as MermaidCliHistoryTask | undefined;
       const historyTask: MermaidCliHistoryTask = { mode: options.taskMode };
       let mermaidMeta = previousTask?.mermaid ? { ...previousTask.mermaid } : undefined;
       const contextPath = mermaidContext?.absolutePath;
-      let filePath = contextPath ?? options.mermaidFilePath;
-      if (!filePath && !options.mermaidFileExplicit) {
-        filePath = mermaidMeta?.file_path;
-      }
+      const filePath = contextPath ?? options.mermaidFilePath;
       if (contextPath) {
         mermaidMeta = { ...mermaidMeta, file_path: contextPath };
       } else if (filePath) {
         mermaidMeta = { ...mermaidMeta, file_path: filePath };
       }
+      const historyOutputFile = summaryOutputPath ?? options.mermaidFilePath;
+      historyTask.output = {
+        file: historyOutputFile,
+        copy: options.copyOutput ? true : undefined,
+      };
       if (mermaidMeta && Object.keys(mermaidMeta).length > 0) {
         historyTask.mermaid = mermaidMeta;
       }
@@ -551,6 +597,12 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         assistantText: content,
         task: historyTask,
       });
+    }
+
+    const artifactAbsolutePath =
+      mermaidContext?.absolutePath ?? path.resolve(process.cwd(), options.mermaidFilePath);
+    if (fs.existsSync(artifactAbsolutePath)) {
+      console.log(`[gpt-5-cli-mermaid] output file: ${options.mermaidFilePath}`);
     }
 
     process.stdout.write(`${content}\n`);

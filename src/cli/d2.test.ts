@@ -39,12 +39,15 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     imagePath: undefined,
     operation: "ask",
     compactIndex: undefined,
-    d2FilePath: undefined,
+    outputPath: "diagram.d2",
+    outputExplicit: false,
+    copyOutput: false,
+    copyExplicit: false,
+    d2FilePath: "diagram.d2",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
     verbosityExplicit: false,
-    d2FileExplicit: false,
     maxIterations: 10,
     maxIterationsExplicit: false,
     hasExplicitHistory: false,
@@ -59,6 +62,8 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
+    expect(options.d2FilePath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
+    expect(options.outputPath).toBe(options.d2FilePath);
   });
 
   it("--d2-iterations でツール呼び出し上限を設定できる", () => {
@@ -75,11 +80,18 @@ describe("d2 parseArgs", () => {
     );
   });
 
-  it("--d2-file で出力パスを指定できる", () => {
+  it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--d2-file", "diagram.d2", "生成"], defaults);
+    const options = parseArgs(["--output", "diagram.d2", "生成"], defaults);
     expect(options.d2FilePath).toBe("diagram.d2");
-    expect(options.d2FileExplicit).toBe(true);
+    expect(options.outputExplicit).toBe(true);
+  });
+
+  it("--copy でコピー出力を有効化する", () => {
+    const defaults = createDefaults();
+    const options = parseArgs(["--copy", "生成"], defaults);
+    expect(options.copyOutput).toBe(true);
+    expect(options.copyExplicit).toBe(true);
   });
 
   it("--debug でデバッグログを有効化する", () => {

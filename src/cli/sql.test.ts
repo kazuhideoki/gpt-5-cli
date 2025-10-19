@@ -28,6 +28,8 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
+    expect(options.sqlFilePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
+    expect(options.outputPath).toBe(options.sqlFilePath);
   });
 
   it("--sql-iterations を検証する", () => {
@@ -56,6 +58,24 @@ describe("parseArgs", () => {
     expect(options.debug).toBe(true);
   });
 
+  it("--output で出力パスを指定できる", () => {
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
+      defaults,
+    );
+    expect(options.sqlFilePath).toBe("result.sql");
+    expect(options.outputExplicit).toBe(true);
+  });
+
+  it("--copy でコピー出力を有効化する", () => {
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "--copy", "SELECT"],
+      defaults,
+    );
+    expect(options.copyOutput).toBe(true);
+    expect(options.copyExplicit).toBe(true);
+  });
+
   it("--dsn を省略すると未設定のまま返す", () => {
     const options = parseArgs(["SELECT"], defaults);
     expect(options.dsn).toBeUndefined();
@@ -75,6 +95,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:abcd",
       maxIterations: 7,
       engine: "postgresql",
+      filePath: "query.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -83,6 +104,8 @@ describe("buildSqlInstructionMessages", () => {
     expect(text).toContain("7 回");
     expect(text).toContain("PostgreSQL SELECT クエリ");
     expect(text).toContain("sql_dry_run");
+    expect(text).toContain("query.sql");
+    expect(text).toContain("write_file");
   });
 
   it("MySQL エンジン向けの文言を切り替える", () => {
@@ -91,6 +114,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:mysql",
       maxIterations: 5,
       engine: "mysql",
+      filePath: "output.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -100,6 +124,7 @@ describe("buildSqlInstructionMessages", () => {
     expect(text).toContain("5 回");
     expect(text).toContain("ENUM 型の定義と候補値を取得する");
     expect(text).toContain("information_schema.statistics");
+    expect(text).toContain("output.sql");
   });
 });
 
