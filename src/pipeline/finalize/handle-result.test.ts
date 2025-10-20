@@ -1,87 +1,67 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import type { HistoryStore } from "../history/store.js";
-import {
-  handleResult,
-  resetDeliverOutputImplementation,
-  setDeliverOutputImplementation,
-} from "./handle-result.js";
-
-const deliverOutputSpy = mock(async () => ({
-  file: { absolutePath: "/tmp/file.txt", bytesWritten: 12 },
-  copied: true,
-}));
-
-afterEach(() => {
-  deliverOutputSpy.mock.calls.length = 0;
-  deliverOutputSpy.mock.results.length = 0;
-  resetDeliverOutputImplementation();
-});
+/**
+ * @file finalize 層のエントリーポイントに対するユニットテスト。
+ */
+import { describe, expect, it, mock } from "bun:test";
+import type { FinalizeRequest } from "./types.js";
+import { handleResult } from "./handle-result.js";
 
 describe("handleResult", () => {
-  test("出力パラメータなしで標準出力と exitCode を返す", async () => {
-    setDeliverOutputImplementation(deliverOutputSpy);
-    const outcome = await handleResult({
-      mode: "ask",
-      content: "hello",
-    });
-    expect(outcome.exitCode).toBe(0);
-    expect(outcome.stdout).toBe("hello");
-    expect(outcome.output).toBeUndefined();
-    expect(deliverOutputSpy).not.toHaveBeenCalled();
-  });
-
-  test("出力指定がある場合は deliverOutput を呼び結果を含める", async () => {
-    setDeliverOutputImplementation(deliverOutputSpy);
-    const outcome = await handleResult({
-      mode: "ask",
-      content: "artifact",
-      output: {
-        filePath: "output.txt",
-        copy: true,
+  it("既定のコンテンツを出力ハンドラーへ渡し、成果物メタデータを返す", async () => {
+    const delivery = mock(async () => ({
+      file: {
+        absolutePath: "/workspace/out.txt",
+        bytesWritten: 42,
       },
-    });
-    expect(deliverOutputSpy).toHaveBeenCalledTimes(1);
-    const [callArgs] = deliverOutputSpy.mock.calls[0] ?? [];
-    expect(callArgs).toMatchObject({ content: "artifact", filePath: "output.txt", copy: true });
-    expect(outcome.output?.filePath).toBe("/tmp/file.txt");
-    expect(outcome.output?.bytesWritten).toBe(12);
-    expect(outcome.output?.copied).toBe(true);
-  });
+      copied: true,
+    }));
 
-  test("履歴指定がある場合は upsertConversation を呼ぶ", async () => {
-    const upsertConversation = mock(() => {});
-    const fakeStore: Pick<HistoryStore<any>, "upsertConversation"> = {
-      upsertConversation,
+    const request: FinalizeRequest = {
+      content: "primary output",
+      output: {
+        handler: delivery,
+        params: {
+          filePath: "out.txt",
+        },
+      },
     };
 
-    const outcome = await handleResult({
-      mode: "ask",
-      content: "history ok",
+    const outcome = await handleResult(request);
+
+    expect(delivery).toHaveBeenCalledTimes(1);
+    const [firstCall] = delivery.mock.calls;
+    expect(firstCall![0]).toMatchObject({
+      content: "primary output",
+      filePath: "out.txt",
+    });
+    expect(outcome.output).toEqual({
+      filePath: "/workspace/out.txt",
+      bytesWritten: 42,
+      copied: true,
+    });
+  });
+
+  it("履歴エフェクトを実行する", async () => {
+    const historyEffect = mock(() => Promise.resolve());
+
+    await handleResult({
+      content: "history",
       history: {
-        store: fakeStore as HistoryStore,
-        metadata: {
-          model: "gpt-5-mini",
-          effort: "medium",
-          verbosity: "medium",
-        },
-        context: {
-          isNewConversation: true,
-          titleToUse: "title",
-        },
-        responseId: "resp-123",
-        userText: "user",
-        assistantText: "assistant",
-        contextData: { foo: "bar" },
+        run: historyEffect,
       },
     });
-    expect(outcome.exitCode).toBe(0);
-    expect(upsertConversation).toHaveBeenCalledTimes(1);
-    const [upsertArg] = upsertConversation.mock.calls[0] ?? [];
-    expect(upsertArg).toMatchObject({
-      responseId: "resp-123",
-      assistantText: "assistant",
-      userText: "user",
-      contextData: { foo: "bar" },
+
+    expect(historyEffect).toHaveBeenCalledTimes(1);
+  });
+
+  it("stdout と exitCode を上書きできる", async () => {
+    const outcome = await handleResult({
+      content: "fallback",
+      stdout: "custom stdout",
+      exitCode: 1,
     });
+
+    expect(outcome.stdout).toBe("custom stdout");
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.output).toBeUndefined();
   });
 });

@@ -33,7 +33,8 @@ import {
 import {
   handleResult,
   generateDefaultOutputPath,
-  type FinalizeHistoryContext,
+  type FinalizeDeliveryInstruction,
+  type FinalizeHistoryEffect,
 } from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
@@ -798,8 +799,9 @@ async function runSqlCli(): Promise<void> {
         ? options.outputPath
         : undefined;
 
-    let finalizeHistory: FinalizeHistoryContext<SqlCliHistoryStoreContext> | undefined;
+    let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
     if (agentResult.responseId) {
+      const responseId = agentResult.responseId;
       const previousContextRaw = context.activeEntry?.context as
         | SqlCliHistoryStoreContext
         | undefined;
@@ -820,41 +822,58 @@ async function runSqlCli(): Promise<void> {
         file: historyOutputFile,
         copy: options.copyOutput ? true : undefined,
       };
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext: previousContextRaw,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
+      finalizeHistoryEffect = {
+        run: () =>
+          historyStore.upsertConversation({
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            context: {
+              isNewConversation: context.isNewConversation,
+              titleToUse: context.titleToUse,
+              previousResponseId: context.previousResponseId,
+              activeLastResponseId: context.activeLastResponseId,
+              resumeSummaryText: context.resumeSummaryText,
+              resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
+              previousContext: previousContextRaw,
+            },
+            responseId,
+            userText: determine.inputText,
+            assistantText: content,
+            contextData: historyContext,
+          }),
       };
     }
 
-    const finalizeOutcome = await handleResult<SqlCliHistoryStoreContext>({
-      mode: "sql",
+    const hasSummaryOutputPath = typeof summaryOutputPath === "string";
+    const finalizeOutputInstruction =
+      hasSummaryOutputPath || options.copyOutput
+        ? ({
+            params: {
+              ...(hasSummaryOutputPath ? { filePath: summaryOutputPath! } : {}),
+              ...(options.copyOutput
+                ? {
+                    copy: true,
+                    ...(options.sqlFilePath
+                      ? {
+                          copySource: {
+                            type: "file" as const,
+                            filePath: options.sqlFilePath,
+                          },
+                        }
+                      : {}),
+                  }
+                : {}),
+            },
+          } satisfies FinalizeDeliveryInstruction)
+        : undefined;
+
+    const finalizeOutcome = await handleResult({
       content,
-      output: {
-        filePath: summaryOutputPath,
-        copy: options.copyOutput,
-        copySource: {
-          type: "file",
-          filePath: options.sqlFilePath,
-        },
-      },
-      history: finalizeHistory,
+      output: finalizeOutputInstruction,
+      history: finalizeHistoryEffect,
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {

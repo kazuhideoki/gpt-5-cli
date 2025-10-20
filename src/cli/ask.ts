@@ -13,8 +13,11 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../pipeline/input/options.js";
-import { handleResult } from "../pipeline/finalize/index.js";
-import type { FinalizeHistoryContext } from "../pipeline/finalize/index.js";
+import {
+  handleResult,
+  type FinalizeDeliveryInstruction,
+  type FinalizeHistoryEffect,
+} from "../pipeline/finalize/index.js";
 import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -419,8 +422,9 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    let finalizeHistory: FinalizeHistoryContext<AskCliHistoryStoreContext> | undefined;
+    let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
     if (agentResult.responseId) {
+      const responseId = agentResult.responseId;
       const previousContextRaw = context.activeEntry?.context as
         | AskCliHistoryStoreContext
         | undefined;
@@ -449,37 +453,46 @@ async function main(): Promise<void> {
       } else if (historyContext.output) {
         delete historyContext.output;
       }
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
+      finalizeHistoryEffect = {
+        run: () =>
+          historyStore.upsertConversation({
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            context: {
+              isNewConversation: context.isNewConversation,
+              titleToUse: context.titleToUse,
+              previousResponseId: context.previousResponseId,
+              activeLastResponseId: context.activeLastResponseId,
+              resumeSummaryText: context.resumeSummaryText,
+              resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
+              previousContext,
+            },
+            responseId,
+            userText: determine.inputText,
+            assistantText: content,
+            contextData: historyContext,
+          }),
       };
     }
 
-    const finalizeOutcome = await handleResult<AskCliHistoryStoreContext>({
-      mode: "ask",
+    const shouldWriteFile = typeof options.outputPath === "string";
+    const finalizeOutputInstruction =
+      shouldWriteFile || options.copyOutput
+        ? ({
+            params: {
+              ...(shouldWriteFile ? { filePath: options.outputPath! } : {}),
+              ...(options.copyOutput ? { copy: true } : {}),
+            },
+          } satisfies FinalizeDeliveryInstruction)
+        : undefined;
+
+    const finalizeOutcome = await handleResult({
       content,
-      output: {
-        filePath: options.outputPath,
-        copy: options.copyOutput,
-      },
-      history: finalizeHistory,
+      output: finalizeOutputInstruction,
+      history: finalizeHistoryEffect,
     });
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

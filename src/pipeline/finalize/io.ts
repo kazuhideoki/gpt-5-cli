@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-type CopySource =
+export type CopySource =
   | {
       type: "content";
       value: string;
@@ -36,7 +36,7 @@ export interface DefaultOutputPathResult {
 
 export const DEFAULT_OUTPUT_DIR_ENV = "GPT_5_CLI_OUTPUT_DIR";
 
-interface DeliverOutputParams {
+export interface DeliverOutputParams {
   /** 書き出す本文。 */
   content: string;
   /** CLI の実行ルート。既定は `process.cwd()` を利用する。 */
@@ -49,7 +49,7 @@ interface DeliverOutputParams {
   copySource?: CopySource;
 }
 
-interface DeliverOutputResult {
+export interface DeliverOutputResult {
   file?: {
     absolutePath: string;
     bytesWritten: number;
