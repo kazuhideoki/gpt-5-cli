@@ -1,8 +1,10 @@
+import type { EffortLevelValue, VerbosityLevelValue } from "../foundation/env.js";
+
 /** OpenAI Reasoning APIへ渡す effort レベル。 */
-export type EffortLevel = "low" | "medium" | "high";
+export type EffortLevel = EffortLevelValue;
 
 /** アシスタント出力の詳細度レベル。 */
-export type VerbosityLevel = "low" | "medium" | "high";
+export type VerbosityLevel = VerbosityLevelValue;
 
 /** CLI が扱うタスクモード。 */
 export type TaskMode = "ask" | "d2" | "mermaid" | "sql";

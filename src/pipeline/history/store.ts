@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { expandHome } from "../../foundation/paths.js";
 import type {
   EffortLevel,
   HistoryEntry as CoreHistoryEntry,
@@ -70,6 +71,33 @@ const baseHistoryEntrySchema = z.object({
 export type HistoryTurn = CoreHistoryTurn;
 
 export type HistoryEntry<TContext = unknown> = CoreHistoryEntry<TContext>;
+
+/**
+ * 履歴ファイルの保存先パスを決定する。
+ *
+ * @param defaultPath 既定パス。
+ * @returns 解析済みの絶対パス。
+ */
+export function resolveHistoryPath(defaultPath?: string): string {
+  const configured = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+  if (typeof configured === "string") {
+    const trimmed = configured.trim();
+    if (trimmed.length === 0) {
+      throw new Error("GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.");
+    }
+    const expanded = expandHome(trimmed);
+    return path.resolve(expanded);
+  }
+  if (typeof defaultPath === "string") {
+    const trimmed = defaultPath.trim();
+    if (trimmed.length === 0) {
+      throw new Error("Default history path is empty.");
+    }
+    const expanded = expandHome(trimmed);
+    return path.resolve(expanded);
+  }
+  throw new Error("GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.");
+}
 
 function createHistoryEntrySchema<TContext>(
   contextSchema?: z.ZodType<TContext>,

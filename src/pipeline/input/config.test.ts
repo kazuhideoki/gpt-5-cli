@@ -2,12 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test"
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ROOT_DIR } from "../../foundation/paths.js";
 import {
-  ROOT_DIR,
   DEFAULT_MAX_ITERATIONS,
   loadDefaults,
   loadEnvironment,
-  resolveHistoryPath,
   resolvePromptsDir,
 } from "./config.js";
 
@@ -28,23 +27,23 @@ const envBackup = new Map<string, string | undefined>();
 let tempDir: string | null = null;
 
 beforeEach(() => {
-  envKeys.forEach((key) => {
+  for (const key of envKeys) {
     envBackup.set(key, process.env[key]);
     delete process.env[key];
-  });
+  }
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-config-test-"));
   process.env.HOME = tempDir;
 });
 
 afterEach(() => {
-  envKeys.forEach((key) => {
+  for (const key of envKeys) {
     const original = envBackup.get(key);
     if (original === undefined) {
       delete process.env[key];
     } else {
       process.env[key] = original;
     }
-  });
+  }
   envBackup.clear();
 });
 
@@ -95,35 +94,6 @@ describe("loadEnvironment", () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
-  });
-});
-
-describe("resolveHistoryPath", () => {
-  it("環境変数が設定されていれば展開して返す", () => {
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/log.json";
-    const resolved = resolveHistoryPath("/default.json");
-    expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
-  });
-
-  it("環境変数が未設定ならエラーになる", () => {
-    expect(() => resolveHistoryPath()).toThrow(
-      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
-    );
-  });
-
-  it("空文字列を設定するとエラーになる", () => {
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "   ";
-    expect(() => resolveHistoryPath("/default.json")).toThrow(
-      "GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.",
-    );
-  });
-
-  it("HOME が無い状態で ~ を使うとエラーになる", () => {
-    delete process.env.HOME;
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history.json";
-    expect(() => resolveHistoryPath("/default.json")).toThrow(
-      "HOME environment variable is required when using '~' paths.",
-    );
   });
 });
 
@@ -197,13 +167,5 @@ describe("loadDefaults", () => {
     );
     expect(defaults.promptsDir).toBe(path.resolve(path.join(process.env.HOME!, "data/prompts")));
     expect(defaults.maxIterations).toBe(5);
-  });
-
-  it("不正なレベルはエラーになる", () => {
-    process.env.OPENAI_DEFAULT_EFFORT = "invalid";
-    process.env.OPENAI_DEFAULT_VERBOSITY = "other";
-    expect(() => loadDefaults()).toThrow(
-      'OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high". Received: invalid',
-    );
   });
 });

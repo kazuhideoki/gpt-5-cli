@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { HistoryEntry } from "./store.js";
-import { HistoryStore } from "./store.js";
+import { HistoryStore, resolveHistoryPath } from "./store.js";
 import { printHistoryDetail, printHistoryList } from "./output.js";
 
 interface TestContext {
@@ -15,6 +15,7 @@ interface TestContext {
 let tempDir: string;
 let historyPath: string;
 let store: HistoryStore<TestContext>;
+const originalHome = process.env.HOME;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-"));
@@ -22,9 +23,15 @@ beforeEach(() => {
   store = new HistoryStore<TestContext>(historyPath, {
     entryFilter: (entry) => entry.context?.cli === "ask" || !entry.context?.cli,
   });
+  process.env.HOME = tempDir;
 });
 
 afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -265,6 +272,41 @@ describe("HistoryStore", () => {
     const entry = store.loadEntries()[0];
     expect(entry.context?.cli).toBe("d2");
     expect(entry.context?.file_path).toBe(absPath);
+  });
+});
+
+describe("resolveHistoryPath", () => {
+  afterEach(() => {
+    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+  });
+
+  it("環境変数が設定されていれば展開して返す", () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/log.json";
+    const resolved = resolveHistoryPath("/default.json");
+    expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
+  });
+
+  it("環境変数が未設定ならエラーになる", () => {
+    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+    expect(() => resolveHistoryPath()).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
+    );
+  });
+
+  it("空文字列を設定するとエラーになる", () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "   ";
+    expect(() => resolveHistoryPath("/default.json")).toThrow(
+      "GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.",
+    );
+  });
+
+  it("HOME が無い状態で ~ を使うとエラーになる", () => {
+    delete process.env.HOME;
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history.json";
+    expect(() => resolveHistoryPath("/default.json")).toThrow(
+      "HOME environment variable is required when using '~' paths.",
+    );
+    process.env.HOME = tempDir;
   });
 });
 
