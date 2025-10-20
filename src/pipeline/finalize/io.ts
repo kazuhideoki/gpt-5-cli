@@ -4,9 +4,9 @@
  */
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { expandHome } from "../../foundation/paths.js";
 
 export type CopySource =
   | {
@@ -62,7 +62,10 @@ function ensureWorkspacePath(rawPath: string, cwd: string): string {
     throw new Error("Error: --output には空でないパスを指定してください");
   }
   const root = path.resolve(cwd);
-  const resolved = path.resolve(root, rawPath);
+  const expanded = expandHome(rawPath.trim());
+  const resolved = path.isAbsolute(expanded)
+    ? path.resolve(expanded)
+    : path.resolve(root, expanded);
   const relative = path.relative(root, resolved);
   const isInside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
   if (!isInside) {
@@ -81,29 +84,11 @@ function formatTimestamp(date: Date): string {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
 }
 
-function expandHomeDirectory(p: string): string {
-  if (!p.startsWith("~")) {
-    return p;
-  }
-  const home = (process.env.HOME ?? os.homedir()).trim();
-  if (!home) {
-    throw new Error("HOME environment variable is required when using '~' paths.");
-  }
-  if (p === "~") {
-    return home;
-  }
-  const remainder = p.slice(1).replace(/^[\\/]+/u, "");
-  if (!remainder) {
-    return home;
-  }
-  return path.join(home, remainder);
-}
-
 function resolveBaseDirectory(mode: string, cwd: string): string {
   const envDirRaw = process.env[DEFAULT_OUTPUT_DIR_ENV]?.trim();
   const normalizedRoot = path.resolve(cwd);
   if (envDirRaw && envDirRaw.length > 0) {
-    const expanded = expandHomeDirectory(envDirRaw);
+    const expanded = expandHome(envDirRaw);
     const candidate = path.resolve(normalizedRoot, expanded);
     const relative = path.relative(normalizedRoot, candidate);
     const isInsideWorkspace =
