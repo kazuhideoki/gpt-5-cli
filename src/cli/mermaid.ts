@@ -95,15 +95,13 @@ function createMermaidCommand(defaults: CliDefaults): Command {
     return Number.parseInt(value, 10);
   };
 
-  const parseMermaidIterations = (value: string): number => {
+  const parseIterations = (value: string): number => {
     if (!/^\d+$/u.test(value)) {
-      throw new InvalidArgumentError(
-        "Error: --mermaid-iterations の値は正の整数で指定してください",
-      );
+      throw new InvalidArgumentError("Error: --iterations の値は正の整数で指定してください");
     }
     const parsed = Number.parseInt(value, 10);
     if (parsed <= 0) {
-      throw new InvalidArgumentError("Error: --mermaid-iterations の値は 1 以上で指定してください");
+      throw new InvalidArgumentError("Error: --iterations の値は 1 以上で指定してください");
     }
     return parsed;
   };
@@ -145,9 +143,9 @@ function createMermaidCommand(defaults: CliDefaults): Command {
     .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
     .option("--copy", "結果をクリップボードにコピーします")
     .option(
-      "-I, --mermaid-iterations <count>",
-      "Mermaidモード時のツール呼び出し上限を指定します",
-      parseMermaidIterations,
+      "-I, --iterations <count>",
+      "イテレーション上限を指定します",
+      parseIterations,
       defaults.maxIterations,
     )
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
@@ -248,7 +246,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
     image?: string;
     output?: string;
     copy?: boolean;
-    mermaidIterations?: number;
+    iterations?: number;
     compact?: number;
   }>();
 
@@ -274,7 +272,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   }
   const copyOutput = Boolean(opts.copy);
   const maxIterations =
-    typeof opts.mermaidIterations === "number" ? opts.mermaidIterations : defaults.maxIterations;
+    typeof opts.iterations === "number" ? opts.iterations : defaults.maxIterations;
   if (!outputPath) {
     outputPath = generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
   }
@@ -316,7 +314,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const outputExplicit = program.getOptionValueSource("output") === "cli";
   const copyExplicit = program.getOptionValueSource("copy") === "cli";
-  const maxIterationsExplicit = program.getOptionValueSource("mermaidIterations") === "cli";
+  const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
 
   try {
     return cliOptionsSchema.parse({

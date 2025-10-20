@@ -32,22 +32,19 @@ describe("parseArgs", () => {
     expect(options.outputPath).toBe(options.sqlFilePath);
   });
 
-  it("--sql-iterations を検証する", () => {
+  it("--iterations でイテレーション上限を設定できる", () => {
     const options = parseArgs(
-      ["--dsn", "postgres://user:pass@host/db", "--sql-iterations", "5", "query"],
+      ["--dsn", "postgres://user:pass@host/db", "--iterations", "5", "query"],
       defaults,
     );
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
-  it("--sql-iterations へ不正な値を渡すとエラー", () => {
+  it("--iterations へ不正な値を渡すとエラー", () => {
     expect(() =>
-      parseArgs(
-        ["--dsn", "postgres://user:pass@host/db", "--sql-iterations", "0", "prompt"],
-        defaults,
-      ),
-    ).toThrow("1 以上");
+      parseArgs(["--dsn", "postgres://user:pass@host/db", "--iterations", "0", "prompt"], defaults),
+    ).toThrow("Error: --iterations の値は 1 以上で指定してください");
   });
 
   it("--debug でデバッグログを有効化する", () => {

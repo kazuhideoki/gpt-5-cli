@@ -68,17 +68,17 @@ describe("mermaid parseArgs", () => {
     expect(options.outputPath).toBe(options.mermaidFilePath);
   });
 
-  it("--mermaid-iterations でツール呼び出し上限を設定できる", () => {
+  it("--iterations でイテレーション上限を設定できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--mermaid-iterations", "5", "図"], defaults);
+    const options = parseArgs(["--iterations", "5", "図"], defaults);
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
-  it("--mermaid-iterations へ不正な値を渡すとエラーになる", () => {
+  it("--iterations へ不正な値を渡すとエラーになる", () => {
     const defaults = createDefaults();
-    expect(() => parseArgs(["--mermaid-iterations", "0", "図"], defaults)).toThrow(
-      "Error: --mermaid-iterations の値は 1 以上で指定してください",
+    expect(() => parseArgs(["--iterations", "0", "図"], defaults)).toThrow(
+      "Error: --iterations の値は 1 以上で指定してください",
     );
   });
 

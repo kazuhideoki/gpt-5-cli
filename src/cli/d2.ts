@@ -125,13 +125,13 @@ function createD2Command(defaults: CliDefaults): Command {
     return Number.parseInt(value, 10);
   };
 
-  const parseD2Iterations = (value: string): number => {
+  const parseIterations = (value: string): number => {
     if (!/^\d+$/u.test(value)) {
-      throw new InvalidArgumentError("Error: --d2-iterations の値は正の整数で指定してください");
+      throw new InvalidArgumentError("Error: --iterations の値は正の整数で指定してください");
     }
     const parsed = Number.parseInt(value, 10);
     if (parsed <= 0) {
-      throw new InvalidArgumentError("Error: --d2-iterations の値は 1 以上で指定してください");
+      throw new InvalidArgumentError("Error: --iterations の値は 1 以上で指定してください");
     }
     return parsed;
   };
@@ -173,9 +173,9 @@ function createD2Command(defaults: CliDefaults): Command {
     .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
     .option("--copy", "結果をクリップボードにコピーします")
     .option(
-      "-I, --d2-iterations <count>",
-      "d2モード時のツール呼び出し上限を指定します",
-      parseD2Iterations,
+      "-I, --iterations <count>",
+      "イテレーション上限を指定します",
+      parseIterations,
       defaults.maxIterations,
     )
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
@@ -276,7 +276,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
     image?: string;
     output?: string;
     copy?: boolean;
-    d2Iterations?: number;
+    iterations?: number;
     compact?: number;
   }>();
 
@@ -302,7 +302,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   }
   const copyOutput = Boolean(opts.copy);
   const maxIterations =
-    typeof opts.d2Iterations === "number" ? opts.d2Iterations : defaults.maxIterations;
+    typeof opts.iterations === "number" ? opts.iterations : defaults.maxIterations;
   if (!outputPath) {
     outputPath = generateDefaultOutputPath({ mode: "d2", extension: "d2" }).relativePath;
   }
@@ -344,7 +344,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const outputExplicit = program.getOptionValueSource("output") === "cli";
   const copyExplicit = program.getOptionValueSource("copy") === "cli";
-  const maxIterationsExplicit = program.getOptionValueSource("d2Iterations") === "cli";
+  const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
 
   try {
     return cliOptionsSchema.parse({
