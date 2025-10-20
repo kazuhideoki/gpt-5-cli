@@ -70,7 +70,7 @@ describe("mermaid CLI integration", () => {
       request_count?: number;
     }>;
     expect(historyData.length).toBe(1);
-   const [entry] = historyData;
+    const [entry] = historyData;
     expect(entry.last_response_id).toBe("resp-mermaid");
     expect(entry.request_count).toBe(1);
     expect(entry.context?.cli).toBe("mermaid");
