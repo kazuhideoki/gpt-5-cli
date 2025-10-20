@@ -37,20 +37,24 @@ describe("finalizeResult", () => {
       upsertConversation,
     } as unknown as HistoryStore<D2HistoryContext>;
 
+    const contextData: D2HistoryContext = {
+      cli: "d2",
+      file_path: "/absolute/path.d2",
+      output: { file: "diagram.d2" },
+    };
+
     const outcome = await finalizeResult<D2HistoryContext>({
       content: "assistant-content",
       userText: "user-input",
       summaryOutputPath: undefined,
       copyOutput: false,
-      defaultOutputFilePath: "diagram.d2",
       history: {
         responseId: "resp-1",
         store: historyStore,
         conversation: baseConversation,
         metadata: { model: "gpt-test", effort: "low", verbosity: "medium" },
         previousContextRaw: undefined,
-        baseContext: { cli: "d2" },
-        contextPath: "/absolute/path.d2",
+        contextData,
       },
     });
 
@@ -59,11 +63,7 @@ describe("finalizeResult", () => {
     const params = call![0];
     expect(params.userText).toBe("user-input");
     expect(params.assistantText).toBe("assistant-content");
-    expect(params.contextData).toEqual({
-      cli: "d2",
-      file_path: "/absolute/path.d2",
-      output: { file: "diagram.d2" },
-    });
+    expect(params.contextData).toEqual(contextData);
     expect(outcome.stdout).toBe("assistant-content");
   });
 
@@ -77,27 +77,29 @@ describe("finalizeResult", () => {
       upsertConversation,
     } as unknown as HistoryStore<MermaidHistoryContext>;
 
+    const contextData: MermaidHistoryContext = {
+      cli: "mermaid",
+      file_path: previousContext.file_path,
+    };
+
     await finalizeResult<MermaidHistoryContext>({
       content: "diagram",
       userText: "describe diagram",
       summaryOutputPath: undefined,
       copyOutput: false,
-      defaultOutputFilePath: undefined,
       history: {
         responseId: "resp-2",
         store: historyStore,
         conversation: baseConversation,
         metadata: { model: "gpt-test", effort: "medium", verbosity: "high" },
         previousContextRaw: previousContext,
-        previousContext,
-        baseContext: { cli: "mermaid" },
+        contextData,
       },
     });
 
     expect(upsertConversation).toHaveBeenCalledTimes(1);
-    const contextData = upsertConversation.mock.calls[0]![0].contextData as MermaidHistoryContext;
-    expect(contextData.file_path).toBe("/from/history.mmd");
-    expect(contextData.output).toBeUndefined();
+    const savedContext = upsertConversation.mock.calls[0]![0].contextData as MermaidHistoryContext;
+    expect(savedContext).toEqual(contextData);
   });
 
   it("responseId が無い場合は履歴更新を実行しない", async () => {
@@ -109,7 +111,6 @@ describe("finalizeResult", () => {
     await finalizeResult<D2HistoryContext>({
       content: "noop",
       userText: "noop",
-      summaryOutputPath: undefined,
       copyOutput: false,
       history: {
         responseId: undefined,
@@ -117,7 +118,7 @@ describe("finalizeResult", () => {
         conversation: baseConversation,
         metadata: { model: "noop", effort: "low", verbosity: "low" },
         previousContextRaw: undefined,
-        baseContext: { cli: "d2" },
+        contextData: { cli: "d2" },
       },
     });
 

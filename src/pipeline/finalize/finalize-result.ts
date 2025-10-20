@@ -1,7 +1,8 @@
 /**
- * @file finalize 層で CLI 共通の終了処理をまとめるユーティリティ。
+ * @file finalizeResult は CLI 各モードの終了処理を共通化する。
+ * 呼び出し側で構築した履歴コンテキストを受け取り、出力・履歴更新をまとめて実行する。
  */
-import type { ConversationContext, EffortLevel, VerbosityLevel, TaskMode } from "../../types.js";
+import type { ConversationContext, EffortLevel, VerbosityLevel } from "../../types.js";
 import type { HistoryStore } from "../history/store.js";
 import { handleResult } from "./handle-result.js";
 import type {
@@ -16,36 +17,23 @@ interface FinalizeResultMetadata {
   verbosity: VerbosityLevel;
 }
 
-interface FinalizeHistoryContextBase {
-  cli: TaskMode;
-  file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
-  [key: string]: unknown;
-}
-
-interface FinalizeResultHistoryOptions<TContext extends FinalizeHistoryContextBase, TStoreContext> {
+export interface FinalizeResultHistoryOptions<TContext> {
   responseId?: string;
-  store: HistoryStore<TStoreContext>;
+  store: HistoryStore<TContext>;
   conversation: ConversationContext;
   metadata: FinalizeResultMetadata;
-  previousContextRaw?: TStoreContext;
-  previousContext?: TContext;
-  baseContext: TContext;
-  contextPath?: string;
+  previousContextRaw?: TContext;
+  contextData: TContext;
 }
 
-interface FinalizeResultParams<TContext extends FinalizeHistoryContextBase, TStoreContext> {
+export interface FinalizeResultParams<TContext> {
   content: string;
   userText: string;
   stdout?: string;
   summaryOutputPath?: string;
   copyOutput: boolean;
-  defaultOutputFilePath?: string;
   copySourceFilePath?: string;
-  history?: FinalizeResultHistoryOptions<TContext, TStoreContext>;
+  history?: FinalizeResultHistoryOptions<TContext>;
 }
 
 /**
@@ -54,20 +42,11 @@ interface FinalizeResultParams<TContext extends FinalizeHistoryContextBase, TSto
  * @param params 終了処理に必要な情報。
  * @returns `handleResult` が返す実行結果。
  */
-export async function finalizeResult<
-  TContext extends FinalizeHistoryContextBase,
-  TStoreContext = TContext,
->(params: FinalizeResultParams<TContext, TStoreContext>): Promise<FinalizeOutcome> {
-  const {
-    content,
-    stdout,
-    summaryOutputPath,
-    copyOutput,
-    defaultOutputFilePath,
-    copySourceFilePath,
-    history,
-    userText,
-  } = params;
+export async function finalizeResult<TContext>(
+  params: FinalizeResultParams<TContext>,
+): Promise<FinalizeOutcome> {
+  const { content, stdout, summaryOutputPath, copyOutput, copySourceFilePath, history, userText } =
+    params;
 
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
     summaryOutputPath || copyOutput
@@ -93,25 +72,7 @@ export async function finalizeResult<
 
   let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
   if (history?.responseId) {
-    const responseId = history.responseId;
-    const previousContext = history.previousContext;
-    const historyContext: TContext = {
-      ...history.baseContext,
-    };
-    const contextPath = history.contextPath;
-    const fallbackPath = defaultOutputFilePath ?? previousContext?.file_path;
-    if (contextPath) {
-      historyContext.file_path = contextPath;
-    } else if (fallbackPath) {
-      historyContext.file_path = fallbackPath;
-    }
-    const historyOutputFile = summaryOutputPath ?? defaultOutputFilePath;
-    if (historyOutputFile || copyOutput) {
-      historyContext.output = {
-        file: historyOutputFile,
-        ...(copyOutput ? { copy: true } : {}),
-      };
-    }
+    const { responseId } = history;
     finalizeHistoryEffect = {
       run: () =>
         history.store.upsertConversation({
@@ -128,7 +89,7 @@ export async function finalizeResult<
           responseId,
           userText,
           assistantText: content,
-          contextData: historyContext as unknown as TStoreContext,
+          contextData: history.contextData,
         }),
     };
   }

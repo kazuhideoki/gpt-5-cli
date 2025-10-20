@@ -18,7 +18,11 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
 } from "../pipeline/process/tools/index.js";
-import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
+import {
+  finalizeResult,
+  generateDefaultOutputPath,
+  buildFileHistoryContext,
+} from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -570,15 +574,19 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
     const previousContext = isMermaidHistoryContext(previousContextRaw)
       ? previousContextRaw
       : undefined;
-    const finalizeOutcome = await finalizeResult<
-      MermaidCliHistoryContext,
-      MermaidCliHistoryStoreContext
-    >({
+    const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
+      base: { cli: "mermaid" },
+      contextPath: mermaidContext?.absolutePath,
+      defaultFilePath: options.mermaidFilePath,
+      previousContext,
+      historyOutputFile: summaryOutputPath ?? options.mermaidFilePath,
+      copyOutput: options.copyOutput,
+    });
+    const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
       summaryOutputPath,
       copyOutput: options.copyOutput,
-      defaultOutputFilePath: options.mermaidFilePath,
       copySourceFilePath: options.mermaidFilePath,
       history: agentResult.responseId
         ? {
@@ -591,9 +599,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
               verbosity: options.verbosity,
             },
             previousContextRaw,
-            previousContext,
-            baseContext: { cli: "mermaid" },
-            contextPath: mermaidContext?.absolutePath,
+            contextData: historyContext,
           }
         : undefined,
     });

@@ -2,6 +2,7 @@
  * finalize 層の公開エントリーポイント。
  */
 export { finalizeResult } from "./finalize-result.js";
+export type { FinalizeResultHistoryOptions, FinalizeResultParams } from "./finalize-result.js";
 export { handleResult } from "./handle-result.js";
 export type {
   FinalizeRequest,
@@ -20,3 +21,5 @@ export {
   type DefaultOutputPathParams,
   type DefaultOutputPathResult,
 } from "./io.js";
+export { buildFileHistoryContext } from "./history-context.js";
+export type { FileHistoryContext } from "./history-context.js";

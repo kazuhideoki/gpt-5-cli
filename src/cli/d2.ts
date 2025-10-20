@@ -21,7 +21,11 @@ import {
   WRITE_FILE_TOOL,
   buildCliToolList,
 } from "../pipeline/process/tools/index.js";
-import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
+import {
+  finalizeResult,
+  generateDefaultOutputPath,
+  buildFileHistoryContext,
+} from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -603,12 +607,19 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
 
     const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
     const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
-    const finalizeOutcome = await finalizeResult<D2CliHistoryContext, D2CliHistoryStoreContext>({
+    const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
+      base: { cli: "d2" },
+      contextPath: d2Context?.absolutePath,
+      defaultFilePath: options.d2FilePath,
+      previousContext,
+      historyOutputFile: summaryOutputPath ?? options.d2FilePath,
+      copyOutput: options.copyOutput,
+    });
+    const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
       content,
       userText: determine.inputText,
       summaryOutputPath,
       copyOutput: options.copyOutput,
-      defaultOutputFilePath: options.d2FilePath,
       copySourceFilePath: options.d2FilePath,
       history: agentResult.responseId
         ? {
@@ -621,9 +632,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
               verbosity: options.verbosity,
             },
             previousContextRaw,
-            previousContext,
-            baseContext: { cli: "d2" },
-            contextPath: d2Context?.absolutePath,
+            contextData: historyContext,
           }
         : undefined,
     });
