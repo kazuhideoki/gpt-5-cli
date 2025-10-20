@@ -459,6 +459,8 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
+    const summaryOutputPath = options.outputPath;
+
     const previousContextRaw = context.activeEntry?.context as
       | AskCliHistoryStoreContext
       | undefined;
@@ -471,8 +473,6 @@ async function main(): Promise<void> {
       outputPath: options.outputPath,
       copyOutput: options.copyOutput,
     });
-
-    const summaryOutputPath = options.outputPath;
 
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,

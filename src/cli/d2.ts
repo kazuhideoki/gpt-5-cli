@@ -427,11 +427,11 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
  * d2モードで使用するファイルパスを検証し、コンテキスト情報を構築する。
  *
  * @param options CLIオプション。
- * @returns d2ファイルの存在情報。非d2モード時はundefined。
+ * @returns d2ファイルの存在情報。
  */
-function ensureD2Context(options: D2CliOptions): D2ContextInfo | undefined {
+function ensureD2Context(options: D2CliOptions): D2ContextInfo {
   if (options.taskMode !== "d2") {
-    return undefined;
+    throw new Error("Invariant violation: ensureD2Context は d2 モード専用です");
   }
   const cwd = process.cwd();
   const rawPath = options.d2FilePath;
@@ -582,8 +582,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-d2]",
-      additionalSystemMessages:
-        options.taskMode === "d2" && d2Context ? buildD2InstructionMessages(d2Context) : undefined,
+      additionalSystemMessages: buildD2InstructionMessages(d2Context),
       tools: buildD2ResponseTools(),
     });
     const agentResult = await runAgentConversation({
@@ -609,7 +608,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
     const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
     const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
       base: { cli: "d2" },
-      contextPath: d2Context?.absolutePath,
+      contextPath: d2Context.absolutePath,
       defaultFilePath: options.d2FilePath,
       previousContext,
       historyOutputFile: summaryOutputPath ?? options.d2FilePath,
@@ -637,8 +636,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         : undefined,
     });
 
-    const artifactAbsolutePath =
-      d2Context?.absolutePath ?? path.resolve(process.cwd(), options.d2FilePath);
+    const artifactAbsolutePath = d2Context.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
       console.log(`[gpt-5-cli-d2] output file: ${options.d2FilePath}`);
     }

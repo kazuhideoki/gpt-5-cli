@@ -402,11 +402,11 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
  * Mermaid モードで使用するファイルパスを検証し、コンテキスト情報を構築する。
  *
  * @param options CLIオプション。
- * @returns Mermaidファイルの存在情報。非Mermaidモード時はundefined。
+ * @returns Mermaidファイルの存在情報。
  */
-function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo | undefined {
+function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
   if (options.taskMode !== "mermaid") {
-    return undefined;
+    throw new Error("Invariant violation: ensureMermaidContext は mermaid モード専用です");
   }
   const cwd = process.cwd();
   const rawPath = options.mermaidFilePath;
@@ -546,10 +546,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-mermaid]",
-      additionalSystemMessages:
-        options.taskMode === "mermaid" && mermaidContext
-          ? buildMermaidInstructionMessages(mermaidContext)
-          : undefined,
+      additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
     });
     const agentResult = await runAgentConversation({
       client,
@@ -577,7 +574,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       : undefined;
     const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
       base: { cli: "mermaid" },
-      contextPath: mermaidContext?.absolutePath,
+      contextPath: mermaidContext.absolutePath,
       defaultFilePath: options.mermaidFilePath,
       previousContext,
       historyOutputFile: summaryOutputPath ?? options.mermaidFilePath,
@@ -605,8 +602,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         : undefined,
     });
 
-    const artifactAbsolutePath =
-      mermaidContext?.absolutePath ?? path.resolve(process.cwd(), options.mermaidFilePath);
+    const artifactAbsolutePath = mermaidContext.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
       console.log(`[gpt-5-cli-mermaid] output file: ${options.mermaidFilePath}`);
     }
