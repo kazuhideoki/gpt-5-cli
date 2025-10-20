@@ -19,9 +19,9 @@ import {
   WRITE_FILE_TOOL,
 } from "../pipeline/process/tools/index.js";
 import {
-  handleResult,
+  finalizeResult,
   generateDefaultOutputPath,
-  type FinalizeHistoryContext,
+  buildFileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -33,6 +33,7 @@ import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
+  // TODO 単に filePath にすると、もう少し筋よく整理可能
   mermaidFilePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
@@ -568,64 +569,40 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         ? options.outputPath
         : undefined;
 
-    let finalizeHistory: FinalizeHistoryContext<MermaidCliHistoryStoreContext> | undefined;
-    if (agentResult.responseId) {
-      const previousContextRaw = context.activeEntry?.context as
-        | MermaidCliHistoryStoreContext
-        | undefined;
-      const previousContext = isMermaidHistoryContext(previousContextRaw)
-        ? previousContextRaw
-        : undefined;
-      const historyContext: MermaidCliHistoryContext = { cli: "mermaid" };
-      const contextPath = mermaidContext?.absolutePath;
-      const filePath = contextPath ?? options.mermaidFilePath ?? previousContext?.file_path;
-      if (contextPath) {
-        historyContext.file_path = contextPath;
-      } else if (filePath) {
-        historyContext.file_path = filePath;
-      }
-      const historyOutputFile = summaryOutputPath ?? options.mermaidFilePath;
-      if (historyOutputFile || options.copyOutput) {
-        historyContext.output = { file: historyOutputFile };
-        if (options.copyOutput) {
-          historyContext.output.copy = true;
-        }
-      }
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext: previousContextRaw,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
-      };
-    }
-
-    const finalizeOutcome = await handleResult<MermaidCliHistoryStoreContext>({
-      mode: "mermaid",
+    const previousContextRaw = context.activeEntry?.context as
+      | MermaidCliHistoryStoreContext
+      | undefined;
+    const previousContext = isMermaidHistoryContext(previousContextRaw)
+      ? previousContextRaw
+      : undefined;
+    const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
+      base: { cli: "mermaid" },
+      contextPath: mermaidContext?.absolutePath,
+      defaultFilePath: options.mermaidFilePath,
+      previousContext,
+      historyOutputFile: summaryOutputPath ?? options.mermaidFilePath,
+      copyOutput: options.copyOutput,
+    });
+    const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
-      output: {
-        filePath: summaryOutputPath,
-        copy: options.copyOutput,
-        copySource: {
-          type: "file",
-          filePath: options.mermaidFilePath,
-        },
-      },
-      history: finalizeHistory,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      copySourceFilePath: options.mermaidFilePath,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            previousContextRaw,
+            contextData: historyContext,
+          }
+        : undefined,
     });
 
     const artifactAbsolutePath =

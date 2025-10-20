@@ -108,6 +108,19 @@ describe("CLI integration", () => {
     const fileContent = fs.readFileSync(absolutePath, "utf8");
     expect(fileContent).toBe("File OK");
 
+    expect(fs.existsSync(historyPath)).toBe(true);
+    const historyRaw = fs.readFileSync(historyPath, "utf8");
+    const historyData = JSON.parse(historyRaw) as Array<
+      Record<string, unknown> & {
+        context?: { output?: { file?: string } };
+        request_count?: number;
+      }
+    >;
+    expect(historyData.length).toBe(1);
+    const [entry] = historyData;
+    expect(entry.request_count).toBe(1);
+    expect(entry.context?.output?.file).toBe(relativePath);
+
     fs.rmSync(absoluteDir, { recursive: true, force: true });
   });
 

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../pipeline/process/responses.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
-import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
+import {
+  buildAskHistoryContext,
+  buildAskResponseTools,
+  createAskWebSearchTool,
+  parseArgs,
+} from "./ask.js";
 import type { CliDefaults, CliOptions, ConversationContext } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { AskCliHistoryContext } from "./ask.js";
@@ -139,6 +144,79 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["-m"], defaults)).toThrow(
       "Invalid option: -m には 0/1/2 を続けてください（例: -m1）",
     );
+  });
+});
+
+describe("buildAskHistoryContext", () => {
+  it("records new output path when provided", () => {
+    const context = buildAskHistoryContext({
+      outputPath: "/tmp/output.txt",
+      copyOutput: false,
+    });
+
+    expect(context).toEqual<AskCliHistoryContext>({
+      cli: "ask",
+      output: {
+        file: "/tmp/output.txt",
+      },
+    });
+  });
+
+  it("falls back to previous output file when no new path is given", () => {
+    const context = buildAskHistoryContext({
+      previousContext: {
+        cli: "ask",
+        output: {
+          file: "/tmp/previous.txt",
+        },
+      },
+      copyOutput: false,
+    });
+
+    expect(context).toEqual<AskCliHistoryContext>({
+      cli: "ask",
+      output: {
+        file: "/tmp/previous.txt",
+      },
+    });
+  });
+
+  it("includes copy flag only when explicitly requested", () => {
+    const context = buildAskHistoryContext({
+      outputPath: "/tmp/output.txt",
+      copyOutput: true,
+      previousContext: {
+        cli: "ask",
+        output: {
+          file: "/tmp/previous.txt",
+          copy: true,
+        },
+      },
+    });
+
+    expect(context).toEqual<AskCliHistoryContext>({
+      cli: "ask",
+      output: {
+        file: "/tmp/output.txt",
+        copy: true,
+      },
+    });
+  });
+
+  it("drops stale copy-only output when no file is present", () => {
+    const context = buildAskHistoryContext({
+      copyOutput: false,
+      previousContext: {
+        cli: "ask",
+        output: {
+          copy: true,
+        },
+      },
+    });
+
+    expect(context).toEqual<AskCliHistoryContext>({
+      cli: "ask",
+    });
   });
 });
 

@@ -85,6 +85,87 @@ describe("deliverOutput", () => {
 
     expect(copyInvocations).toEqual([]);
   });
+
+  test("filePath に HOME 展開を含むパスを指定できる", async () => {
+    const originalHome = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-home-"));
+    const workspace = path.join(fakeHome, "workspace");
+    await fs.mkdir(workspace, { recursive: true });
+    process.env.HOME = fakeHome;
+    try {
+      const targetPath = "~/workspace/result.txt";
+      await deliverOutput({
+        content: "home expansion",
+        cwd: workspace,
+        filePath: targetPath,
+      });
+      const expectedPath = path.join(fakeHome, "workspace", "result.txt");
+      const written = await fs.readFile(expectedPath, "utf8");
+      expect(written).toBe("home expansion");
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  test("HOME が未設定でもユーザーディレクトリにフォールバックする", async () => {
+    const originalHomeEnv = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-fallback-home-"));
+    const workspace = path.join(fakeHome, "workspace");
+    await fs.mkdir(workspace, { recursive: true });
+
+    const originalHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = () => fakeHome;
+    delete process.env.HOME;
+
+    try {
+      await deliverOutput({
+        content: "fallback expansion",
+        cwd: workspace,
+        filePath: "~/workspace/output.txt",
+      });
+
+      const expectedPath = path.join(fakeHome, "workspace", "output.txt");
+      const written = await fs.readFile(expectedPath, "utf8");
+      expect(written).toBe("fallback expansion");
+    } finally {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+      if (originalHomeEnv === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHomeEnv;
+      }
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  test("ワークスペース外へ出る HOME 展開はエラーになる", async () => {
+    const originalHome = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-home-"));
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-workspace-"));
+    process.env.HOME = fakeHome;
+    try {
+      await expect(
+        deliverOutput({
+          content: "should fail",
+          cwd: workspace,
+          filePath: "~/outside.txt",
+        }),
+      ).rejects.toThrow(/ワークスペース配下/);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+      await fs.rm(fakeHome, { recursive: true, force: true });
+      await fs.rm(workspace, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("generateDefaultOutputPath", () => {

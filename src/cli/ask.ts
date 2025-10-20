@@ -13,8 +13,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../pipeline/input/options.js";
-import { handleResult } from "../pipeline/finalize/index.js";
-import type { FinalizeHistoryContext } from "../pipeline/finalize/index.js";
+import { finalizeResult } from "../pipeline/finalize/index.js";
 import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -41,6 +40,47 @@ const askCliHistoryContextSchema = askCliHistoryContextStrictSchema
 
 export type AskCliHistoryContext = z.infer<typeof askCliHistoryContextStrictSchema>;
 type AskCliHistoryStoreContext = z.infer<typeof askCliHistoryContextSchema>;
+
+function isAskHistoryContext(value: unknown): value is AskCliHistoryContext {
+  return askCliHistoryContextStrictSchema.safeParse(value).success;
+}
+
+interface BuildAskHistoryContextParams {
+  previousContext?: AskCliHistoryContext;
+  outputPath?: string;
+  copyOutput: boolean;
+}
+
+/**
+ * ask CLI が履歴へ保存するコンテキストを構築する。
+ */
+export function buildAskHistoryContext(params: BuildAskHistoryContextParams): AskCliHistoryContext {
+  const { previousContext, outputPath, copyOutput } = params;
+  const historyOutputFile = outputPath ?? previousContext?.output?.file;
+
+  const nextContext: AskCliHistoryContext = {
+    cli: "ask",
+  };
+
+  if (historyOutputFile !== undefined || copyOutput) {
+    nextContext.output = {
+      ...(historyOutputFile !== undefined ? { file: historyOutputFile } : {}),
+      ...(copyOutput ? { copy: true } : {}),
+    };
+    return nextContext;
+  }
+
+  const previousFile = previousContext?.output?.file;
+  if (previousFile !== undefined) {
+    const previousCopy = previousContext?.output?.copy;
+    nextContext.output = {
+      file: previousFile,
+      ...(previousCopy ? { copy: previousCopy } : {}),
+    };
+  }
+
+  return nextContext;
+}
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
@@ -419,67 +459,40 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    let finalizeHistory: FinalizeHistoryContext<AskCliHistoryStoreContext> | undefined;
-    if (agentResult.responseId) {
-      const previousContextRaw = context.activeEntry?.context as
-        | AskCliHistoryStoreContext
-        | undefined;
-      const previousContext =
-        previousContextRaw &&
-        typeof previousContextRaw === "object" &&
-        previousContextRaw !== null &&
-        "cli" in previousContextRaw &&
-        (previousContextRaw as { cli?: unknown }).cli === "ask"
-          ? (previousContextRaw as AskCliHistoryContext)
-          : undefined;
-      const historyContext: AskCliHistoryContext = {
-        cli: "ask",
-        ...(previousContext?.output ? { output: { ...previousContext.output } } : {}),
-      };
-      const historyOutputFile = options.outputPath ?? previousContext?.output?.file;
-      const historyOutputCopy = options.copyOutput ? true : undefined;
-      if (historyOutputFile || typeof historyOutputCopy === "boolean") {
-        historyContext.output = {};
-        if (historyOutputFile) {
-          historyContext.output.file = historyOutputFile;
-        }
-        if (typeof historyOutputCopy === "boolean") {
-          historyContext.output.copy = historyOutputCopy;
-        }
-      } else if (historyContext.output) {
-        delete historyContext.output;
-      }
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
-      };
-    }
+    const previousContextRaw = context.activeEntry?.context as
+      | AskCliHistoryStoreContext
+      | undefined;
+    const previousContext = isAskHistoryContext(previousContextRaw)
+      ? previousContextRaw
+      : undefined;
 
-    const finalizeOutcome = await handleResult<AskCliHistoryStoreContext>({
-      mode: "ask",
+    const historyContext = buildAskHistoryContext({
+      previousContext,
+      outputPath: options.outputPath,
+      copyOutput: options.copyOutput,
+    });
+
+    const summaryOutputPath = options.outputPath;
+
+    const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
-      output: {
-        filePath: options.outputPath,
-        copy: options.copyOutput,
-      },
-      history: finalizeHistory,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            previousContextRaw,
+            contextData: historyContext,
+          }
+        : undefined,
     });
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

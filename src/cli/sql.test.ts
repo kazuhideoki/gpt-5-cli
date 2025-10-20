@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import {
-  buildSqlCliHistoryContext,
+  buildSqlHistoryContext,
   buildSqlInstructionMessages,
   inferSqlEngineFromDsn,
   parseArgs,
@@ -128,9 +128,9 @@ describe("buildSqlInstructionMessages", () => {
   });
 });
 
-describe("buildSqlCliHistoryContext", () => {
+describe("buildSqlHistoryContext", () => {
   it("新しい接続情報を保存する", () => {
-    const context = buildSqlCliHistoryContext(
+    const context = buildSqlHistoryContext(
       {
         dsnHash: "sha256:new",
         dsn: "postgres://report:pass@db:5432/analytics",
@@ -155,7 +155,7 @@ describe("buildSqlCliHistoryContext", () => {
       dsn: "postgres://legacy/db",
       connection: { host: "legacy" },
     };
-    const updated = buildSqlCliHistoryContext(
+    const updated = buildSqlHistoryContext(
       {
         dsnHash: "sha256:new",
         dsn: "postgres://next@host/db",
@@ -163,12 +163,14 @@ describe("buildSqlCliHistoryContext", () => {
         engine: "postgresql",
       },
       existing,
+      { historyOutputFile: "result.sql", copyOutput: true },
     );
     expect(updated.dsn_hash).toBe("sha256:new");
     expect(updated.connection?.host).toBe("next");
     expect(updated.connection?.database).toBe("analytics");
     expect(updated.dsn).toBe("postgres://next@host/db");
     expect(updated.engine).toBe("postgresql");
+    expect(updated.output).toEqual({ file: "result.sql", copy: true });
   });
 });
 

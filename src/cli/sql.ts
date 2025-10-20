@@ -30,11 +30,7 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../pipeline/input/options.js";
-import {
-  handleResult,
-  generateDefaultOutputPath,
-  type FinalizeHistoryContext,
-} from "../pipeline/finalize/index.js";
+import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
@@ -655,10 +651,16 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   ];
 }
 
+interface SqlHistoryContextExtras {
+  historyOutputFile?: string;
+  copyOutput?: boolean;
+}
+
 /** 履歴へ保存する SQL メタデータを組み立て、既存コンテキスト情報と統合する。 */
-export function buildSqlCliHistoryContext(
+export function buildSqlHistoryContext(
   options: SqlCliHistoryContextOptions,
   previousContext?: SqlCliHistoryContext,
+  extras: SqlHistoryContextExtras = {},
 ): SqlCliHistoryContext {
   if (!options.engine) {
     throw new Error("Error: SQL engine is required to build history context");
@@ -681,8 +683,24 @@ export function buildSqlCliHistoryContext(
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
   }
-  if (previousContext?.output) {
-    nextContext.output = { ...previousContext.output };
+  let nextOutput: SqlCliHistoryContext["output"] | undefined;
+  if (extras.historyOutputFile !== undefined) {
+    nextOutput = {
+      file: extras.historyOutputFile,
+      ...(extras.copyOutput ? { copy: true } : {}),
+    };
+  } else if (extras.copyOutput && previousContext?.output?.file) {
+    nextOutput = {
+      file: previousContext.output.file,
+      copy: true,
+    };
+  } else if (previousContext?.output) {
+    nextOutput = { ...previousContext.output };
+  }
+  if (nextOutput) {
+    nextContext.output = nextOutput;
+  } else {
+    delete nextContext.output;
   }
   return nextContext;
 }
@@ -798,63 +816,46 @@ async function runSqlCli(): Promise<void> {
         ? options.outputPath
         : undefined;
 
-    let finalizeHistory: FinalizeHistoryContext<SqlCliHistoryStoreContext> | undefined;
-    if (agentResult.responseId) {
-      const previousContextRaw = context.activeEntry?.context as
-        | SqlCliHistoryStoreContext
-        | undefined;
-      const previousContext = isSqlHistoryContext(previousContextRaw)
-        ? previousContextRaw
-        : undefined;
-      const historyContext = buildSqlCliHistoryContext(
-        {
-          dsnHash: sqlEnv.hash,
-          dsn: sqlEnv.dsn,
-          connection: sqlEnv.connection,
-          engine: sqlEnv.engine,
-        },
-        previousContext,
-      );
-      const historyOutputFile = summaryOutputPath ?? options.sqlFilePath;
-      historyContext.output = {
-        file: historyOutputFile,
-        copy: options.copyOutput ? true : undefined,
-      };
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext: previousContextRaw,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
-      };
-    }
-
-    const finalizeOutcome = await handleResult<SqlCliHistoryStoreContext>({
-      mode: "sql",
-      content,
-      output: {
-        filePath: summaryOutputPath,
-        copy: options.copyOutput,
-        copySource: {
-          type: "file",
-          filePath: options.sqlFilePath,
-        },
+    const previousContextRaw = context.activeEntry?.context as
+      | SqlCliHistoryStoreContext
+      | undefined;
+    const previousContext = isSqlHistoryContext(previousContextRaw)
+      ? previousContextRaw
+      : undefined;
+    const historyContext = buildSqlHistoryContext(
+      {
+        dsnHash: sqlEnv.hash,
+        dsn: sqlEnv.dsn,
+        connection: sqlEnv.connection,
+        engine: sqlEnv.engine,
       },
-      history: finalizeHistory,
+      previousContext,
+      {
+        historyOutputFile: summaryOutputPath ?? options.sqlFilePath,
+        copyOutput: options.copyOutput,
+      },
+    );
+
+    const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
+      content,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      copySourceFilePath: options.sqlFilePath,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            previousContextRaw,
+            contextData: historyContext,
+          }
+        : undefined,
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {

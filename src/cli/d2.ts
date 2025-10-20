@@ -22,9 +22,9 @@ import {
   buildCliToolList,
 } from "../pipeline/process/tools/index.js";
 import {
-  handleResult,
+  finalizeResult,
   generateDefaultOutputPath,
-  type FinalizeHistoryContext,
+  buildFileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -605,64 +605,36 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         ? options.outputPath
         : undefined;
 
-    let finalizeHistory: FinalizeHistoryContext<D2CliHistoryStoreContext> | undefined;
-    if (agentResult.responseId) {
-      const previousContextRaw = context.activeEntry?.context as
-        | D2CliHistoryStoreContext
-        | undefined;
-      const previousContext = isD2HistoryContext(previousContextRaw)
-        ? previousContextRaw
-        : undefined;
-      const historyContext: D2CliHistoryContext = { cli: "d2" };
-      const contextPath = d2Context?.absolutePath;
-      const filePath = contextPath ?? options.d2FilePath ?? previousContext?.file_path;
-      if (contextPath) {
-        historyContext.file_path = contextPath;
-      } else if (filePath) {
-        historyContext.file_path = filePath;
-      }
-      const historyOutputFile = summaryOutputPath ?? options.d2FilePath;
-      if (historyOutputFile || options.copyOutput) {
-        historyContext.output = { file: historyOutputFile };
-        if (options.copyOutput) {
-          historyContext.output.copy = true;
-        }
-      }
-      finalizeHistory = {
-        store: historyStore,
-        metadata: {
-          model: options.model,
-          effort: options.effort,
-          verbosity: options.verbosity,
-        },
-        context: {
-          isNewConversation: context.isNewConversation,
-          titleToUse: context.titleToUse,
-          previousResponseId: context.previousResponseId,
-          activeLastResponseId: context.activeLastResponseId,
-          resumeSummaryText: context.resumeSummaryText,
-          resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext: previousContextRaw,
-        },
-        responseId: agentResult.responseId,
-        userText: determine.inputText,
-        assistantText: content,
-        contextData: historyContext,
-      };
-    }
-
-    const finalizeOutcome = await handleResult<D2CliHistoryStoreContext>({
-      mode: "d2",
+    const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
+    const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
+    const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
+      base: { cli: "d2" },
+      contextPath: d2Context?.absolutePath,
+      defaultFilePath: options.d2FilePath,
+      previousContext,
+      historyOutputFile: summaryOutputPath ?? options.d2FilePath,
+      copyOutput: options.copyOutput,
+    });
+    const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
       content,
-      output: {
-        filePath: summaryOutputPath,
-        copy: options.copyOutput,
-        copySource: {
-          type: "file",
-          filePath: options.d2FilePath,
-        },
-      },
-      history: finalizeHistory,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      copySourceFilePath: options.d2FilePath,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
+            metadata: {
+              model: options.model,
+              effort: options.effort,
+              verbosity: options.verbosity,
+            },
+            previousContextRaw,
+            contextData: historyContext,
+          }
+        : undefined,
     });
 
     const artifactAbsolutePath =
