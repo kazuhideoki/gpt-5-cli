@@ -1,7 +1,7 @@
 /**
  * 履歴ターンを要約用のテキストへ整形するヘルパー。
  */
-import type { HistoryTurn } from "../../core/types.js";
+import type { HistoryTurn } from "../../types.js";
 
 export function formatTurnsForSummary(turns: HistoryTurn[]): string {
   return turns

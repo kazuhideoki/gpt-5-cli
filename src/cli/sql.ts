@@ -34,7 +34,7 @@ import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/i
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 

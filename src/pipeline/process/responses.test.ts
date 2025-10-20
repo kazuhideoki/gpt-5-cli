@@ -5,7 +5,7 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../../core/types.js";
+} from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import type { Response } from "openai/resources/responses/responses";
 import { buildRequest, extractResponseText, performCompact } from "./responses.js";

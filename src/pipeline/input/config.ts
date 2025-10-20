@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 import { ZodError } from "zod";
-import type { CliDefaults } from "../../core/types.js";
+import type { CliDefaults } from "../../types.js";
 import { envConfigSchema, type EnvConfig } from "../../foundation/env.js";
 import { ROOT_DIR, expandHome } from "../../foundation/paths.js";
 import { resolveHistoryPath } from "../history/store.js";

@@ -8,7 +8,7 @@ import {
   inferSqlEngineFromDsn,
   parseArgs,
 } from "./sql.js";
-import type { CliDefaults } from "../core/types.js";
+import type { CliDefaults } from "../types.js";
 
 const defaults: CliDefaults = {
   modelMain: "gpt-5",

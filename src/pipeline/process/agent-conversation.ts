@@ -5,7 +5,7 @@ import type { AgentInputItem, ModelSettings } from "@openai/agents";
 import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import type { CliOptions, OpenAIInputMessage } from "../../core/types.js";
+import type { CliOptions, OpenAIInputMessage } from "../../types.js";
 import type { ToolRegistration } from "./tools/index.js";
 import { buildAgentsToolList } from "./tools/index.js";
 

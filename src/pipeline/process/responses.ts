@@ -15,7 +15,7 @@ import type {
   CliOptions,
   ConversationContext,
   OpenAIInputMessage,
-} from "../../core/types.js";
+} from "../../types.js";
 
 interface BuildRequestParams {
   options: CliOptions;

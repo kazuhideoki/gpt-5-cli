@@ -4,7 +4,7 @@
  */
 import { InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, EffortLevel, VerbosityLevel } from "../../core/types.js";
+import type { CliDefaults, EffortLevel, VerbosityLevel } from "../../types.js";
 
 /** CLI 履歴番号フラグを数値に変換するスキーマ。 */
 const historyIndexSchema = z

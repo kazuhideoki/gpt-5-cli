@@ -1,6 +1,6 @@
 // log-format.ts: パイプライン層で利用するログ整形ユーティリティ。
 // NOTE: 将来的に共通ロギング基盤へ移行する際は foundation/logging (仮) へ再配置する。
-import type { EffortLevel } from "../../core/types.js";
+import type { EffortLevel } from "../../types.js";
 
 type Level = EffortLevel;
 

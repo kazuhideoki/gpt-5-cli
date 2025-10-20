@@ -1,10 +1,10 @@
-import type { EffortLevelValue, VerbosityLevelValue } from "../foundation/env.js";
+import type { EasyInputMessage } from "openai/resources/responses/responses";
 
 /** OpenAI Reasoning APIへ渡す effort レベル。 */
-export type EffortLevel = EffortLevelValue;
+export type EffortLevel = "low" | "medium" | "high";
 
 /** アシスタント出力の詳細度レベル。 */
-export type VerbosityLevel = VerbosityLevelValue;
+export type VerbosityLevel = "low" | "medium" | "high";
 
 /** CLI が扱うタスクモード。 */
 export type TaskMode = "ask" | "d2" | "mermaid" | "sql";
@@ -22,8 +22,6 @@ export interface CliDefaults {
 }
 
 // 以降は CLI/Session 双方から参照される共通型
-import type { EasyInputMessage } from "openai/resources/responses/responses";
-
 export interface HistoryTurn {
   role: string;
   text?: string;

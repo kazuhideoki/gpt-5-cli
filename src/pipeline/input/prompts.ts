@@ -4,7 +4,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import type { TaskMode } from "../../core/types.js";
+import type { TaskMode } from "../../types.js";
 
 /** プロンプトテンプレートとして扱うファイル拡張子。 */
 const PROMPT_EXTENSION = ".md";

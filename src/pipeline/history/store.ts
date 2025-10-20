@@ -11,7 +11,7 @@ import type {
   HistoryEntry as CoreHistoryEntry,
   HistoryTurn as CoreHistoryTurn,
   VerbosityLevel,
-} from "../../core/types.js";
+} from "../../types.js";
 
 /** 履歴に格納される各ターンを検証するスキーマ。 */
 const historyTurnSchema = z.object({

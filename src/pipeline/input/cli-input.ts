@@ -2,7 +2,7 @@
 // NOTE(pipeline/input): 各 CLI 固有の入力前処理は現状 CLI 側に残しており、共通化できる箇所には TODO を付与予定。
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { CliDefaults, CliOptions } from "../../core/types.js";
+import type { CliDefaults, CliOptions } from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { printHistoryDetail, printHistoryList } from "../history/output.js";
 

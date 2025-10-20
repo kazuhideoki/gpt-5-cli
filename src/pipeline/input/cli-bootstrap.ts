@@ -4,7 +4,7 @@ import type { HistoryEntry } from "../history/store.js";
 import { HistoryStore } from "../history/store.js";
 import { loadDefaults, loadEnvironment } from "./config.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";
-import type { CliDefaults, CliOptions } from "../../core/types.js";
+import type { CliDefaults, CliOptions } from "../../types.js";
 import type { z } from "zod";
 
 interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {

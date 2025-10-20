@@ -3,15 +3,16 @@
  * Input/Process 層から参照される検証ロジックをここに集約する。
  */
 import { z } from "zod";
+import type { EffortLevel, VerbosityLevel } from "../types.js";
 
-// NOTE(pipeline/input): 現状は Input 層が主用途だが、core/types で型共有しているため
+// NOTE(pipeline/input): 現状は Input 層が主用途だが、types で型共有しているため
 // レイヤ規約上 foundation に配置している。将来的に型の依存方向を整理できれば
 // input 配下へ移設する選択肢も検討する。
-const effortValues = ["low", "medium", "high"] as const;
-const verbosityValues = ["low", "medium", "high"] as const;
+const effortValues: readonly EffortLevel[] = ["low", "medium", "high"];
+const verbosityValues: readonly VerbosityLevel[] = ["low", "medium", "high"];
 
-export type EffortLevelValue = (typeof effortValues)[number];
-export type VerbosityLevelValue = (typeof verbosityValues)[number];
+export type EffortLevelValue = EffortLevel;
+export type VerbosityLevelValue = VerbosityLevel;
 
 const effortMessage = 'OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high".';
 const verbosityMessage = 'OPENAI_DEFAULT_VERBOSITY must be one of "low", "medium", or "high".';

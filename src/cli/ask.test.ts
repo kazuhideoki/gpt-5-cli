@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../pipeline/process/responses.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
 import { buildAskResponseTools, createAskWebSearchTool, parseArgs } from "./ask.js";
-import type { CliDefaults, CliOptions, ConversationContext } from "../core/types.js";
+import type { CliDefaults, CliOptions, ConversationContext } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { AskCliHistoryContext } from "./ask.js";
 

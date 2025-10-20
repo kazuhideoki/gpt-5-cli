@@ -11,9 +11,7 @@
 以下は本リポジトリの構造と責務です。**推測せず**、必要に応じて該当ファイルを開いて確認してから編集してください。
 
 - `src/cli/` … `default`・`d2`・`mermaid`・`sql` 各モードのエントリーポイント群と共通ランタイム `runtime/` を束ねる。`runtime/` は CLI 初期化・入力分岐などの共通処理。
-- `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/pipeline/process/` や `src/cli/`）から横並びで組み合わせる設計。
-  - `types.ts` … CLI/パイプライン共通の型定義。`foundation/env.ts` のスキーマ由来型を再輸入して公開する。
-  - `formatting.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
+- `src/types.ts` … CLI/パイプライン共通の型定義。effort/verbosity などの基本型もここで定義し、各層がこのファイル経由で契約を共有する。
 - `src/foundation/` … パス解決 (`paths.ts`) や環境変数スキーマ (`env.ts`) など、層を跨いで再利用する基盤ユーティリティ。
 - `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では
   - `finalize/io.ts` に結果処理ユーティリティを移設済み。
@@ -55,7 +53,7 @@
 
 **R4. 参照規律（Biome で強制）**
 
-- `core` から `@pipeline/*`・`@cli/*`・相対 `../**/pipeline/**`・`../**/cli/**` への import を禁止。
+- 層横断の import は `src/types.ts` と `src/foundation/**` に限定し、それ以外で `cli`⇔`pipeline` が直接参照しない。
 - `pipeline/process` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
 - 例外設定は設けない（`biome.json` の `overrides` で強制）。
 

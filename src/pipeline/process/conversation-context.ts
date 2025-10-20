@@ -1,6 +1,6 @@
 // conversation-context.ts: 履歴ストアを元に CLI 用会話コンテキストを構築するユーティリティ。
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
-import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../core/types.js";
+import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
   options: TOptions;

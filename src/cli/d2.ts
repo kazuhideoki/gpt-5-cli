@@ -5,7 +5,7 @@ import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { webSearchTool } from "@openai/agents-openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   expandLegacyShortFlags,

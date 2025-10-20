@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type OpenAI from "openai";
-import type { CliOptions } from "../../core/types.js";
+import type { CliOptions } from "../../types.js";
 import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { ToolRegistration } from "./tools/index.js";
