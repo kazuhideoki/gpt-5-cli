@@ -33,6 +33,7 @@ import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
+  // TODO 単に filePath にすると、もう少し筋よく整理可能
   mermaidFilePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
