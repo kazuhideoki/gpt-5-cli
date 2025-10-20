@@ -42,25 +42,6 @@ const LOG_LABEL = "[gpt-5-cli-sql]";
 
 export type SqlEngine = "postgresql" | "mysql";
 
-const POSTGRES_SQL_TOOL_REGISTRATIONS = [
-  READ_FILE_TOOL,
-  WRITE_FILE_TOOL,
-  SQL_FETCH_TABLE_SCHEMA_TOOL,
-  SQL_FETCH_COLUMN_SCHEMA_TOOL,
-  SQL_FETCH_ENUM_SCHEMA_TOOL,
-  SQL_FETCH_INDEX_SCHEMA_TOOL,
-  SQL_DRY_RUN_TOOL,
-  SQL_FORMAT_TOOL,
-] as const;
-
-// NOTE: MySQL 用ツール実装は今後追加予定。現段階では PostgreSQL 向けツールを暫定で再利用する。
-const MYSQL_SQL_TOOL_REGISTRATIONS = POSTGRES_SQL_TOOL_REGISTRATIONS;
-
-const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATIONS> = {
-  postgresql: POSTGRES_SQL_TOOL_REGISTRATIONS,
-  mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
-};
-
 /** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
   host?: string;
@@ -86,6 +67,25 @@ export interface SqlCliOptions extends CliOptions {
   engine?: SqlEngine;
   sqlFilePath: string;
 }
+
+const POSTGRES_SQL_TOOL_REGISTRATIONS = [
+  READ_FILE_TOOL,
+  WRITE_FILE_TOOL,
+  SQL_FETCH_TABLE_SCHEMA_TOOL,
+  SQL_FETCH_COLUMN_SCHEMA_TOOL,
+  SQL_FETCH_ENUM_SCHEMA_TOOL,
+  SQL_FETCH_INDEX_SCHEMA_TOOL,
+  SQL_DRY_RUN_TOOL,
+  SQL_FORMAT_TOOL,
+] as const;
+
+// NOTE: MySQL 用ツール実装は今後追加予定。現段階では PostgreSQL 向けツールを暫定で再利用する。
+const MYSQL_SQL_TOOL_REGISTRATIONS = POSTGRES_SQL_TOOL_REGISTRATIONS;
+
+const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATIONS> = {
+  postgresql: POSTGRES_SQL_TOOL_REGISTRATIONS,
+  mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
+};
 
 const connectionSchema = z
   .object({
@@ -128,12 +128,47 @@ function isSqlHistoryContext(
   );
 }
 
-/** SQL履歴コンテキストを構築する際の引数一式。 */
-interface SqlCliHistoryContextOptions {
-  dsnHash: string;
-  dsn: string;
-  connection: SqlConnectionMetadata;
-  engine: SqlEngine;
+/**
+ * SQL CLI のヘルプを標準出力へ表示する。
+ *
+ * @param defaults 既定値。
+ * @param options 解析済み CLI オプション。
+ */
+function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
+  console.log("Usage:");
+  console.log("  gpt-5-cli-sql [flag] <input>");
+  console.log("  gpt-5-cli-sql --compact <num>");
+  console.log("");
+  console.log("flag（種類+数字／連結可／ハイフン必須）:");
+  console.log(
+    `  -m0/-m1/-m2 : model => nano/mini/main (${defaults.modelNano}/${defaults.modelMini}/${defaults.modelMain})`,
+  );
+  console.log(`  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`);
+  console.log(`  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`);
+  console.log("  -c          : continue（直前の会話から継続）");
+  console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
+  console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
+  console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
+  console.log("  --debug     : デバッグログを有効化");
+  console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
+  console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
+  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
+  console.log("  --copy      : 結果をクリップボードにコピー");
+  console.log("  -i <path>   : 入力に画像を添付");
+  console.log("");
+  console.log("環境変数(.env):");
+  console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
+  console.log(
+    `  GPT_5_CLI_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数、既定: ${defaults.maxIterations})`,
+  );
+  console.log(
+    "  GPT_5_CLI_HISTORY_INDEX_FILE, GPT_5_CLI_PROMPTS_DIR : 共通設定 (default/d2 と同じ)",
+  );
+  console.log("");
+  console.log("例:");
+  console.log("  gpt-5-cli-sql 既存レポートの集計クエリを高速化したい");
+  console.log("  gpt-5-cli-sql -r2 テーブル定義を一覧して -> 履歴 2 を継続");
+  console.log("  gpt-5-cli-sql --compact 3 -> 履歴 3 を要約");
 }
 
 const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
@@ -403,49 +438,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   }
 }
 
-/**
- * SQL CLI のヘルプを標準出力へ表示する。
- *
- * @param defaults 既定値。
- * @param options 解析済み CLI オプション。
- */
-function printHelp(defaults: CliDefaults, options: SqlCliOptions): void {
-  console.log("Usage:");
-  console.log("  gpt-5-cli-sql [flag] <input>");
-  console.log("  gpt-5-cli-sql --compact <num>");
-  console.log("");
-  console.log("flag（種類+数字／連結可／ハイフン必須）:");
-  console.log(
-    `  -m0/-m1/-m2 : model => nano/mini/main (${defaults.modelNano}/${defaults.modelMini}/${defaults.modelMain})`,
-  );
-  console.log(`  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`);
-  console.log(`  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`);
-  console.log("  -c          : continue（直前の会話から継続）");
-  console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
-  console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
-  console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s1）");
-  console.log("  --debug     : デバッグログを有効化");
-  console.log("  -P <dsn>    : PostgreSQL などの接続文字列 (--dsn)");
-  console.log("  -I <count>  : SQLモード時のツール呼び出し上限 (--sql-iterations)");
-  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
-  console.log("  --copy      : 結果をクリップボードにコピー");
-  console.log("  -i <path>   : 入力に画像を添付");
-  console.log("");
-  console.log("環境変数(.env):");
-  console.log("  SQRUFF_BIN              : sqruff 実行ファイルのパス (既定: sqruff)");
-  console.log(
-    `  GPT_5_CLI_MAX_ITERATIONS : エージェントのツール呼び出し上限 (正の整数、既定: ${defaults.maxIterations})`,
-  );
-  console.log(
-    "  GPT_5_CLI_HISTORY_INDEX_FILE, GPT_5_CLI_PROMPTS_DIR : 共通設定 (default/d2 と同じ)",
-  );
-  console.log("");
-  console.log("例:");
-  console.log("  gpt-5-cli-sql 既存レポートの集計クエリを高速化したい");
-  console.log("  gpt-5-cli-sql -r2 テーブル定義を一覧して -> 履歴 2 を継続");
-  console.log("  gpt-5-cli-sql --compact 3 -> 履歴 3 を要約");
-}
-
 /** DSN をハッシュ化し、履歴に保存しやすい識別子へ変換する。 */
 function hashDsn(dsn: string): string {
   const digest = createHash("sha256").update(dsn).digest("hex");
@@ -654,6 +646,14 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
 interface SqlHistoryContextExtras {
   historyOutputFile?: string;
   copyOutput?: boolean;
+}
+
+/** SQL履歴コンテキストを構築する際の引数一式。 */
+interface SqlCliHistoryContextOptions {
+  dsnHash: string;
+  dsn: string;
+  connection: SqlConnectionMetadata;
+  engine: SqlEngine;
 }
 
 /** 履歴へ保存する SQL メタデータを組み立て、既存コンテキスト情報と統合する。 */

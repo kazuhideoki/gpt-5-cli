@@ -24,6 +24,20 @@ import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
+const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+
+export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
+  const tools = buildCliToolList(ASK_TOOL_REGISTRATIONS) ?? [];
+  return tools.filter((tool) => tool.type !== "web_search_preview");
+}
+
+export function createAskWebSearchTool(): AgentsSdkTool {
+  return webSearchTool({
+    name: "web_search",
+    searchContextSize: "medium",
+  });
+}
+
 const askCliHistoryContextStrictSchema = z.object({
   cli: z.literal("ask"),
   output: z
@@ -80,20 +94,6 @@ export function buildAskHistoryContext(params: BuildAskHistoryContextParams): As
   }
 
   return nextContext;
-}
-
-const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
-
-export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  const tools = buildCliToolList(ASK_TOOL_REGISTRATIONS) ?? [];
-  return tools.filter((tool) => tool.type !== "web_search_preview");
-}
-
-export function createAskWebSearchTool(): AgentsSdkTool {
-  return webSearchTool({
-    name: "web_search",
-    searchContextSize: "medium",
-  });
 }
 
 /**
