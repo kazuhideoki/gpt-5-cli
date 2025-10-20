@@ -18,7 +18,11 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
 } from "../pipeline/process/tools/index.js";
-import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
+import {
+  handleResult,
+  generateDefaultOutputPath,
+  type FinalizeHistoryContext,
+} from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -62,6 +66,17 @@ const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
 
 export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
 type MermaidCliHistoryStoreContext = z.infer<typeof mermaidCliHistoryContextSchema>;
+
+function isMermaidHistoryContext(
+  value: MermaidCliHistoryStoreContext | undefined,
+): value is MermaidCliHistoryContext {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "cli" in value &&
+    (value as { cli?: unknown }).cli === "mermaid"
+  );
+}
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -553,18 +568,14 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         ? options.outputPath
         : undefined;
 
-    await deliverOutput({
-      content,
-      filePath: summaryOutputPath,
-      copy: options.copyOutput,
-      copySource: {
-        type: "file",
-        filePath: options.mermaidFilePath,
-      },
-    });
-
+    let finalizeHistory: FinalizeHistoryContext<MermaidCliHistoryStoreContext> | undefined;
     if (agentResult.responseId) {
-      const previousContext = context.activeEntry?.context as MermaidCliHistoryContext | undefined;
+      const previousContextRaw = context.activeEntry?.context as
+        | MermaidCliHistoryStoreContext
+        | undefined;
+      const previousContext = isMermaidHistoryContext(previousContextRaw)
+        ? previousContextRaw
+        : undefined;
       const historyContext: MermaidCliHistoryContext = { cli: "mermaid" };
       const contextPath = mermaidContext?.absolutePath;
       const filePath = contextPath ?? options.mermaidFilePath ?? previousContext?.file_path;
@@ -580,7 +591,8 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           historyContext.output.copy = true;
         }
       }
-      historyStore.upsertConversation({
+      finalizeHistory = {
+        store: historyStore,
         metadata: {
           model: options.model,
           effort: options.effort,
@@ -593,14 +605,28 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext,
+          previousContext: previousContextRaw,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         contextData: historyContext,
-      });
+      };
     }
+
+    const finalizeOutcome = await handleResult<MermaidCliHistoryStoreContext>({
+      mode: "mermaid",
+      content,
+      output: {
+        filePath: summaryOutputPath,
+        copy: options.copyOutput,
+        copySource: {
+          type: "file",
+          filePath: options.mermaidFilePath,
+        },
+      },
+      history: finalizeHistory,
+    });
 
     const artifactAbsolutePath =
       mermaidContext?.absolutePath ?? path.resolve(process.cwd(), options.mermaidFilePath);
@@ -608,7 +634,7 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
       console.log(`[gpt-5-cli-mermaid] output file: ${options.mermaidFilePath}`);
     }
 
-    process.stdout.write(`${content}\n`);
+    process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);

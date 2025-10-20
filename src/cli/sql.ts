@@ -30,7 +30,11 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../pipeline/input/options.js";
-import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
+import {
+  handleResult,
+  generateDefaultOutputPath,
+  type FinalizeHistoryContext,
+} from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
@@ -116,6 +120,17 @@ const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
 
 export type SqlCliHistoryContext = z.infer<typeof sqlCliHistoryContextStrictSchema>;
 type SqlCliHistoryStoreContext = z.infer<typeof sqlCliHistoryContextSchema>;
+
+function isSqlHistoryContext(
+  value: SqlCliHistoryStoreContext | undefined,
+): value is SqlCliHistoryContext {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "cli" in value &&
+    (value as { cli?: unknown }).cli === "sql"
+  );
+}
 
 /** SQL履歴コンテキストを構築する際の引数一式。 */
 interface SqlCliHistoryContextOptions {
@@ -783,18 +798,14 @@ async function runSqlCli(): Promise<void> {
         ? options.outputPath
         : undefined;
 
-    await deliverOutput({
-      content,
-      filePath: summaryOutputPath,
-      copy: options.copyOutput,
-      copySource: {
-        type: "file",
-        filePath: options.sqlFilePath,
-      },
-    });
-
+    let finalizeHistory: FinalizeHistoryContext<SqlCliHistoryStoreContext> | undefined;
     if (agentResult.responseId) {
-      const previousContext = context.activeEntry?.context as SqlCliHistoryContext | undefined;
+      const previousContextRaw = context.activeEntry?.context as
+        | SqlCliHistoryStoreContext
+        | undefined;
+      const previousContext = isSqlHistoryContext(previousContextRaw)
+        ? previousContextRaw
+        : undefined;
       const historyContext = buildSqlCliHistoryContext(
         {
           dsnHash: sqlEnv.hash,
@@ -809,7 +820,8 @@ async function runSqlCli(): Promise<void> {
         file: historyOutputFile,
         copy: options.copyOutput ? true : undefined,
       };
-      historyStore.upsertConversation({
+      finalizeHistory = {
+        store: historyStore,
         metadata: {
           model: options.model,
           effort: options.effort,
@@ -822,20 +834,34 @@ async function runSqlCli(): Promise<void> {
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext,
+          previousContext: previousContextRaw,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         contextData: historyContext,
-      });
+      };
     }
+
+    const finalizeOutcome = await handleResult<SqlCliHistoryStoreContext>({
+      mode: "sql",
+      content,
+      output: {
+        filePath: summaryOutputPath,
+        copy: options.copyOutput,
+        copySource: {
+          type: "file",
+          filePath: options.sqlFilePath,
+        },
+      },
+      history: finalizeHistory,
+    });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {
       console.log(`[gpt-5-cli-sql] output file: ${options.sqlFilePath}`);
     }
 
-    process.stdout.write(`${content}\n`);
+    process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);

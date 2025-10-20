@@ -143,6 +143,7 @@ describe("d2 CLI integration", () => {
     const firstEntry = historyAfterFirst[0];
     expect(firstEntry.context?.cli).toBe("d2");
     expect(firstEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(firstEntry.context?.output?.file).toBe(relativePath);
     expect(firstEntry.request_count).toBe(1);
 
     const second = await runD2Cli(["-c", "2回目"], env);
@@ -156,6 +157,7 @@ describe("d2 CLI integration", () => {
     expect(secondEntry.context?.cli).toBe("d2");
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(secondEntry.context?.output?.file).toBe(relativePath);
     const third = await runD2Cli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
     expect(third.stdout).toContain("[gpt-5-cli-d2]");
@@ -167,6 +169,7 @@ describe("d2 CLI integration", () => {
     expect(thirdEntry.context?.cli).toBe("d2");
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(thirdEntry.context?.output?.file).toBe(relativePath);
     expect(callIndex).toBe(responses.length);
   });
 
@@ -257,6 +260,7 @@ describe("d2 CLI integration", () => {
     const entry = historyAfterSummary[0];
     expect(entry.context?.cli).toBe("d2");
     expect(entry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(entry.context?.output?.file).toBe(relativePath);
     expect(entry.turns?.length).toBe(1);
     expect(entry.turns?.[0]?.role).toBe("system");
     expect(entry.turns?.[0]?.text).toBe("D2 Summary");

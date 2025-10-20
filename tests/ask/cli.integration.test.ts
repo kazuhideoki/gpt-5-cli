@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
-import { createBaseEnv, createTempHistoryPath, extractUserLines, runAskCli } from "../helpers/cli";
+import {
+  createBaseEnv,
+  createTempHistoryPath,
+  extractUserLines,
+  projectRoot,
+  runAskCli,
+} from "../helpers/cli";
 
 describe("CLI integration", () => {
   let server: ReturnType<typeof Bun.serve>;
@@ -69,6 +77,38 @@ describe("CLI integration", () => {
     expect(entry.turns?.[0]?.text).toBe("正常テスト");
     expect(entry.turns?.[1]?.role).toBe("assistant");
     expect(entry.turns?.[1]?.text).toBe("OK!");
+  });
+
+  test("正常系: --output 指定時にファイルへ保存する", async () => {
+    currentHandler = async (request) => {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/v1/responses") {
+        await request.json();
+        const body = { id: "resp-ask-output", output_text: ["File OK"] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const env = createBaseEnv(server.port, historyPath);
+    const uniqueDir = path.join("tmp", "ask-tests", randomUUID());
+    const relativePath = path.join(uniqueDir, "latest.txt");
+    const absoluteDir = path.resolve(projectRoot, uniqueDir);
+    const absolutePath = path.join(absoluteDir, "latest.txt");
+
+    const result = await runAskCli(["-o", relativePath, "ファイル出力テスト"], env);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[gpt-5-cli]");
+    expect(extractUserLines(result.stdout).at(-1)).toBe("File OK");
+    expect(fs.existsSync(absolutePath)).toBe(true);
+    const fileContent = fs.readFileSync(absolutePath, "utf8");
+    expect(fileContent).toBe("File OK");
+
+    fs.rmSync(absoluteDir, { recursive: true, force: true });
   });
 
   test("異常系: OpenAI エラー時に非ゼロ終了し履歴を残さない", async () => {

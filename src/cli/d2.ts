@@ -21,7 +21,11 @@ import {
   WRITE_FILE_TOOL,
   buildCliToolList,
 } from "../pipeline/process/tools/index.js";
-import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
+import {
+  handleResult,
+  generateDefaultOutputPath,
+  type FinalizeHistoryContext,
+} from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -93,6 +97,17 @@ const d2CliHistoryContextSchema = d2CliHistoryContextStrictSchema
 
 export type D2CliHistoryContext = z.infer<typeof d2CliHistoryContextStrictSchema>;
 type D2CliHistoryStoreContext = z.infer<typeof d2CliHistoryContextSchema>;
+
+function isD2HistoryContext(
+  value: D2CliHistoryStoreContext | undefined,
+): value is D2CliHistoryContext {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    "cli" in value &&
+    (value as { cli?: unknown }).cli === "d2"
+  );
+}
 
 /**
  * CLIの利用方法を標準出力に表示する。
@@ -590,18 +605,14 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         ? options.outputPath
         : undefined;
 
-    await deliverOutput({
-      content,
-      filePath: summaryOutputPath,
-      copy: options.copyOutput,
-      copySource: {
-        type: "file",
-        filePath: options.d2FilePath,
-      },
-    });
-
+    let finalizeHistory: FinalizeHistoryContext<D2CliHistoryStoreContext> | undefined;
     if (agentResult.responseId) {
-      const previousContext = context.activeEntry?.context as D2CliHistoryContext | undefined;
+      const previousContextRaw = context.activeEntry?.context as
+        | D2CliHistoryStoreContext
+        | undefined;
+      const previousContext = isD2HistoryContext(previousContextRaw)
+        ? previousContextRaw
+        : undefined;
       const historyContext: D2CliHistoryContext = { cli: "d2" };
       const contextPath = d2Context?.absolutePath;
       const filePath = contextPath ?? options.d2FilePath ?? previousContext?.file_path;
@@ -617,7 +628,8 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
           historyContext.output.copy = true;
         }
       }
-      historyStore.upsertConversation({
+      finalizeHistory = {
+        store: historyStore,
         metadata: {
           model: options.model,
           effort: options.effort,
@@ -630,14 +642,28 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
           activeLastResponseId: context.activeLastResponseId,
           resumeSummaryText: context.resumeSummaryText,
           resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-          previousContext,
+          previousContext: previousContextRaw,
         },
         responseId: agentResult.responseId,
         userText: determine.inputText,
         assistantText: content,
         contextData: historyContext,
-      });
+      };
     }
+
+    const finalizeOutcome = await handleResult<D2CliHistoryStoreContext>({
+      mode: "d2",
+      content,
+      output: {
+        filePath: summaryOutputPath,
+        copy: options.copyOutput,
+        copySource: {
+          type: "file",
+          filePath: options.d2FilePath,
+        },
+      },
+      history: finalizeHistory,
+    });
 
     const artifactAbsolutePath =
       d2Context?.absolutePath ?? path.resolve(process.cwd(), options.d2FilePath);
@@ -645,7 +671,7 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
       console.log(`[gpt-5-cli-d2] output file: ${options.d2FilePath}`);
     }
 
-    process.stdout.write(`${content}\n`);
+    process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
