@@ -6,7 +6,7 @@ import type {
   ResponseCreateParamsNonStreaming,
   ResponseTextConfig,
 } from "openai/resources/responses/responses";
-import { formatModelValue, formatScaleValue } from "../../core/formatting.js";
+import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
 import { buildCliToolList } from "./tools/index.js";

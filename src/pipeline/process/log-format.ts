@@ -1,4 +1,6 @@
-import type { EffortLevel } from "./types.js";
+// log-format.ts: パイプライン層で利用するログ整形ユーティリティ。
+// NOTE: 将来的に共通ロギング基盤へ移行する際は foundation/logging (仮) へ再配置する。
+import type { EffortLevel } from "../../core/types.js";
 
 type Level = EffortLevel;
 
@@ -24,10 +26,6 @@ function resolveLogStyle(): LogStyle {
 
 /**
  * 指定したレベルに応じて値を強調表示する。
- *
- * @param value 表示文字列。
- * @param level 強調レベル。
- * @returns 装飾済みの文字列。
  */
 export function decorateLevelValue(value: string, level: Level): string {
   const style = resolveLogStyle();
@@ -42,9 +40,6 @@ export function decorateLevelValue(value: string, level: Level): string {
 
 /**
  * 文字列値からeffort/verbosityに対応するレベルを推測する。
- *
- * @param value 比較対象の文字列。
- * @returns 判定されたレベル。
  */
 export function levelForScaleValue(value: string): Level {
   const lower = value.toLowerCase();
@@ -56,12 +51,6 @@ export function levelForScaleValue(value: string): Level {
 
 /**
  * モデル名と既定モデルを比較して推定レベルを返す。
- *
- * @param value モデル名。
- * @param modelMain メインモデル名。
- * @param modelMini ミニモデル名。
- * @param modelNano ナノモデル名。
- * @returns 推定レベル。
  */
 export function levelForModelValue(
   value: string,
@@ -101,3 +90,5 @@ export function formatModelValue(
 export function formatScaleValue(value: string): string {
   return decorateLevelValue(value, levelForScaleValue(value));
 }
+
+// TODO: foundation/logging (仮称) の整備後、resolveLogStyle などの端末依存処理を移設する。
