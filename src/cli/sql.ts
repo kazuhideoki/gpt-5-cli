@@ -8,10 +8,10 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import { computeContext } from "../session/conversation-context.js";
-import { prepareImageData } from "../session/image-attachments.js";
-import { buildRequest, performCompact } from "../session/responses-session.js";
-import { createOpenAIClient } from "../session/openai-client.js";
+import { computeContext } from "../pipeline/process/conversation-context.js";
+import { prepareImageData } from "../pipeline/process/image-attachments.js";
+import { buildRequest, performCompact } from "../pipeline/process/responses.js";
+import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   READ_FILE_TOOL,
   SQL_DRY_RUN_TOOL,
@@ -22,20 +22,21 @@ import {
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
   setSqlEnvironment,
-} from "../core/tools.js";
+} from "../pipeline/process/tools/index.js";
 import {
   expandLegacyShortFlags,
   parseEffortFlag,
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
-import { deliverOutput, generateDefaultOutputPath } from "../core/output.js";
-import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
-import { determineInput } from "./runtime/input.js";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../core/types.js";
-import type { HistoryEntry } from "../core/history.js";
-import { runAgentConversation } from "../session/agent-session.js";
+} from "../pipeline/input/options.js";
+import { deliverOutput, generateDefaultOutputPath } from "../pipeline/finalize/io.js";
+import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
+import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
+import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
+import type { HistoryEntry } from "../pipeline/history/store.js";
+import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 
@@ -707,6 +708,7 @@ async function runSqlCli(): Promise<void> {
       return;
     }
 
+    // TODO(pipeline/input): SQL モード固有の DSN / 出力初期化の一部を input 層へ昇格させるか検討する。
     const context = computeContext(
       options,
       historyStore,

@@ -4,23 +4,24 @@ import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { webSearchTool } from "@openai/agents-openai";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "../core/types.js";
-import { createOpenAIClient } from "../session/openai-client.js";
+import type { CliDefaults, CliOptions } from "../types.js";
+import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   expandLegacyShortFlags,
   parseEffortFlag,
   parseHistoryFlag,
   parseModelFlag,
   parseVerbosityFlag,
-} from "../core/options.js";
-import { deliverOutput } from "../core/output.js";
-import { READ_FILE_TOOL, buildCliToolList } from "../core/tools.js";
-import { computeContext } from "../session/conversation-context.js";
-import { prepareImageData } from "../session/image-attachments.js";
-import { buildRequest, performCompact } from "../session/responses-session.js";
-import { runAgentConversation } from "../session/agent-session.js";
-import { determineInput } from "./runtime/input.js";
-import { bootstrapCli, createCliHistoryEntryFilter } from "./runtime/runner.js";
+} from "../pipeline/input/options.js";
+import { deliverOutput } from "../pipeline/finalize/io.js";
+import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
+import { computeContext } from "../pipeline/process/conversation-context.js";
+import { prepareImageData } from "../pipeline/process/image-attachments.js";
+import { buildRequest, performCompact } from "../pipeline/process/responses.js";
+import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
+import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
+import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 const askCliHistoryContextStrictSchema = z.object({
@@ -369,6 +370,7 @@ async function main(): Promise<void> {
       return;
     }
 
+    // TODO(pipeline/input): ask モードの履歴出力設定を input 層で共有できるよう整理する。
     const context = computeContext(
       options,
       historyStore,

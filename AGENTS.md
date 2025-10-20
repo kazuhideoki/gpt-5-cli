@@ -11,11 +11,18 @@
 以下は本リポジトリの構造と責務です。**推測せず**、必要に応じて該当ファイルを開いて確認してから編集してください。
 
 - `src/cli/` … `default`・`d2`・`mermaid`・`sql` 各モードのエントリーポイント群と共通ランタイム `runtime/` を束ねる。`runtime/` は CLI 初期化・入力分岐などの共通処理。
-- `src/session/` … Responses API を使うチャットセッションの **サービス層**。履歴同期とツール実行のオーケストレーションを担う。Agents SDK 用の `agent-session.ts` もここに並列配置されている。
-- `src/core/` … CLI から利用される **ドメインロジック層**。モジュール同士は `types.ts` の型以外への依存を持たない。サービス層（`src/session/` や `src/cli/`）から横並びで組み合わせる設計。
-  - `config.ts` … 設定の読込・検証と API キー解決（`resolveOpenAIApiKey`）。**他 core モジュールに依存しない**。
-  - `tools.ts` … 関数ツール定義とランタイム生成。Responses API 用ツール配列 `buildCliToolList` を提供。
-  - `options.ts` / `formatting.ts` / `prompts.ts` / `history.ts` … `types.ts` のみ参照する純ユーティリティ。
+- `src/types.ts` … CLI/パイプライン共通の型定義。effort/verbosity などの基本型もここで定義し、各層がこのファイル経由で契約を共有する。
+- `src/foundation/` … パス解決 (`paths.ts`) や環境変数スキーマ (`env.ts`) など、層を跨いで再利用する基盤ユーティリティ。
+- `src/pipeline/` … パイプライン層への再編を進行中。2025-10-19 時点では
+  - `finalize/io.ts` に結果処理ユーティリティを移設済み。
+  - `history/` に履歴インデックスのストレージ(`store.ts`)と CLI 出力整形(`output.ts`)を配置。
+    - `store.ts` で環境変数を用いた履歴パス解決 (`resolveHistoryPath`) も提供。
+  - `process/` にエージェント実行・リクエスト組み立て・会話コンテキスト生成など `session` から移した共通ロジックを配置。`performCompact` の終端副作用などは TODO コメント付きで finalize への移行を計画中。
+    - `openai-client.ts` が API キー解決 (`resolveOpenAIApiKey`) と `OpenAI` インスタンス生成を担う。
+    - `tools/` … 旧 `core/tools.ts` を分割移設した Function Tool 定義と実行ランタイム。`runtime.ts` が `buildCliToolList` / `buildAgentsToolList` を公開し、`filesystem.ts`・`d2.ts`・`mermaid.ts`・`sql.ts` で機能別ツールを管理する。リファクタ移行中につき TODO が残存。
+  - `input/` に CLI 共通の入力判定 (`determineInput`)、フラグ解析 (`options.ts`)、プロンプト解決 (`prompts.ts`) を移設済み。モード固有の前処理は CLI 層に TODO コメント付きで残してある。
+    - `config.ts` が `.env` 読み込みと CLI 既定値 (`loadDefaults`) を提供。
+  - 将来的に `input/` も導入予定。
 
 **ビルド/開発コマンド**（よく使う順）
 
@@ -46,8 +53,8 @@
 
 **R4. 参照規律（Biome で強制）**
 
-- `core` から `@session/*`・`@cli/*`・相対 `../**/session/**`・`../**/cli/**` への import を禁止。
-- `session` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
+- 層横断の import は `src/types.ts` と `src/foundation/**` に限定し、それ以外で `cli`⇔`pipeline` が直接参照しない。
+- `pipeline/process` から `@cli/*`・相対 `../**/cli/**` への import を禁止。
 - 例外設定は設けない（`biome.json` の `overrides` で強制）。
 
 **R5. ログ/出力**

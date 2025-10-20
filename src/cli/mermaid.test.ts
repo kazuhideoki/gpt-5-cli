@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "./runtime/input.js";
+import { determineInput } from "../pipeline/input/cli-input.js";
 import { parseArgs } from "./mermaid.js";
-import type { CliDefaults } from "../core/types.js";
+import type { CliDefaults } from "../types.js";
 import type { MermaidCliOptions } from "./mermaid.js";
-import type { HistoryEntry, HistoryStore } from "../core/history.js";
+import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { MermaidCliHistoryContext } from "./mermaid.js";
 
 type HistoryStoreLike = HistoryStore<MermaidCliHistoryContext>;
