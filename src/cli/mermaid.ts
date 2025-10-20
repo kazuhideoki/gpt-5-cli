@@ -85,57 +85,81 @@ function isMermaidHistoryContext(
  * @param defaults 現在の既定値セット。
  * @param options 解析済みのCLIオプション。
  */
-function printHelp(defaults: CliDefaults, options: MermaidCliOptions): void {
-  console.log("Usage:");
-  console.log("  gpt-5-cli-mermaid [-i <image>] [flag] <input>");
-  console.log("  gpt-5-cli-mermaid --compact <num>");
-  console.log("");
-  console.log("flag（種類+数字／連結可／ハイフン必須）:");
-  console.log(
-    `  -m0/-m1/-m2 : model => nano/mini/main(${defaults.modelNano}/${defaults.modelMini}/${defaults.modelMain})`,
-  );
-  console.log(`  -e0/-e1/-e2 : effort => low/medium/high (既定: ${options.effort})`);
-  console.log(`  -v0/-v1/-v2 : verbosity => low/medium/high (既定: ${options.verbosity})`);
-  console.log("  -c          : continue（直前の会話から継続）");
-  console.log("  -r{num}     : 対応する履歴で対話を再開（例: -r2）");
-  console.log("  -d{num}     : 対応する履歴を削除（例: -d2）");
-  console.log("  -s{num}     : 対応する履歴の対話内容を表示（例: -s2）");
-  console.log("  --debug     : デバッグログを有効化");
-  console.log("");
-  console.log(
-    "  -i <image>   : 入力に画像を添付（$HOME 配下のフルパスまたは 'スクリーンショット *.png'）",
-  );
-  console.log("  -o, --output <path> : 結果を指定ファイルに保存");
-  console.log("  --copy      : 結果をクリップボードにコピー");
-  console.log("  -I <count>  : Mermaidモード時のツール呼び出し上限 (--mermaid-iterations)");
-  console.log(
-    "  ※ `.mmd` など純粋な Mermaid ファイルを推奨。Markdown に埋め込む場合は必ず ```mermaid``` ブロック内に記述してください。",
-  );
-  console.log("");
-  console.log("環境変数(.env):");
-  console.log(
-    "  GPT_5_CLI_HISTORY_INDEX_FILE : 履歴ファイルの保存先（例: ~/Library/Mobile Documents/com~apple~CloudDocs/gpt-5-cli/history_index.json）",
-  );
-  console.log(
-    "  GPT_5_CLI_PROMPTS_DIR        : systemプロンプトテンプレートの配置ディレクトリ（例: ~/Library/Application Support/gpt-5-cli/prompts）",
-  );
-  console.log(
-    `  GPT_5_CLI_MAX_ITERATIONS     : エージェントのツール呼び出し上限（正の整数、既定: ${defaults.maxIterations})`,
-  );
-  console.log("");
-  console.log(
-    `既定: model=${defaults.modelNano}, effort=${options.effort}, verbosity=${options.verbosity}（フラグ未指定時）`,
-  );
-  console.log("");
-  console.log("例:");
-  console.log(
-    "  gpt-5-cli-mermaid -m1e2v2 もっと詳しく -> model=gpt-5-mini(m1), effort=high(e2), verbosity=high(v2)",
-  );
-  console.log(
-    "  gpt-5-cli-mermaid -m0e0v0 箇条書きで   -> model=gpt-5-nano(m0), effort=low(e0), verbosity=low(v0)",
-  );
-  console.log("  gpt-5-cli-mermaid -r                 -> 履歴一覧のみ表示して終了");
-  console.log("  gpt-5-cli-mermaid -r2 続きをやろう   -> 2番目の履歴を使って継続");
+function createMermaidCommand(defaults: CliDefaults): Command {
+  const program = new Command();
+
+  const parseCompactIndex = (value: string): number => {
+    if (!/^\d+$/.test(value)) {
+      throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
+    }
+    return Number.parseInt(value, 10);
+  };
+
+  const parseMermaidIterations = (value: string): number => {
+    if (!/^\d+$/u.test(value)) {
+      throw new InvalidArgumentError(
+        "Error: --mermaid-iterations の値は正の整数で指定してください",
+      );
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (parsed <= 0) {
+      throw new InvalidArgumentError("Error: --mermaid-iterations の値は 1 以上で指定してください");
+    }
+    return parsed;
+  };
+
+  program
+    .exitOverride()
+    .allowUnknownOption(false)
+    .showSuggestionAfterError(false)
+    .configureOutput({
+      writeErr: (str) => {
+        const trimmed = str.replace(/\s+$/u, "");
+        if (trimmed.length > 0) {
+          console.error(trimmed);
+        }
+      },
+    });
+
+  program.helpOption("-?, --help", "ヘルプを表示します");
+  program
+    .option(
+      "-m, --model <index>",
+      "モデルを選択 (0/1/2)",
+      (value) => parseModelFlag(value, defaults),
+      defaults.modelNano,
+    )
+    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortFlag, defaults.effort)
+    .option(
+      "-v, --verbosity <index>",
+      "verbosity を選択 (0/1/2)",
+      parseVerbosityFlag,
+      defaults.verbosity,
+    )
+    .option("-c, --continue-conversation", "直前の会話から継続します")
+    .option("-r, --resume [index]", "指定した番号の履歴から継続します")
+    .option("-d, --delete [index]", "指定した番号の履歴を削除します")
+    .option("-s, --show [index]", "指定した番号の履歴を表示します")
+    .option("--debug", "デバッグログを有効化します")
+    .option("-i, --image <path>", "画像ファイルを添付します")
+    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
+    .option("--copy", "結果をクリップボードにコピーします")
+    .option(
+      "-I, --mermaid-iterations <count>",
+      "Mermaidモード時のツール呼び出し上限を指定します",
+      parseMermaidIterations,
+      defaults.maxIterations,
+    )
+    .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
+
+  program.argument("[input...]", "ユーザー入力");
+
+  return program;
+}
+
+function outputHelp(defaults: CliDefaults, _options: MermaidCliOptions): void {
+  const program = createMermaidCommand(defaults);
+  program.outputHelp();
 }
 
 /** CLI全体のオプションを統合的に検証するスキーマ。 */
@@ -194,90 +218,25 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
  * @returns CLI全体で使用するオプション集合。
  */
 export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
-  const program = new Command();
-
-  /** `--compact` フラグの文字列値を履歴番号として検証する。 */
-  const parseCompactIndex = (value: string): number => {
-    if (!/^\d+$/.test(value)) {
-      throw new InvalidArgumentError("Error: --compact の履歴番号は正の整数で指定してください");
-    }
-    return Number.parseInt(value, 10);
-  };
-
-  /** Mermaidモードのツール呼び出し上限値を検証し、正の整数として解釈する。 */
-  const parseMermaidIterations = (value: string): number => {
-    if (!/^\d+$/u.test(value)) {
-      throw new InvalidArgumentError(
-        "Error: --mermaid-iterations の値は正の整数で指定してください",
-      );
-    }
-    const parsed = Number.parseInt(value, 10);
-    if (parsed <= 0) {
-      throw new InvalidArgumentError("Error: --mermaid-iterations の値は 1 以上で指定してください");
-    }
-    return parsed;
-  };
-
-  program
-    .exitOverride()
-    .allowUnknownOption(false)
-    .showSuggestionAfterError(false)
-    .configureOutput({
-      writeErr: (str) => {
-        const trimmed = str.replace(/\s+$/u, "");
-        if (trimmed.length > 0) {
-          console.error(trimmed);
-        }
-      },
-    });
-
-  program.helpOption(false);
-  program
-    .option("-?, --help", "ヘルプを表示します")
-    .option(
-      "-m, --model <index>",
-      "モデルを選択 (0/1/2)",
-      (value) => parseModelFlag(value, defaults),
-      defaults.modelNano,
-    )
-    .option("-e, --effort <index>", "effort を選択 (0/1/2)", parseEffortFlag, defaults.effort)
-    .option(
-      "-v, --verbosity <index>",
-      "verbosity を選択 (0/1/2)",
-      parseVerbosityFlag,
-      defaults.verbosity,
-    )
-    .option("-c, --continue-conversation", "直前の会話から継続します")
-    .option("-r, --resume [index]", "指定した番号の履歴から継続します")
-    .option("-d, --delete [index]", "指定した番号の履歴を削除します")
-    .option("-s, --show [index]", "指定した番号の履歴を表示します")
-    .option("--debug", "デバッグログを有効化します")
-    .option("-i, --image <path>", "画像ファイルを添付します")
-    .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
-    .option("--copy", "結果をクリップボードにコピーします")
-    .option(
-      "-I, --mermaid-iterations <count>",
-      "Mermaidモード時のツール呼び出し上限を指定します",
-      parseMermaidIterations,
-      defaults.maxIterations,
-    )
-    .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
-
-  program.argument("[input...]", "ユーザー入力");
+  const program = createMermaidCommand(defaults);
 
   const normalizedArgv = expandLegacyShortFlags(argv);
-
+  let helpRequested = false;
   try {
     program.parse(normalizedArgv, { from: "user" });
   } catch (error) {
     if (error instanceof CommanderError) {
-      throw new Error(error.message);
+      if (error.code === "commander.helpDisplayed") {
+        helpRequested = true;
+      } else {
+        throw new Error(error.message);
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   const opts = program.opts<{
-    help?: boolean;
     model: string;
     effort: MermaidCliOptions["effort"];
     verbosity: MermaidCliOptions["verbosity"];
@@ -358,7 +317,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
   const outputExplicit = program.getOptionValueSource("output") === "cli";
   const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("mermaidIterations") === "cli";
-  const helpRequested = Boolean(opts.help);
 
   try {
     return cliOptionsSchema.parse({
@@ -488,7 +446,6 @@ async function main(): Promise<void> {
     });
 
     if (bootstrap.status === "help") {
-      printHelp(bootstrap.defaults, bootstrap.options);
       return;
     }
 
@@ -501,7 +458,7 @@ async function main(): Promise<void> {
     }
 
     const determine = await determineInput(options, historyStore, defaults, {
-      printHelp,
+      printHelp: outputHelp,
     });
     if (determine.kind === "exit") {
       process.exit(determine.code);
