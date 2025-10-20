@@ -13,7 +13,8 @@ import {
   parseModelFlag,
   parseVerbosityFlag,
 } from "../pipeline/input/options.js";
-import { deliverOutput } from "../pipeline/finalize/io.js";
+import { handleResult } from "../pipeline/finalize/index.js";
+import type { FinalizeHistoryContext } from "../pipeline/finalize/index.js";
 import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -418,14 +419,19 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    await deliverOutput({
-      content,
-      filePath: options.outputPath,
-      copy: options.copyOutput,
-    });
-
+    let finalizeHistory: FinalizeHistoryContext<AskCliHistoryStoreContext> | undefined;
     if (agentResult.responseId) {
-      const previousContext = context.activeEntry?.context as AskCliHistoryContext | undefined;
+      const previousContextRaw = context.activeEntry?.context as
+        | AskCliHistoryStoreContext
+        | undefined;
+      const previousContext =
+        previousContextRaw &&
+        typeof previousContextRaw === "object" &&
+        previousContextRaw !== null &&
+        "cli" in previousContextRaw &&
+        (previousContextRaw as { cli?: unknown }).cli === "ask"
+          ? (previousContextRaw as AskCliHistoryContext)
+          : undefined;
       const historyContext: AskCliHistoryContext = {
         cli: "ask",
         ...(previousContext?.output ? { output: { ...previousContext.output } } : {}),
@@ -443,7 +449,8 @@ async function main(): Promise<void> {
       } else if (historyContext.output) {
         delete historyContext.output;
       }
-      historyStore.upsertConversation({
+      finalizeHistory = {
+        store: historyStore,
         metadata: {
           model: options.model,
           effort: options.effort,
@@ -462,10 +469,20 @@ async function main(): Promise<void> {
         userText: determine.inputText,
         assistantText: content,
         contextData: historyContext,
-      });
+      };
     }
 
-    process.stdout.write(`${content}\n`);
+    const finalizeOutcome = await handleResult<AskCliHistoryStoreContext>({
+      mode: "ask",
+      content,
+      output: {
+        filePath: options.outputPath,
+        copy: options.copyOutput,
+      },
+      history: finalizeHistory,
+    });
+
+    process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
       console.error(error.message);
