@@ -70,11 +70,12 @@ describe("mermaid CLI integration", () => {
       request_count?: number;
     }>;
     expect(historyData.length).toBe(1);
-    const [entry] = historyData;
+   const [entry] = historyData;
     expect(entry.last_response_id).toBe("resp-mermaid");
     expect(entry.request_count).toBe(1);
     expect(entry.context?.cli).toBe("mermaid");
     expect(entry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(entry.context?.output?.file).toBe(relativePath);
     expect(entry.turns?.length).toBe(2);
     expect(entry.turns?.[0]?.role).toBe("user");
     expect(entry.turns?.[0]?.text).toBe("Mermaid 図を作成");
@@ -147,6 +148,7 @@ describe("mermaid CLI integration", () => {
     const firstEntry = historyAfterFirst[0];
     expect(firstEntry.context?.cli).toBe("mermaid");
     expect(firstEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(firstEntry.context?.output?.file).toBe(relativePath);
     expect(firstEntry.request_count).toBe(1);
 
     const second = await runMermaidCli(["-c", "2回目"], env);
@@ -160,6 +162,7 @@ describe("mermaid CLI integration", () => {
     expect(secondEntry.context?.cli).toBe("mermaid");
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(secondEntry.context?.output?.file).toBe(relativePath);
 
     const third = await runMermaidCli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
@@ -172,6 +175,7 @@ describe("mermaid CLI integration", () => {
     expect(thirdEntry.context?.cli).toBe("mermaid");
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.context?.file_path).toBe(expectedAbsolutePath);
+    expect(thirdEntry.context?.output?.file).toBe(relativePath);
 
     const summary = await runMermaidCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
@@ -187,6 +191,7 @@ describe("mermaid CLI integration", () => {
     expect(summaryEntry.turns?.[0]?.role).toBe("system");
     expect(summaryEntry.turns?.[0]?.text).toBe("Mermaid Summary");
     expect(summaryEntry.resume?.summary?.text).toBe("Mermaid Summary");
+    expect(summaryEntry.context?.output?.file).toBe(relativePath);
     expect(callIndex).toBe(responses.length);
   });
 
