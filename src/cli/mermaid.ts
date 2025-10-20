@@ -475,8 +475,9 @@ function buildMermaidInstructionMessages(mermaidContext: MermaidContextInfo): Op
 /**
  * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
  */
-export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Promise<void> {
+async function main(): Promise<void> {
   try {
+    const argv = process.argv.slice(2);
     const bootstrap = bootstrapCli<MermaidCliOptions, MermaidCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-mermaid]",
@@ -619,5 +620,5 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
 }
 
 if (import.meta.main) {
-  await runMermaidCli();
+  await main();
 }

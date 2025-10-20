@@ -511,8 +511,9 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
 /**
  * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
  */
-export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<void> {
+async function main(): Promise<void> {
   try {
+    const argv = process.argv.slice(2);
     const bootstrap = bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-d2]",
@@ -653,5 +654,5 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
 }
 
 if (import.meta.main) {
-  await runD2Cli();
+  await main();
 }

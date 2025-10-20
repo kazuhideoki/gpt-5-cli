@@ -708,7 +708,7 @@ export function buildSqlHistoryContext(
 /**
  * SQLモード CLI のエントリーポイント。環境初期化からAPI利用・履歴更新までを統括する。
  */
-async function runSqlCli(): Promise<void> {
+async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
     const bootstrap = bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
@@ -874,5 +874,5 @@ async function runSqlCli(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await runSqlCli();
+  await main();
 }
