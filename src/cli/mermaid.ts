@@ -18,12 +18,7 @@ import {
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
 } from "../pipeline/process/tools/index.js";
-import {
-  handleResult,
-  generateDefaultOutputPath,
-  type FinalizeDeliveryInstruction,
-  type FinalizeHistoryEffect,
-} from "../pipeline/finalize/index.js";
+import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -569,82 +564,38 @@ export async function runMermaidCli(argv: string[] = process.argv.slice(2)): Pro
         ? options.outputPath
         : undefined;
 
-    let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
-    if (agentResult.responseId) {
-      const responseId = agentResult.responseId;
-      const previousContextRaw = context.activeEntry?.context as
-        | MermaidCliHistoryStoreContext
-        | undefined;
-      const previousContext = isMermaidHistoryContext(previousContextRaw)
-        ? previousContextRaw
-        : undefined;
-      const historyContext: MermaidCliHistoryContext = { cli: "mermaid" };
-      const contextPath = mermaidContext?.absolutePath;
-      const filePath = contextPath ?? options.mermaidFilePath ?? previousContext?.file_path;
-      if (contextPath) {
-        historyContext.file_path = contextPath;
-      } else if (filePath) {
-        historyContext.file_path = filePath;
-      }
-      const historyOutputFile = summaryOutputPath ?? options.mermaidFilePath;
-      if (historyOutputFile || options.copyOutput) {
-        historyContext.output = { file: historyOutputFile };
-        if (options.copyOutput) {
-          historyContext.output.copy = true;
-        }
-      }
-      finalizeHistoryEffect = {
-        run: () =>
-          historyStore.upsertConversation({
+    const previousContextRaw = context.activeEntry?.context as
+      | MermaidCliHistoryStoreContext
+      | undefined;
+    const previousContext = isMermaidHistoryContext(previousContextRaw)
+      ? previousContextRaw
+      : undefined;
+    const finalizeOutcome = await finalizeResult<
+      MermaidCliHistoryContext,
+      MermaidCliHistoryStoreContext
+    >({
+      content,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      defaultOutputFilePath: options.mermaidFilePath,
+      copySourceFilePath: options.mermaidFilePath,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
             metadata: {
               model: options.model,
               effort: options.effort,
               verbosity: options.verbosity,
             },
-            context: {
-              isNewConversation: context.isNewConversation,
-              titleToUse: context.titleToUse,
-              previousResponseId: context.previousResponseId,
-              activeLastResponseId: context.activeLastResponseId,
-              resumeSummaryText: context.resumeSummaryText,
-              resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-              previousContext: previousContextRaw,
-            },
-            responseId,
-            userText: determine.inputText,
-            assistantText: content,
-            contextData: historyContext,
-          }),
-      };
-    }
-
-    const hasSummaryOutputPath = typeof summaryOutputPath === "string";
-    const finalizeOutputInstruction =
-      hasSummaryOutputPath || options.copyOutput
-        ? ({
-            params: {
-              ...(hasSummaryOutputPath ? { filePath: summaryOutputPath! } : {}),
-              ...(options.copyOutput
-                ? {
-                    copy: true,
-                    ...(options.mermaidFilePath
-                      ? {
-                          copySource: {
-                            type: "file" as const,
-                            filePath: options.mermaidFilePath,
-                          },
-                        }
-                      : {}),
-                  }
-                : {}),
-            },
-          } satisfies FinalizeDeliveryInstruction)
-        : undefined;
-
-    const finalizeOutcome = await handleResult({
-      content,
-      output: finalizeOutputInstruction,
-      history: finalizeHistoryEffect,
+            previousContextRaw,
+            previousContext,
+            baseContext: { cli: "mermaid" },
+            contextPath: mermaidContext?.absolutePath,
+          }
+        : undefined,
     });
 
     const artifactAbsolutePath =

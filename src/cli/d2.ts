@@ -21,12 +21,7 @@ import {
   WRITE_FILE_TOOL,
   buildCliToolList,
 } from "../pipeline/process/tools/index.js";
-import {
-  handleResult,
-  generateDefaultOutputPath,
-  type FinalizeDeliveryInstruction,
-  type FinalizeHistoryEffect,
-} from "../pipeline/finalize/index.js";
+import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -606,82 +601,31 @@ export async function runD2Cli(argv: string[] = process.argv.slice(2)): Promise<
         ? options.outputPath
         : undefined;
 
-    let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
-    if (agentResult.responseId) {
-      const responseId = agentResult.responseId;
-      const previousContextRaw = context.activeEntry?.context as
-        | D2CliHistoryStoreContext
-        | undefined;
-      const previousContext = isD2HistoryContext(previousContextRaw)
-        ? previousContextRaw
-        : undefined;
-      const historyContext: D2CliHistoryContext = { cli: "d2" };
-      const contextPath = d2Context?.absolutePath;
-      const filePath = contextPath ?? options.d2FilePath ?? previousContext?.file_path;
-      if (contextPath) {
-        historyContext.file_path = contextPath;
-      } else if (filePath) {
-        historyContext.file_path = filePath;
-      }
-      const historyOutputFile = summaryOutputPath ?? options.d2FilePath;
-      if (historyOutputFile || options.copyOutput) {
-        historyContext.output = { file: historyOutputFile };
-        if (options.copyOutput) {
-          historyContext.output.copy = true;
-        }
-      }
-      finalizeHistoryEffect = {
-        run: () =>
-          historyStore.upsertConversation({
+    const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
+    const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
+    const finalizeOutcome = await finalizeResult<D2CliHistoryContext, D2CliHistoryStoreContext>({
+      content,
+      userText: determine.inputText,
+      summaryOutputPath,
+      copyOutput: options.copyOutput,
+      defaultOutputFilePath: options.d2FilePath,
+      copySourceFilePath: options.d2FilePath,
+      history: agentResult.responseId
+        ? {
+            responseId: agentResult.responseId,
+            store: historyStore,
+            conversation: context,
             metadata: {
               model: options.model,
               effort: options.effort,
               verbosity: options.verbosity,
             },
-            context: {
-              isNewConversation: context.isNewConversation,
-              titleToUse: context.titleToUse,
-              previousResponseId: context.previousResponseId,
-              activeLastResponseId: context.activeLastResponseId,
-              resumeSummaryText: context.resumeSummaryText,
-              resumeSummaryCreatedAt: context.resumeSummaryCreatedAt,
-              previousContext: previousContextRaw,
-            },
-            responseId,
-            userText: determine.inputText,
-            assistantText: content,
-            contextData: historyContext,
-          }),
-      };
-    }
-
-    const hasSummaryOutputPath = typeof summaryOutputPath === "string";
-    const finalizeOutputInstruction =
-      hasSummaryOutputPath || options.copyOutput
-        ? ({
-            params: {
-              ...(hasSummaryOutputPath ? { filePath: summaryOutputPath! } : {}),
-              ...(options.copyOutput
-                ? {
-                    copy: true,
-                    ...(options.d2FilePath
-                      ? {
-                          copySource: {
-                            type: "file" as const,
-                            filePath: options.d2FilePath,
-                          },
-                        }
-                      : {}),
-                  }
-                : {}),
-            },
-          } satisfies FinalizeDeliveryInstruction)
-        : undefined;
-
-    const finalizeOutcome = await handleResult({
-      content,
-      output: finalizeOutputInstruction,
-      history: finalizeHistoryEffect,
+            previousContextRaw,
+            previousContext,
+            baseContext: { cli: "d2" },
+            contextPath: d2Context?.absolutePath,
+          }
+        : undefined,
     });
 
     const artifactAbsolutePath =

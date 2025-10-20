@@ -1,6 +1,7 @@
 /**
  * finalize 層の公開エントリーポイント。
  */
+export { finalizeResult } from "./finalize-result.js";
 export { handleResult } from "./handle-result.js";
 export type {
   FinalizeRequest,
