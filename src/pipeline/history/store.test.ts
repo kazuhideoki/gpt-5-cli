@@ -300,13 +300,23 @@ describe("resolveHistoryPath", () => {
     );
   });
 
-  it("HOME が無い状態で ~ を使うとエラーになる", () => {
+  it("HOME が無い状態でもユーザーディレクトリを利用して展開する", () => {
+    const fallbackHome = path.join(tempDir, "fallback-home");
+    fs.mkdirSync(fallbackHome, { recursive: true });
+
+    const originalHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = () => fallbackHome;
+
     delete process.env.HOME;
     process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history.json";
-    expect(() => resolveHistoryPath("/default.json")).toThrow(
-      "HOME environment variable is required when using '~' paths.",
-    );
-    process.env.HOME = tempDir;
+
+    try {
+      const resolved = resolveHistoryPath("/default.json");
+      expect(resolved).toBe(path.resolve(path.join(fallbackHome, "history.json")));
+    } finally {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+      process.env.HOME = tempDir;
+    }
   });
 });
 

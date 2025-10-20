@@ -112,6 +112,37 @@ describe("deliverOutput", () => {
     }
   });
 
+  test("HOME が未設定でもユーザーディレクトリにフォールバックする", async () => {
+    const originalHomeEnv = process.env.HOME;
+    const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-fallback-home-"));
+    const workspace = path.join(fakeHome, "workspace");
+    await fs.mkdir(workspace, { recursive: true });
+
+    const originalHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = () => fakeHome;
+    delete process.env.HOME;
+
+    try {
+      await deliverOutput({
+        content: "fallback expansion",
+        cwd: workspace,
+        filePath: "~/workspace/output.txt",
+      });
+
+      const expectedPath = path.join(fakeHome, "workspace", "output.txt");
+      const written = await fs.readFile(expectedPath, "utf8");
+      expect(written).toBe("fallback expansion");
+    } finally {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+      if (originalHomeEnv === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHomeEnv;
+      }
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    }
+  });
+
   test("ワークスペース外へ出る HOME 展開はエラーになる", async () => {
     const originalHome = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-home-"));

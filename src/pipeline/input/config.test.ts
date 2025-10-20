@@ -116,12 +116,23 @@ describe("resolvePromptsDir", () => {
     );
   });
 
-  it("HOME が無い状態で ~ を使うとエラーになる", () => {
+  it("HOME が無い状態でもユーザーディレクトリを利用して展開する", () => {
+    const fallbackHome = path.join(tempDir!, "fallback-prompts");
+    fs.mkdirSync(fallbackHome, { recursive: true });
+
+    const originalHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = () => fallbackHome;
+
     delete process.env.HOME;
     process.env.GPT_5_CLI_PROMPTS_DIR = "~/prompts";
-    expect(() => resolvePromptsDir("/default/prompts")).toThrow(
-      "HOME environment variable is required when using '~' paths.",
-    );
+
+    try {
+      const resolved = resolvePromptsDir("/default/prompts");
+      expect(resolved).toBe(path.resolve(path.join(fallbackHome, "prompts")));
+    } finally {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+      process.env.HOME = tempDir!;
+    }
   });
 });
 
