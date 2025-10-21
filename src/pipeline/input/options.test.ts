@@ -38,4 +38,15 @@ describe("expandLegacyShortFlags", () => {
       "Invalid option: -m には 0/1/2 を続けてください（例: -m1）",
     );
   });
+
+  test("c/d/s/r を含む連結フラグを数値付きで展開する", () => {
+    const expanded = expandLegacyShortFlags(["-cds3r10"]);
+    expect(expanded).toEqual(["-c", "-d", "-s", "3", "-r", "10"]);
+  });
+
+  test("未知の短縮フラグが含まれる場合はエラーになる", () => {
+    expect(() => expandLegacyShortFlags(["-az"])).toThrow(
+      "Invalid option: -a は無効です。-m0/1/2, -e0/1/2, -v0/1/2, -c, -r, -d/-d{num}, -s/-s{num} を使用してください。",
+    );
+  });
 });
