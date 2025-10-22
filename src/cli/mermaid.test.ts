@@ -43,7 +43,7 @@ function createOptions(overrides: Partial<MermaidCliOptions> = {}): MermaidCliOp
     outputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
-    mermaidFilePath: "diagram.mmd",
+    filePath: "diagram.mmd",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -62,10 +62,10 @@ describe("mermaid parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.mermaidFilePath).toMatch(
+    expect(options.filePath).toMatch(
       /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
     );
-    expect(options.outputPath).toBe(options.mermaidFilePath);
+    expect(options.outputPath).toBe(options.filePath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -85,7 +85,7 @@ describe("mermaid parseArgs", () => {
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.mmd", "生成"], defaults);
-    expect(options.mermaidFilePath).toBe("diagram.mmd");
+    expect(options.filePath).toBe("diagram.mmd");
     expect(options.outputExplicit).toBe(true);
   });
 

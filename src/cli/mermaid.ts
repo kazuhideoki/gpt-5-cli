@@ -27,8 +27,7 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
-  // TODO 単に filePath にすると、もう少し筋よく整理可能
-  mermaidFilePath: string;
+  filePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
 }
@@ -132,7 +131,7 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    mermaidFilePath: z.string().min(1),
+    filePath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
@@ -181,7 +180,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
       ...commonOptions,
       taskMode: "mermaid",
       outputPath: resolvedOutputPath,
-      mermaidFilePath: resolvedOutputPath,
+      filePath: resolvedOutputPath,
       maxIterations,
       maxIterationsExplicit,
     });
@@ -205,7 +204,7 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
     throw new Error("Invariant violation: ensureMermaidContext は mermaid モード専用です");
   }
   const cwd = process.cwd();
-  const rawPath = options.mermaidFilePath;
+  const rawPath = options.filePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -220,7 +219,7 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
     throw new Error(`Error: 指定した Mermaid ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.mermaidFilePath = relativePath;
+  options.filePath = relativePath;
   options.outputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
@@ -321,7 +320,7 @@ async function main(): Promise<void> {
             const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
-              nextOptions.mermaidFilePath = historyFile;
+              nextOptions.filePath = historyFile;
             }
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
@@ -358,7 +357,7 @@ async function main(): Promise<void> {
     }
 
     const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.mermaidFilePath
+      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
         ? options.outputPath
         : undefined;
 
@@ -371,9 +370,9 @@ async function main(): Promise<void> {
     const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
       base: { cli: "mermaid" },
       contextPath: mermaidContext.absolutePath,
-      defaultFilePath: options.mermaidFilePath,
+      defaultFilePath: options.filePath,
       previousContext,
-      historyOutputFile: summaryOutputPath ?? options.mermaidFilePath,
+      historyOutputFile: summaryOutputPath ?? options.filePath,
       copyOutput: options.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
@@ -381,7 +380,7 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       summaryOutputPath,
       copyOutput: options.copyOutput,
-      copySourceFilePath: options.mermaidFilePath,
+      copySourceFilePath: options.filePath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
@@ -400,7 +399,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = mermaidContext.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-mermaid] output file: ${options.mermaidFilePath}`);
+      console.log(`[gpt-5-cli-mermaid] output file: ${options.filePath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

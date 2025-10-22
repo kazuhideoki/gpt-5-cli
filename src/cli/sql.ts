@@ -59,7 +59,7 @@ export interface SqlCliOptions extends CliOptions {
   maxIterationsExplicit: boolean;
   dsn?: string;
   engine?: SqlEngine;
-  sqlFilePath: string;
+  filePath: string;
 }
 
 const POSTGRES_SQL_TOOL_REGISTRATIONS = [
@@ -183,7 +183,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
-    sqlFilePath: z.string().min(1),
+    filePath: z.string().min(1),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -241,7 +241,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       ...commonOptions,
       taskMode: "sql",
       outputPath: resolvedOutputPath,
-      sqlFilePath: resolvedOutputPath,
+      filePath: resolvedOutputPath,
       dsn,
       maxIterations,
       maxIterationsExplicit,
@@ -306,7 +306,7 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
 
 function ensureSqlOutputPath(options: SqlCliOptions): string {
   const cwd = process.cwd();
-  const rawPath = options.sqlFilePath;
+  const rawPath = options.filePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -321,7 +321,7 @@ function ensureSqlOutputPath(options: SqlCliOptions): string {
     throw new Error(`Error: 指定した出力パスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.sqlFilePath = relativePath;
+  options.filePath = relativePath;
   options.outputPath = relativePath;
   return absolutePath;
 }
@@ -574,7 +574,7 @@ async function main(): Promise<void> {
           const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
           if (!nextOptions.outputExplicit && historyContext?.output?.file) {
             nextOptions.outputPath = historyContext.output.file;
-            nextOptions.sqlFilePath = historyContext.output.file;
+            nextOptions.filePath = historyContext.output.file;
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
             nextOptions.copyOutput = historyContext.output.copy;
@@ -612,7 +612,7 @@ async function main(): Promise<void> {
         dsnHash: sqlEnv.hash,
         maxIterations: options.maxIterations,
         engine: sqlEnv.engine,
-        filePath: options.sqlFilePath,
+        filePath: options.filePath,
       }),
     });
 
@@ -630,7 +630,7 @@ async function main(): Promise<void> {
     }
 
     const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.sqlFilePath
+      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
         ? options.outputPath
         : undefined;
 
@@ -649,7 +649,7 @@ async function main(): Promise<void> {
       },
       previousContext,
       {
-        historyOutputFile: summaryOutputPath ?? options.sqlFilePath,
+        historyOutputFile: summaryOutputPath ?? options.filePath,
         copyOutput: options.copyOutput,
       },
     );
@@ -659,7 +659,7 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       summaryOutputPath,
       copyOutput: options.copyOutput,
-      copySourceFilePath: options.sqlFilePath,
+      copySourceFilePath: options.filePath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
@@ -677,7 +677,7 @@ async function main(): Promise<void> {
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {
-      console.log(`[gpt-5-cli-sql] output file: ${options.sqlFilePath}`);
+      console.log(`[gpt-5-cli-sql] output file: ${options.filePath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

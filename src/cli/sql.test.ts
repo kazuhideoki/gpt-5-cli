@@ -28,8 +28,8 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
-    expect(options.sqlFilePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
-    expect(options.outputPath).toBe(options.sqlFilePath);
+    expect(options.filePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
+    expect(options.outputPath).toBe(options.filePath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -60,7 +60,7 @@ describe("parseArgs", () => {
       ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
       defaults,
     );
-    expect(options.sqlFilePath).toBe("result.sql");
+    expect(options.filePath).toBe("result.sql");
     expect(options.outputExplicit).toBe(true);
   });
 

@@ -31,7 +31,7 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
-  d2FilePath: string;
+  filePath: string;
   maxIterations: number;
   maxIterationsExplicit: boolean;
 }
@@ -162,7 +162,7 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    d2FilePath: z.string().min(1),
+    filePath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
@@ -211,7 +211,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
       ...commonOptions,
       taskMode: "d2",
       outputPath: resolvedOutputPath,
-      d2FilePath: resolvedOutputPath,
+      filePath: resolvedOutputPath,
       maxIterations,
       maxIterationsExplicit,
     });
@@ -235,7 +235,7 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo {
     throw new Error("Invariant violation: ensureD2Context は d2 モード専用です");
   }
   const cwd = process.cwd();
-  const rawPath = options.d2FilePath;
+  const rawPath = options.filePath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -250,7 +250,7 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.d2FilePath = relativePath;
+  options.filePath = relativePath;
   options.outputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
@@ -362,7 +362,7 @@ async function main(): Promise<void> {
             const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
               nextOptions.outputPath = historyFile;
-              nextOptions.d2FilePath = historyFile;
+              nextOptions.filePath = historyFile;
             }
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
@@ -401,7 +401,7 @@ async function main(): Promise<void> {
     }
 
     const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.d2FilePath
+      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
         ? options.outputPath
         : undefined;
 
@@ -410,9 +410,9 @@ async function main(): Promise<void> {
     const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
       base: { cli: "d2" },
       contextPath: d2Context.absolutePath,
-      defaultFilePath: options.d2FilePath,
+      defaultFilePath: options.filePath,
       previousContext,
-      historyOutputFile: summaryOutputPath ?? options.d2FilePath,
+      historyOutputFile: summaryOutputPath ?? options.filePath,
       copyOutput: options.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
@@ -420,7 +420,7 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       summaryOutputPath,
       copyOutput: options.copyOutput,
-      copySourceFilePath: options.d2FilePath,
+      copySourceFilePath: options.filePath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
@@ -439,7 +439,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = d2Context.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-d2] output file: ${options.d2FilePath}`);
+      console.log(`[gpt-5-cli-d2] output file: ${options.filePath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);
