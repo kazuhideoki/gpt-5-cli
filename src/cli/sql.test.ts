@@ -1,10 +1,14 @@
 /**
  * @file SQL モード CLI のオプション解析と補助ロジックの単体テスト。
  */
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import fs from "node:fs";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   buildSqlHistoryContext,
   buildSqlInstructionMessages,
+  ensureSqlContext,
   inferSqlEngineFromDsn,
   parseArgs,
 } from "./sql.js";
@@ -185,5 +189,76 @@ describe("inferSqlEngineFromDsn", () => {
 
   it("未対応スキームはエラーを投げる", () => {
     expect(() => inferSqlEngineFromDsn("sqlserver://host/db")).toThrow("未対応");
+  });
+});
+
+describe("ensureSqlContext", () => {
+  const tempEntries: string[] = [];
+
+  afterEach(() => {
+    for (const entry of tempEntries.splice(0)) {
+      fs.rmSync(entry, { recursive: true, force: true });
+    }
+  });
+
+  const testDsn = "postgres://user:pass@localhost:5432/db";
+
+  it("ワークスペース内のパスを正規化し、存在しない場合は exists=false を返す", () => {
+    const relativeDir = path.join("tmp", "sql-context", randomUUID());
+    const absoluteDir = path.resolve(process.cwd(), relativeDir);
+    fs.mkdirSync(absoluteDir, { recursive: true });
+    tempEntries.push(absoluteDir);
+
+    const relativePath = path.join(relativeDir, "query.sql");
+    const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
+
+    const context = ensureSqlContext(options);
+
+    expect(context.relativePath).toBe(relativePath);
+    expect(context.absolutePath).toBe(path.resolve(process.cwd(), relativePath));
+    expect(context.exists).toBe(false);
+    expect(options.filePath).toBe(relativePath);
+    expect(options.outputPath).toBe(relativePath);
+  });
+
+  it("既存ファイルがある場合は exists=true を返す", () => {
+    const relativeDir = path.join("tmp", "sql-context", randomUUID());
+    const absoluteDir = path.resolve(process.cwd(), relativeDir);
+    fs.mkdirSync(absoluteDir, { recursive: true });
+    tempEntries.push(absoluteDir);
+
+    const relativePath = path.join(relativeDir, "query.sql");
+    const absolutePath = path.resolve(process.cwd(), relativePath);
+    fs.writeFileSync(absolutePath, "SELECT 1;");
+
+    const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
+    const context = ensureSqlContext(options);
+
+    expect(context.relativePath).toBe(relativePath);
+    expect(context.absolutePath).toBe(absolutePath);
+    expect(context.exists).toBe(true);
+    expect(options.filePath).toBe(relativePath);
+    expect(options.outputPath).toBe(relativePath);
+  });
+
+  it("ワークスペース外のパスではエラーを投げる", () => {
+    const outsidePath = path.resolve(process.cwd(), "..", `outside-${randomUUID()}.sql`);
+    const options = parseArgs(["--dsn", testDsn, "--output", outsidePath, "SELECT"], defaults);
+
+    expect(() => ensureSqlContext(options)).toThrow(
+      `Error: SQL出力の保存先はカレントディレクトリ配下に指定してください: ${outsidePath}`,
+    );
+  });
+
+  it("既存ディレクトリを指す場合はエラーを投げる", () => {
+    const relativeDir = path.join("tmp", "sql-context", randomUUID());
+    const absoluteDir = path.resolve(process.cwd(), relativeDir);
+    fs.mkdirSync(absoluteDir, { recursive: true });
+    tempEntries.push(absoluteDir);
+
+    const options = parseArgs(["--dsn", testDsn, "--output", relativeDir, "SELECT"], defaults);
+    expect(() => ensureSqlContext(options)).toThrow(
+      `Error: 指定した SQL ファイルパスはディレクトリです: ${relativeDir}`,
+    );
   });
 });

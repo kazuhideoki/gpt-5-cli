@@ -53,6 +53,13 @@ interface SqlDsnSnapshot {
   connection: SqlConnectionMetadata;
 }
 
+/** SQL ファイルの存在確認やパス情報を保持するための型。 */
+interface SqlContextInfo {
+  relativePath: string;
+  absolutePath: string;
+  exists: boolean;
+}
+
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
   maxIterations: number;
@@ -304,7 +311,16 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
   }
 }
 
-function ensureSqlOutputPath(options: SqlCliOptions): string {
+/**
+ * SQL モードで使用するファイルパスを検証し、コンテキスト情報を構築する。
+ *
+ * @param options CLI オプション。
+ * @returns SQL ファイルの存在情報。
+ */
+export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
+  if (options.taskMode !== "sql") {
+    throw new Error("Invariant violation: ensureSqlContext は sql モード専用です");
+  }
   const cwd = process.cwd();
   const rawPath = options.filePath;
   const absolutePath = path.resolve(cwd, rawPath);
@@ -318,12 +334,13 @@ function ensureSqlOutputPath(options: SqlCliOptions): string {
     );
   }
   if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
-    throw new Error(`Error: 指定した出力パスはディレクトリです: ${rawPath}`);
+    throw new Error(`Error: 指定した SQL ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
   options.filePath = relativePath;
   options.outputPath = relativePath;
-  return absolutePath;
+  const exists = fs.existsSync(absolutePath);
+  return { relativePath, absolutePath, exists };
 }
 
 /** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
@@ -583,7 +600,8 @@ async function main(): Promise<void> {
       },
     );
 
-    const sqlOutputAbsolutePath = ensureSqlOutputPath(options);
+    const sqlContext = ensureSqlContext(options);
+    const sqlOutputAbsolutePath = sqlContext.absolutePath;
 
     const determineActiveEntry = determine.activeEntry as
       | HistoryEntry<SqlCliHistoryContext>
