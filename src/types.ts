@@ -56,14 +56,17 @@ export interface HistoryEntry<TContext = unknown> {
   context?: TContext;
 }
 
-/** ユーザー入力を解析して得たCLI実行時オプション。 */
-export interface CliOptions {
+/**
+ * CLI モード間で共有される解析済みフラグ値を表す。
+ * いずれのフラグも CLI 入力に応じて任意で指定されるため、存在しない場合は
+ * undefined で表現する必要があるプロパティのみ optional としている。
+ */
+export interface CommonCliOptions {
   model: string;
   effort: EffortLevel;
   verbosity: VerbosityLevel;
   continueConversation: boolean;
   debug: boolean;
-  taskMode: TaskMode;
   outputPath?: string;
   outputExplicit: boolean;
   copyOutput: boolean;
@@ -81,6 +84,11 @@ export interface CliOptions {
   verbosityExplicit: boolean;
   hasExplicitHistory: boolean;
   helpRequested: boolean;
+}
+
+/** ユーザー入力を解析して得たCLI実行時オプション。 */
+export interface CliOptions extends CommonCliOptions {
+  taskMode: TaskMode;
 }
 
 /** OpenAI Responses API入力メッセージ型のエイリアス。 */
