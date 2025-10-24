@@ -251,7 +251,7 @@ async function main(): Promise<void> {
       options,
       logLabel: "[gpt-5-cli]",
       toolRegistrations: ASK_TOOL_REGISTRATIONS,
-      maxTurns: defaults.maxIterations,
+      maxTurns: options.maxIterations,
       additionalAgentTools: [createAskWebSearchTool()],
     });
     const content = agentResult.assistantText;

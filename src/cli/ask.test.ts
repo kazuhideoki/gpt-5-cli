@@ -386,6 +386,14 @@ describe("determineInput", () => {
   });
 });
 
+describe("main", () => {
+  it("--iterations で指定した上限を runAgentConversation に渡す", async () => {
+    const file = Bun.file(new URL("./ask.ts", import.meta.url));
+    const source = await file.text();
+    expect(source.includes("maxTurns: options.maxIterations")).toBe(true);
+  });
+});
+
 describe("ask web search integration", () => {
   it("web_search ツールを生成して名称を固定する", () => {
     const tool = createAskWebSearchTool();
