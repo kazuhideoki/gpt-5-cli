@@ -2,7 +2,6 @@
 // mermaid.ts: Mermaid 図のチェック・修正を行う CLI エントリーポイント。
 import fs from "node:fs";
 import path from "node:path";
-import { InvalidArgumentError } from "commander";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
@@ -28,8 +27,6 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
   filePath: string;
-  maxIterations: number;
-  maxIterationsExplicit: boolean;
 }
 
 /**
@@ -79,30 +76,11 @@ function isMermaidHistoryContext(
  * @param options 解析済みのCLIオプション。
  */
 function createMermaidProgram(defaults: CliDefaults) {
-  const parseIterations = (value: string): number => {
-    if (!/^\d+$/u.test(value)) {
-      throw new InvalidArgumentError("Error: --iterations の値は正の整数で指定してください");
-    }
-    const parsed = Number.parseInt(value, 10);
-    if (parsed <= 0) {
-      throw new InvalidArgumentError("Error: --iterations の値は 1 以上で指定してください");
-    }
-    return parsed;
-  };
-
   return buildCommonCommand({
     defaults,
     mode: "mermaid",
     argument: { tokens: "[input...]", description: "ユーザー入力" },
-    extraOptionRegistrars: [
-      (program) =>
-        program.option(
-          "-I, --iterations <count>",
-          "イテレーション上限を指定します",
-          parseIterations,
-          defaults.maxIterations,
-        ),
-    ],
+    extraOptionRegistrars: [],
   });
 }
 
@@ -169,20 +147,15 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
   const program = createMermaidProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const programOptions = program.opts<{ iterations?: number }>();
   const resolvedOutputPath =
     commonOptions.outputPath ??
     generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
-  const maxIterations = programOptions.iterations ?? defaults.maxIterations;
-  const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "mermaid",
       outputPath: resolvedOutputPath,
       filePath: resolvedOutputPath,
-      maxIterations,
-      maxIterationsExplicit,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

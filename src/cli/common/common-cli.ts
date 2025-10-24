@@ -13,6 +13,8 @@ import type { CommonCliParseResult, CommonCommandBuildOptions } from "./types.js
 const HELP_FLAGS = "-?, --help";
 const HELP_DESCRIPTION = "ヘルプを表示します";
 const COMPACT_ERROR_MESSAGE = "Error: --compact の履歴番号は正の整数で指定してください";
+const ITERATIONS_PARSE_MESSAGE = "Error: --iterations の値は正の整数で指定してください";
+const ITERATIONS_MIN_MESSAGE = "Error: --iterations の値は 1 以上で指定してください";
 
 const commonCliOptionsSchema: z.ZodType<CommonCliOptions> = z.object({
   model: z.string(),
@@ -20,6 +22,8 @@ const commonCliOptionsSchema: z.ZodType<CommonCliOptions> = z.object({
   verbosity: z.enum(["low", "medium", "high"]),
   continueConversation: z.boolean(),
   debug: z.boolean(),
+  maxIterations: z.number(),
+  maxIterationsExplicit: z.boolean(),
   outputPath: z.string().min(1).optional(),
   outputExplicit: z.boolean(),
   copyOutput: z.boolean(),
@@ -62,6 +66,17 @@ function registerCommonOptions(program: Command, defaults: CliDefaults): void {
     return Number.parseInt(value, 10);
   };
 
+  const parseIterations = (value: string): number => {
+    if (!/^\d+$/u.test(value)) {
+      throw new InvalidArgumentError(ITERATIONS_PARSE_MESSAGE);
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (parsed <= 0) {
+      throw new InvalidArgumentError(ITERATIONS_MIN_MESSAGE);
+    }
+    return parsed;
+  };
+
   program
     .option(
       "-m, --model <index>",
@@ -84,6 +99,12 @@ function registerCommonOptions(program: Command, defaults: CliDefaults): void {
     .option("-i, --image <path>", "画像ファイルを添付します")
     .option("-o, --output <path>", "結果を保存するファイルパスを指定します")
     .option("--copy", "結果をクリップボードにコピーします")
+    .option(
+      "-I, --iterations <count>",
+      "イテレーション上限を指定します",
+      parseIterations,
+      defaults.maxIterations,
+    )
     .option("--compact <index>", "指定した履歴を要約します", parseCompactIndex);
 }
 
@@ -134,6 +155,7 @@ export function parseCommonOptions(
     output?: string;
     copy?: boolean;
     compact?: number;
+    iterations?: number;
   }>();
 
   const args = program.args as string[];
@@ -193,6 +215,9 @@ export function parseCommonOptions(
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
   const outputExplicit = program.getOptionValueSource("output") === "cli";
   const copyExplicit = program.getOptionValueSource("copy") === "cli";
+  const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
+  const maxIterations =
+    typeof opts.iterations === "number" ? opts.iterations : defaults.maxIterations;
 
   try {
     const options = commonCliOptionsSchema.parse({
@@ -206,6 +231,8 @@ export function parseCommonOptions(
       showIndex,
       imagePath,
       debug,
+      maxIterations,
+      maxIterationsExplicit,
       outputPath,
       outputExplicit,
       copyOutput,

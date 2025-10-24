@@ -67,6 +67,8 @@ export interface CommonCliOptions {
   verbosity: VerbosityLevel;
   continueConversation: boolean;
   debug: boolean;
+  maxIterations: number;
+  maxIterationsExplicit: boolean;
   outputPath?: string;
   outputExplicit: boolean;
   copyOutput: boolean;

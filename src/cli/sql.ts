@@ -6,7 +6,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { InvalidArgumentError } from "commander";
 import { z } from "zod";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -62,8 +61,6 @@ interface SqlContextInfo {
 
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
-  maxIterations: number;
-  maxIterationsExplicit: boolean;
   dsn?: string;
   engine?: SqlEngine;
   filePath: string;
@@ -136,31 +133,12 @@ function isSqlHistoryContext(
  * @param options 解析済み CLI オプション。
  */
 function createSqlProgram(defaults: CliDefaults) {
-  const parseIterations = (value: string): number => {
-    if (!/^\d+$/u.test(value)) {
-      throw new InvalidArgumentError("Error: --iterations の値は正の整数で指定してください");
-    }
-    const parsed = Number.parseInt(value, 10);
-    if (parsed <= 0) {
-      throw new InvalidArgumentError("Error: --iterations の値は 1 以上で指定してください");
-    }
-    return parsed;
-  };
-
   return buildCommonCommand({
     defaults,
     mode: "sql",
     argument: { tokens: "[input...]", description: "ユーザー入力" },
     extraOptionRegistrars: [
-      (program) =>
-        program
-          .option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します")
-          .option(
-            "-I, --iterations <count>",
-            "イテレーション上限を指定します",
-            parseIterations,
-            defaults.maxIterations,
-          ),
+      (program) => program.option("-P, --dsn <dsn>", "PostgreSQL などの接続文字列を直接指定します"),
     ],
   });
 }
@@ -229,9 +207,7 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions {
   const program = createSqlProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const programOptions = program.opts<{ iterations?: number; dsn?: string }>();
-  const maxIterations = programOptions.iterations ?? defaults.maxIterations;
-  const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
+  const programOptions = program.opts<{ dsn?: string }>();
   let dsn: string | undefined;
   if (typeof programOptions.dsn === "string") {
     const trimmed = programOptions.dsn.trim();
@@ -250,8 +226,6 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
       outputPath: resolvedOutputPath,
       filePath: resolvedOutputPath,
       dsn,
-      maxIterations,
-      maxIterationsExplicit,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

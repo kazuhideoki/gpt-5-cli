@@ -117,6 +117,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
+    maxIterations: z.number(),
+    maxIterationsExplicit: z.boolean(),
     outputPath: z.string().min(1).optional(),
     outputExplicit: z.boolean(),
     copyOutput: z.boolean(),

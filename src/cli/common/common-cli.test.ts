@@ -41,6 +41,7 @@ describe("buildCommonCommand", () => {
     expect(optionFlags).toContain("-i, --image <path>");
     expect(optionFlags).toContain("-o, --output <path>");
     expect(optionFlags).toContain("--copy");
+    expect(optionFlags).toContain("-I, --iterations <count>");
     expect(optionFlags).toContain("--compact <index>");
     const helpText = command.helpInformation();
     expect(helpText).toContain("-?, --help");
@@ -71,6 +72,8 @@ describe("parseCommonOptions", () => {
         "2",
         "--verbosity",
         "0",
+        "--iterations",
+        "12",
         "--debug",
         "--copy",
         "--output",
@@ -88,6 +91,8 @@ describe("parseCommonOptions", () => {
     expect(options.copyExplicit).toBe(true);
     expect(options.outputPath).toBe("/tmp/out.txt");
     expect(options.outputExplicit).toBe(true);
+    expect(options.maxIterations).toBe(12);
+    expect(options.maxIterationsExplicit).toBe(true);
     expect(options.args).toEqual(["質問"]);
   });
 
@@ -121,6 +126,22 @@ describe("parseCommonOptions", () => {
     const result = parseCommonOptions(["--help"], defaults, command);
     expect(result.helpRequested).toBe(true);
     expect(result.options.helpRequested).toBe(true);
+  });
+
+  it("--iterations を指定しない場合は既定値と false を返す", () => {
+    const defaults = createDefaults();
+    const command = buildCommand({ defaults });
+    const { options } = parseCommonOptions([], defaults, command);
+    expect(options.maxIterations).toBe(defaults.maxIterations);
+    expect(options.maxIterationsExplicit).toBe(false);
+  });
+
+  it("--iterations を指定すると maxIterations と maxIterationsExplicit を更新する", () => {
+    const defaults = createDefaults();
+    const command = buildCommand({ defaults });
+    const { options } = parseCommonOptions(["--iterations", "5"], defaults, command);
+    expect(options.maxIterations).toBe(5);
+    expect(options.maxIterationsExplicit).toBe(true);
   });
 });
 
