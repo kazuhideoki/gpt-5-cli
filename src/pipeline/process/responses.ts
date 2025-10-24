@@ -95,7 +95,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: tools ?? buildCliToolList([]),
+    tools: tools ?? buildCliToolList([], { appendWebSearchPreview: true }),
     input: inputForRequest,
   };
 

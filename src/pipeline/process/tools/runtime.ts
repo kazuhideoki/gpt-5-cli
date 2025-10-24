@@ -145,8 +145,13 @@ export function buildAgentsToolList(
   });
 }
 
+export interface BuildCliToolListConfig {
+  appendWebSearchPreview: boolean;
+}
+
 export function buildCliToolList(
   registrations: Iterable<ToolRegistration<any, any>>,
+  config: BuildCliToolListConfig,
 ): ResponseCreateParamsNonStreaming["tools"] {
   const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
   const seen = new Set<string>();
@@ -163,5 +168,9 @@ export function buildCliToolList(
     seen.add(definition.name);
   }
 
-  return [...functionTools, { type: "web_search_preview" as const }];
+  if (config.appendWebSearchPreview) {
+    return [...functionTools, { type: "web_search_preview" as const }];
+  }
+
+  return functionTools;
 }

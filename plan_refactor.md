@@ -103,7 +103,7 @@ export type Pipeline = (
 
 ## 追加整理トラック案
 
-### 処理層: tool リストフィルタの共通化（難易度: 低）
+### 処理層: tool リストフィルタの共通化（難易度: 低） ✅
 - 現状: ask / d2 が `buildCliToolList` 生成後に `web_search_preview` を個別フィルタしている。
 - 整理案: `pipeline/process/tools` 側で標準フィルタを提供し、CLI は登録リスト宣言だけで済むようにする。
 - 効果: ツール一覧の後処理を集約し、今後のプレビューツール仕様変更に追従しやすくする。
