@@ -119,7 +119,7 @@ gpt-5-cli-sql -- --help
 bun run start:sql -- --help
 ```
 
-SQL CLI では接続情報の管理や `--sql-iterations` フラグなどが追加され、会話履歴には SQL 用タスクメタデータが保存されます。CLI ごとの履歴分離を行う場合は `.env.sql` に `GPT_5_CLI_HISTORY_INDEX_FILE` を設定し、必要に応じて `OPENAI_DEFAULT_EFFORT` なども上書きしてください。
+SQL CLI では接続情報の管理や `--iterations` フラグなどが追加され、会話履歴には SQL 用タスクメタデータが保存されます。CLI ごとの履歴分離を行う場合は `.env.sql` に `GPT_5_CLI_HISTORY_INDEX_FILE` を設定し、必要に応じて `OPENAI_DEFAULT_EFFORT` なども上書きしてください。
 
 主な追加フラグ:
 

@@ -43,7 +43,7 @@ function createOptions(overrides: Partial<MermaidCliOptions> = {}): MermaidCliOp
     outputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
-    mermaidFilePath: "diagram.mmd",
+    filePath: "diagram.mmd",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -62,30 +62,30 @@ describe("mermaid parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.mermaidFilePath).toMatch(
+    expect(options.filePath).toMatch(
       /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
     );
-    expect(options.outputPath).toBe(options.mermaidFilePath);
+    expect(options.outputPath).toBe(options.filePath);
   });
 
-  it("--mermaid-iterations でツール呼び出し上限を設定できる", () => {
+  it("--iterations でイテレーション上限を設定できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--mermaid-iterations", "5", "図"], defaults);
+    const options = parseArgs(["--iterations", "5", "図"], defaults);
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
-  it("--mermaid-iterations へ不正な値を渡すとエラーになる", () => {
+  it("--iterations へ不正な値を渡すとエラーになる", () => {
     const defaults = createDefaults();
-    expect(() => parseArgs(["--mermaid-iterations", "0", "図"], defaults)).toThrow(
-      "Error: --mermaid-iterations の値は 1 以上で指定してください",
+    expect(() => parseArgs(["--iterations", "0", "図"], defaults)).toThrow(
+      "Error: --iterations の値は 1 以上で指定してください",
     );
   });
 
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.mmd", "生成"], defaults);
-    expect(options.mermaidFilePath).toBe("diagram.mmd");
+    expect(options.filePath).toBe("diagram.mmd");
     expect(options.outputExplicit).toBe(true);
   });
 
