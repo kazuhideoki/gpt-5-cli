@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildRequest } from "../pipeline/process/responses.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import {
   buildAskHistoryContext,
   buildAskResponseTools,
@@ -275,12 +275,12 @@ describe("buildRequest", () => {
   });
 });
 
-describe("determineInput", () => {
+describe("resolveInputOrExecuteHistoryAction", () => {
   it("削除フラグで対象履歴を削除して終了する", async () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -302,10 +302,15 @@ describe("determineInput", () => {
       expect(index).toBe(5);
       expect(noColor).toBe(Boolean(process.env.NO_COLOR));
     };
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
-      ...noopDeps,
-      printHistoryDetail: printDetail,
-    });
+    const result = await resolveInputOrExecuteHistoryAction(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      {
+        ...noopDeps,
+        printHistoryDetail: printDetail,
+      },
+    );
     expect(result.kind).toBe("exit");
   });
 
@@ -316,10 +321,15 @@ describe("determineInput", () => {
     const printList = (historyStore: HistoryStoreLike) => {
       expect(historyStore).toBe(store);
     };
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
-      ...noopDeps,
-      printHistoryList: printList,
-    });
+    const result = await resolveInputOrExecuteHistoryAction(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      {
+        ...noopDeps,
+        printHistoryList: printList,
+      },
+    );
     expect(result.kind).toBe("exit");
   });
 
@@ -336,7 +346,7 @@ describe("determineInput", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -361,7 +371,7 @@ describe("determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,

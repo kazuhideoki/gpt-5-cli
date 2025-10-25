@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js";
 import type { CliDefaults } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
@@ -129,7 +129,7 @@ class StubHistoryStore {
   }
 }
 
-describe("d2 determineInput", () => {
+describe("d2 resolveInputOrExecuteHistoryAction", () => {
   it("履歴番号指定で既存の d2 タスクを保持したまま返す", async () => {
     const defaults = createDefaults();
     const entry: D2HistoryEntry = {
@@ -145,7 +145,7 @@ describe("d2 determineInput", () => {
       args: ["続けよう"],
     });
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -170,7 +170,7 @@ describe("d2 determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,

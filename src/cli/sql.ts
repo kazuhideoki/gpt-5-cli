@@ -29,7 +29,7 @@ import {
 } from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
@@ -544,7 +544,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await determineInput(options, historyStore, defaults, {
+    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
       printHelp: outputHelp,
     });
     if (determine.kind === "exit") {

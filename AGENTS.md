@@ -20,7 +20,7 @@
   - `process/` にエージェント実行・リクエスト組み立て・会話コンテキスト生成など `session` から移した共通ロジックを配置。`performCompact` の終端副作用などは TODO コメント付きで finalize への移行を計画中。
     - `openai-client.ts` が API キー解決 (`resolveOpenAIApiKey`) と `OpenAI` インスタンス生成を担う。
     - `tools/` … 旧 `core/tools.ts` を分割移設した Function Tool 定義と実行ランタイム。`runtime.ts` が `buildCliToolList` / `buildAgentsToolList` を公開し、`filesystem.ts`・`d2.ts`・`mermaid.ts`・`sql.ts` で機能別ツールを管理する。リファクタ移行中につき TODO が残存。
-  - `input/` に CLI 共通の入力判定 (`determineInput`)、フラグ解析 (`options.ts`)、プロンプト解決 (`prompts.ts`) を移設済み。モード固有の前処理は CLI 層に TODO コメント付きで残してある。
+  - `input/` に CLI 共通の入力判定 (`resolveInputOrExecuteHistoryAction`)、フラグ解析 (`options.ts`)、プロンプト解決 (`prompts.ts`) を移設済み。モード固有の前処理は CLI 層に TODO コメント付きで残してある。
     - `config.ts` が `.env` 読み込みと CLI 既定値 (`loadDefaults`) を提供。
   - 将来的に `input/` も導入予定。
 

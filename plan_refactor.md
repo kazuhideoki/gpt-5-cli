@@ -140,7 +140,7 @@ export type HandleResultFn = (
 
 ## メモ
 
-- `determineInput`, `computeContext`, `ensure{CLI}Context` の責務の違いは何？
+- `resolveInputOrExecuteHistoryAction`, `computeContext`, `ensure{CLI}Context` の責務の違いは何？
   - 論理的にはCLI共通の processに渡すための input 処理と、CLI固有の処理の2つでいいか？
   - それを処理しやすく流れをつけるのが良いと考えた。どうだろう？
 - buildRequest に prepareImageData を含めてもいい？ そうすると process層 はリクエストの準備 と 実行の２つでまとまる

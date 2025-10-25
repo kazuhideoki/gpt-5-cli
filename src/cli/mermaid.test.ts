@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { parseArgs } from "./mermaid.js";
 import type { CliDefaults } from "../types.js";
 import type { MermaidCliOptions } from "./mermaid.js";
@@ -131,7 +131,7 @@ class StubHistoryStore {
   }
 }
 
-describe("mermaid determineInput", () => {
+describe("mermaid resolveInputOrExecuteHistoryAction", () => {
   it("履歴番号指定で既存の mermaid コンテキストを保持したまま返す", async () => {
     const defaults = createDefaults();
     const entry: MermaidHistoryEntry = {
@@ -147,7 +147,7 @@ describe("mermaid determineInput", () => {
       args: ["続けよう"],
     });
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -172,7 +172,7 @@ describe("mermaid determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
