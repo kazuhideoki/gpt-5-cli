@@ -135,7 +135,7 @@ describe("d2 determineInput", () => {
     const entry: D2HistoryEntry = {
       last_response_id: "resp-d2",
       title: "diagram",
-      context: { cli: "d2", file_path: "/tmp/out.d2" },
+      context: { cli: "d2", absolute_path: "/tmp/out.d2" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({

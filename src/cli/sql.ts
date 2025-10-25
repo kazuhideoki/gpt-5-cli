@@ -104,12 +104,9 @@ const sqlCliHistoryContextStrictSchema = z.object({
   dsn_hash: z.string().min(1),
   dsn: z.string().optional(),
   connection: connectionSchema,
-  output: z
-    .object({
-      file: z.string(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
+  relative_path: z.string().optional(),
+  copy: z.boolean().optional(),
+  absolute_path: z.string().optional(),
 });
 
 const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
@@ -495,24 +492,20 @@ export function buildSqlHistoryContext(
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
   }
-  let nextOutput: SqlCliHistoryContext["output"] | undefined;
   if (extras.historyArtifactPath !== undefined) {
-    nextOutput = {
-      file: extras.historyArtifactPath,
-      ...(extras.copyOutput ? { copy: true } : {}),
-    };
-  } else if (extras.copyOutput && previousContext?.output?.file) {
-    nextOutput = {
-      file: previousContext.output.file,
-      copy: true,
-    };
-  } else if (previousContext?.output) {
-    nextOutput = { ...previousContext.output };
-  }
-  if (nextOutput) {
-    nextContext.output = nextOutput;
+    nextContext.relative_path = extras.historyArtifactPath;
+  } else if (previousContext?.relative_path) {
+    nextContext.relative_path = previousContext.relative_path;
   } else {
-    delete nextContext.output;
+    delete nextContext.relative_path;
+  }
+
+  if (extras.copyOutput) {
+    nextContext.copy = true;
+  } else if (previousContext?.copy) {
+    nextContext.copy = true;
+  } else {
+    delete nextContext.copy;
   }
   return nextContext;
 }
@@ -567,12 +560,15 @@ async function main(): Promise<void> {
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
           const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
-          if (!nextOptions.responseOutputExplicit && historyContext?.output?.file) {
-            nextOptions.responseOutputPath = historyContext.output.file;
-            nextOptions.artifactPath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit) {
+            const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
+            if (historyFile) {
+              nextOptions.responseOutputPath = historyFile;
+              nextOptions.artifactPath = historyFile;
+            }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },

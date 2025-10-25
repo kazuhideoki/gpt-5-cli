@@ -112,14 +112,14 @@ describe("CLI integration", () => {
     const historyRaw = fs.readFileSync(historyPath, "utf8");
     const historyData = JSON.parse(historyRaw) as Array<
       Record<string, unknown> & {
-        context?: { output?: { file?: string } };
+        context?: { relative_path?: string; copy?: boolean };
         request_count?: number;
       }
     >;
     expect(historyData.length).toBe(1);
     const [entry] = historyData;
     expect(entry.request_count).toBe(1);
-    expect(entry.context?.output?.file).toBe(relativePath);
+    expect(entry.context?.relative_path).toBe(relativePath);
 
     fs.rmSync(absoluteDir, { recursive: true, force: true });
   });

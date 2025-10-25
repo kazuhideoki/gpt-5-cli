@@ -172,7 +172,8 @@ describe("buildSqlHistoryContext", () => {
     expect(updated.connection?.database).toBe("analytics");
     expect(updated.dsn).toBe("postgres://next@host/db");
     expect(updated.engine).toBe("postgresql");
-    expect(updated.output).toEqual({ file: "result.sql", copy: true });
+    expect(updated.relative_path).toBe("result.sql");
+    expect(updated.copy).toBe(true);
   });
 });
 

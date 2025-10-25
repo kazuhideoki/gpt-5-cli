@@ -73,13 +73,9 @@ export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"
 
 const d2CliHistoryContextStrictSchema = z.object({
   cli: z.literal("d2"),
-  output: z
-    .object({
-      file: z.string(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
-  file_path: z.string().optional(),
+  relative_path: z.string().optional(),
+  copy: z.boolean().optional(),
+  absolute_path: z.string().optional(),
 });
 
 const d2CliHistoryContextSchema = d2CliHistoryContextStrictSchema
@@ -332,14 +328,14 @@ async function main(): Promise<void> {
           const historyContext = activeEntry.context as D2CliHistoryContext | undefined;
 
           if (!nextOptions.responseOutputExplicit) {
-            const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
+            const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
             if (historyFile) {
               nextOptions.responseOutputPath = historyFile;
               nextOptions.artifactPath = historyFile;
             }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },

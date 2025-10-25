@@ -4,24 +4,26 @@
  */
 import type { HistoryEntry, HistoryStore } from "./store.js";
 
-function extractOutputInfo(context: unknown): { file?: string; copy?: boolean } | undefined {
+function extractOutputInfo(
+  context: unknown,
+): { relative?: string; absolute?: string; copy?: boolean } | undefined {
   if (!context || typeof context !== "object") {
     return undefined;
   }
-  const output = (context as { output?: unknown }).output;
-  if (!output || typeof output !== "object") {
-    return undefined;
-  }
-  const file =
-    typeof (output as { file?: unknown }).file === "string"
-      ? (output as { file?: string }).file
+  const relative =
+    typeof (context as { relative_path?: unknown }).relative_path === "string"
+      ? (context as { relative_path: string }).relative_path
       : undefined;
-  const copyRaw = (output as { copy?: unknown }).copy;
+  const absolute =
+    typeof (context as { absolute_path?: unknown }).absolute_path === "string"
+      ? (context as { absolute_path: string }).absolute_path
+      : undefined;
+  const copyRaw = (context as { copy?: unknown }).copy;
   const copy = typeof copyRaw === "boolean" ? copyRaw : undefined;
-  if (!file && !copy) {
+  if (!relative && !absolute && !copy) {
     return undefined;
   }
-  return { file, copy };
+  return { relative, absolute, copy };
 }
 
 /**
@@ -48,14 +50,17 @@ export function printHistoryList<TContext>(store: HistoryStore<TContext>): void 
     const outputInfo = extractOutputInfo(entry.context);
     if (outputInfo) {
       const parts: string[] = [];
-      if (outputInfo.file) {
-        parts.push(`file=${outputInfo.file}`);
+      if (outputInfo.relative) {
+        parts.push(`relative=${outputInfo.relative}`);
+      }
+      if (outputInfo.absolute) {
+        parts.push(`absolute=${outputInfo.absolute}`);
       }
       if (outputInfo.copy) {
         parts.push("copy");
       }
       if (parts.length > 0) {
-        line = `${line} output[${parts.join(", ")}]`;
+        line = `${line} paths[${parts.join(", ")}]`;
       }
     }
     console.log(line);
@@ -68,8 +73,11 @@ function printOutputInfo(entry: HistoryEntry<unknown>): void {
     return;
   }
   const parts: string[] = [];
-  if (outputInfo.file) {
-    parts.push(`file=${outputInfo.file}`);
+  if (outputInfo.relative) {
+    parts.push(`relative=${outputInfo.relative}`);
+  }
+  if (outputInfo.absolute) {
+    parts.push(`absolute=${outputInfo.absolute}`);
   }
   if (outputInfo.copy) {
     parts.push("copy");

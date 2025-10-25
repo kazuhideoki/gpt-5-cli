@@ -32,12 +32,9 @@ export function createAskWebSearchTool(): AgentsSdkTool {
 
 const askCliHistoryContextStrictSchema = z.object({
   cli: z.literal("ask"),
-  output: z
-    .object({
-      file: z.string().optional(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
+  relative_path: z.string().optional(),
+  absolute_path: z.string().optional(),
+  copy: z.boolean().optional(),
 });
 
 const askCliHistoryContextSchema = askCliHistoryContextStrictSchema
@@ -62,27 +59,20 @@ interface BuildAskHistoryContextParams {
  */
 export function buildAskHistoryContext(params: BuildAskHistoryContextParams): AskCliHistoryContext {
   const { previousContext, responseOutputPath, copyOutput } = params;
-  const historyFinalOutput = responseOutputPath ?? previousContext?.output?.file;
+  const resolvedPath = responseOutputPath ?? previousContext?.relative_path;
 
   const nextContext: AskCliHistoryContext = {
     cli: "ask",
   };
 
-  if (historyFinalOutput !== undefined || copyOutput) {
-    nextContext.output = {
-      ...(historyFinalOutput !== undefined ? { file: historyFinalOutput } : {}),
-      ...(copyOutput ? { copy: true } : {}),
-    };
-    return nextContext;
+  if (resolvedPath !== undefined) {
+    nextContext.relative_path = resolvedPath;
+  } else if (previousContext?.relative_path !== undefined) {
+    nextContext.relative_path = previousContext.relative_path;
   }
 
-  const previousFile = previousContext?.output?.file;
-  if (previousFile !== undefined) {
-    const previousCopy = previousContext?.output?.copy;
-    nextContext.output = {
-      file: previousFile,
-      ...(previousCopy ? { copy: previousCopy } : {}),
-    };
+  if (copyOutput || previousContext?.copy) {
+    nextContext.copy = true;
   }
 
   return nextContext;
@@ -223,11 +213,14 @@ async function main(): Promise<void> {
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
           const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
-          if (!nextOptions.responseOutputExplicit && historyContext?.output?.file) {
-            nextOptions.responseOutputPath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit) {
+            const historyPath = historyContext?.relative_path ?? historyContext?.absolute_path;
+            if (historyPath) {
+              nextOptions.responseOutputPath = historyPath;
+            }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },

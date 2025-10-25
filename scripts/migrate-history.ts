@@ -61,6 +61,31 @@ const legacyHistorySchema = z.array(legacyEntrySchema);
 type LegacyEntry = z.infer<typeof legacyEntrySchema>;
 type LegacyTask = z.infer<NonNullable<typeof legacyTaskSchema>>;
 
+type MigratedBaseContext = {
+  cli: "ask" | "d2" | "mermaid" | "sql";
+  absolute_path?: string;
+  relative_path?: string;
+  copy?: boolean;
+};
+
+type MigratedAskContext = MigratedBaseContext & {
+  cli: "ask";
+};
+
+type MigratedFileContext = MigratedBaseContext & {
+  cli: "d2" | "mermaid";
+};
+
+type MigratedSqlContext = MigratedBaseContext & {
+  cli: "sql";
+  engine: "postgresql" | "mysql";
+  dsn_hash: string;
+  dsn?: string;
+  connection?: Record<string, unknown>;
+};
+
+type MigratedContext = MigratedAskContext | MigratedFileContext | MigratedSqlContext;
+
 const program = new Command()
   .requiredOption("--input <path>", "変換対象の履歴ファイルパス")
   .option("--output <path>", "変換結果の出力先（省略時は上書き保存）");
@@ -76,18 +101,28 @@ const raw = fs.readFileSync(inputPath, "utf8");
 const parsed = JSON.parse(raw);
 const history = legacyHistorySchema.parse(parsed);
 
-const transformOutput = (legacyOutput: LegacyTask["output"]) => {
-  if (!legacyOutput) {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const normalizeString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") {
     return undefined;
   }
-  const next: { file?: string; copy?: boolean } = {};
-  if (typeof legacyOutput.file === "string" && legacyOutput.file.trim().length > 0) {
-    next.file = legacyOutput.file;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const ensureCopyFlag = (rawCopy: unknown): boolean | undefined => {
+  return rawCopy === true ? true : undefined;
+};
+
+const extractOutputFields = (legacyOutput: LegacyTask["output"] | unknown) => {
+  if (!isRecord(legacyOutput)) {
+    return { relative: undefined, copy: undefined };
   }
-  if (typeof legacyOutput.copy === "boolean") {
-    next.copy = legacyOutput.copy;
-  }
-  return Object.keys(next).length > 0 ? next : undefined;
+  const relative = normalizeString(legacyOutput.file);
+  const copy = ensureCopyFlag(legacyOutput.copy);
+  return { relative, copy };
 };
 
 const migrateTask = (task: LegacyTask | undefined): Record<string, unknown> | undefined => {
@@ -99,24 +134,51 @@ const migrateTask = (task: LegacyTask | undefined): Record<string, unknown> | un
     throw new Error("legacy entry has a task but no mode is specified");
   }
   if (mode === "ask") {
-    return {
+    const { relative, copy } = extractOutputFields(task.output);
+    const context: MigratedAskContext = {
       cli: "ask",
-      output: transformOutput(task.output),
     };
+    if (relative) {
+      context.relative_path = relative;
+    }
+    if (copy) {
+      context.copy = true;
+    }
+    return context;
   }
   if (mode === "d2") {
-    return {
-      cli: "d2" as const,
-      file_path: task.d2?.file_path,
-      output: transformOutput(task.output),
+    const { relative, copy } = extractOutputFields(task.output);
+    const absolute = normalizeString(task.d2?.file_path);
+    const context: MigratedFileContext = {
+      cli: "d2",
     };
+    if (absolute) {
+      context.absolute_path = absolute;
+    }
+    if (relative) {
+      context.relative_path = relative;
+    }
+    if (copy) {
+      context.copy = true;
+    }
+    return context;
   }
   if (mode === "mermaid") {
-    return {
-      cli: "mermaid" as const,
-      file_path: task.mermaid?.file_path,
-      output: transformOutput(task.output),
+    const { relative, copy } = extractOutputFields(task.output);
+    const absolute = normalizeString(task.mermaid?.file_path);
+    const context: MigratedFileContext = {
+      cli: "mermaid",
     };
+    if (absolute) {
+      context.absolute_path = absolute;
+    }
+    if (relative) {
+      context.relative_path = relative;
+    }
+    if (copy) {
+      context.copy = true;
+    }
+    return context;
   }
   if (mode === "sql") {
     const engine = task.sql?.type;
@@ -131,20 +193,23 @@ const migrateTask = (task: LegacyTask | undefined): Record<string, unknown> | un
           ([, value]) => value !== undefined && value !== "",
         ),
       );
-    const context: Record<string, unknown> = {
-      cli: "sql" as const,
+    const { relative, copy } = extractOutputFields(task.output);
+    const context: MigratedSqlContext = {
+      cli: "sql",
       engine,
       dsn_hash: dsnHash,
     };
-    const output = transformOutput(task.output);
-    if (output) {
-      context.output = output;
-    }
     if (task.sql?.dsn) {
       context.dsn = task.sql.dsn;
     }
     if (normalizedConnection && Object.keys(normalizedConnection).length > 0) {
       context.connection = normalizedConnection;
+    }
+    if (relative) {
+      context.relative_path = relative;
+    }
+    if (copy) {
+      context.copy = true;
     }
     return context;
   }
@@ -158,19 +223,71 @@ const guessMode = (task: LegacyTask): string | undefined => {
   return undefined;
 };
 
+const migrateExistingContext = (rawContext: unknown): MigratedContext | undefined => {
+  if (!isRecord(rawContext)) {
+    return undefined;
+  }
+  const cli = rawContext.cli;
+  if (cli !== "ask" && cli !== "d2" && cli !== "mermaid" && cli !== "sql") {
+    return undefined;
+  }
+
+  const rawOutput = (rawContext as { output?: unknown }).output;
+  const { relative: legacyRelative, copy: legacyCopy } = extractOutputFields(rawOutput);
+  const existingRelative = normalizeString(
+    (rawContext as { relative_path?: unknown }).relative_path,
+  );
+  const relative = existingRelative ?? legacyRelative;
+  const absolute = normalizeString(
+    (rawContext as { absolute_path?: unknown }).absolute_path ??
+      (rawContext as { file_path?: unknown }).file_path,
+  );
+  const copyFromContext = ensureCopyFlag((rawContext as { copy?: unknown }).copy);
+  const copy = copyFromContext ?? legacyCopy;
+
+  const context: Record<string, unknown> = { ...rawContext };
+  delete context.output;
+  delete context.file_path;
+  if (relative !== undefined) {
+    context.relative_path = relative;
+  } else {
+    delete context.relative_path;
+  }
+  if (absolute !== undefined) {
+    context.absolute_path = absolute;
+  } else {
+    delete context.absolute_path;
+  }
+  if (copy) {
+    context.copy = true;
+  } else {
+    delete context.copy;
+  }
+
+  if (cli === "sql") {
+    if (typeof context.engine !== "string" || typeof context.dsn_hash !== "string") {
+      throw new Error("legacy SQL context is missing engine or dsn_hash");
+    }
+    return context as MigratedSqlContext;
+  }
+
+  return context as MigratedAskContext | MigratedFileContext;
+};
+
 const migrated = history.map((entry: LegacyEntry) => {
-  if ("context" in entry && entry.context !== undefined) {
-    return entry;
+  const { task: legacyTask, context: legacyContext, ...rest } = entry;
+
+  const migratedContext =
+    migrateExistingContext(legacyContext) ?? migrateTask(legacyTask ?? undefined);
+
+  if (migratedContext) {
+    return { ...rest, context: migratedContext };
   }
-  if (!entry.task) {
-    const { task: _unused, ...rest } = entry;
-    return rest;
+
+  if (legacyContext !== undefined) {
+    return { ...rest, context: legacyContext };
   }
-  const context = migrateTask(entry.task);
-  const { task: _unused, ...rest } = entry;
-  if (context) {
-    return { ...rest, context };
-  }
+
   return rest;
 });
 

@@ -8,20 +8,16 @@ import { finalizeResult } from "./finalize-result.js";
 
 type D2HistoryContext = {
   cli: "d2";
-  file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
+  absolute_path?: string;
+  relative_path?: string;
+  copy?: boolean;
 };
 
 type MermaidHistoryContext = {
   cli: "mermaid";
-  file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
+  absolute_path?: string;
+  relative_path?: string;
+  copy?: boolean;
 };
 
 const baseConversation: ConversationContext = {
@@ -39,8 +35,8 @@ describe("finalizeResult", () => {
 
     const contextData: D2HistoryContext = {
       cli: "d2",
-      file_path: "/absolute/path.d2",
-      output: { file: "diagram.d2" },
+      absolute_path: "/absolute/path.d2",
+      relative_path: "diagram.d2",
     };
 
     const outcome = await finalizeResult<D2HistoryContext>({
@@ -67,10 +63,10 @@ describe("finalizeResult", () => {
     expect(outcome.stdout).toBe("assistant-content");
   });
 
-  it("contextPath が無い場合に previousContext の file_path を引き継ぐ", async () => {
+  it("contextPath が無い場合に previousContext の absolute_path を引き継ぐ", async () => {
     const previousContext: MermaidHistoryContext = {
       cli: "mermaid",
-      file_path: "/from/history.mmd",
+      absolute_path: "/from/history.mmd",
     };
     const upsertConversation = mock(() => undefined);
     const historyStore = {
@@ -79,7 +75,7 @@ describe("finalizeResult", () => {
 
     const contextData: MermaidHistoryContext = {
       cli: "mermaid",
-      file_path: previousContext.file_path,
+      absolute_path: previousContext.absolute_path,
     };
 
     await finalizeResult<MermaidHistoryContext>({

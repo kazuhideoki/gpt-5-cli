@@ -43,13 +43,9 @@ const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHE
 
 const mermaidCliHistoryContextStrictSchema = z.object({
   cli: z.literal("mermaid"),
-  output: z
-    .object({
-      file: z.string(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
-  file_path: z.string().optional(),
+  relative_path: z.string().optional(),
+  copy: z.boolean().optional(),
+  absolute_path: z.string().optional(),
 });
 
 const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
@@ -291,14 +287,14 @@ async function main(): Promise<void> {
           const historyContext = activeEntry.context as MermaidCliHistoryContext | undefined;
 
           if (!nextOptions.responseOutputExplicit) {
-            const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
+            const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
             if (historyFile) {
               nextOptions.responseOutputPath = historyFile;
               nextOptions.artifactPath = historyFile;
             }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },

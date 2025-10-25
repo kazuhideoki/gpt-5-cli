@@ -156,9 +156,7 @@ describe("buildAskHistoryContext", () => {
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/output.txt",
-      },
+      relative_path: "/tmp/output.txt",
     });
   });
 
@@ -166,18 +164,14 @@ describe("buildAskHistoryContext", () => {
     const context = buildAskHistoryContext({
       previousContext: {
         cli: "ask",
-        output: {
-          file: "/tmp/previous.txt",
-        },
+        relative_path: "/tmp/previous.txt",
       },
       copyOutput: false,
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/previous.txt",
-      },
+      relative_path: "/tmp/previous.txt",
     });
   });
 
@@ -187,35 +181,30 @@ describe("buildAskHistoryContext", () => {
       copyOutput: true,
       previousContext: {
         cli: "ask",
-        output: {
-          file: "/tmp/previous.txt",
-          copy: true,
-        },
+        relative_path: "/tmp/previous.txt",
+        copy: true,
       },
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/output.txt",
-        copy: true,
-      },
+      relative_path: "/tmp/output.txt",
+      copy: true,
     });
   });
 
-  it("drops stale copy-only output when no file is present", () => {
+  it("preserves previous copy flag even when no file is present", () => {
     const context = buildAskHistoryContext({
       copyOutput: false,
       previousContext: {
         cli: "ask",
-        output: {
-          copy: true,
-        },
+        copy: true,
       },
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
+      copy: true,
     });
   });
 });

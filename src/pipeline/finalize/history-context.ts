@@ -6,11 +6,12 @@ import type { TaskMode } from "../../types.js";
 
 export interface FileHistoryContext {
   cli: TaskMode;
-  file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
+  /** 絶対パスでのファイル参照。 */
+  absolute_path?: string;
+  /** ワークスペース基準の相対パス。 */
+  relative_path?: string;
+  /** コピー指示フラグ。 */
+  copy?: boolean;
 }
 
 interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
@@ -53,24 +54,25 @@ export function buildFileHistoryContext<TContext extends FileHistoryContext>(
     ...base,
   };
 
-  const fallbackPath = defaultFilePath ?? previousContext?.file_path;
-  const resolvedFilePath = contextPath ?? fallbackPath;
-  if (resolvedFilePath !== undefined) {
-    result.file_path = resolvedFilePath;
+  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path;
+  if (resolvedAbsolutePath !== undefined) {
+    result.absolute_path = resolvedAbsolutePath;
   } else {
-    delete result.file_path;
+    delete result.absolute_path;
   }
 
-  if (historyArtifactPath !== undefined || copyOutput) {
-    result.output = {
-      file: historyArtifactPath,
-      ...(copyOutput ? { copy: true } : {}),
-    };
-  } else if (previousContext?.output) {
-    // copy フラグなど以前の情報をそのまま引き継ぐ。
-    result.output = { ...previousContext.output };
+  const resolvedRelativePath =
+    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path;
+  if (resolvedRelativePath !== undefined) {
+    result.relative_path = resolvedRelativePath;
   } else {
-    delete result.output;
+    delete result.relative_path;
+  }
+
+  if (copyOutput || previousContext?.copy) {
+    result.copy = true;
+  } else {
+    delete result.copy;
   }
 
   return result;

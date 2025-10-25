@@ -137,7 +137,7 @@ describe("mermaid determineInput", () => {
     const entry: MermaidHistoryEntry = {
       last_response_id: "resp-mermaid",
       title: "diagram",
-      context: { cli: "mermaid", file_path: "/tmp/out.mmd" },
+      context: { cli: "mermaid", absolute_path: "/tmp/out.mmd" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({
