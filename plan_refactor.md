@@ -144,4 +144,4 @@ export type HandleResultFn = (
   - 論理的にはCLI共通の processに渡すための input 処理と、CLI固有の処理の2つでいいか？
   - それを処理しやすく流れをつけるのが良いと考えた。どうだろう？
 - buildRequest に prepareImageData を含めてもいい？ そうすると process層 はリクエストの準備 と 実行の２つでまとまる
-- finalize層は `resolveResultOutput`, `is{CLI}HistoryContext`, `finalizeResult`となっている。これを準備(事情注入)と実行に分けられそう。どう？
+- finalize層は `resolveResultOutput`, `is{CLI}HistoryContext`, `finalizeResult`となっている。これを準備(事情注入)と実行に分けられそう。責務はどうなっている？

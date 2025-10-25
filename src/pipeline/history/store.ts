@@ -141,13 +141,28 @@ interface HistoryConversationUpsert<TContext> {
   contextData?: TContext;
 }
 
+/**
+ * 履歴ストアの動作構成。CLI から保存されるコンテキストの検証やフィルタを切り替える。
+ *
+ * @template TContext CLI 履歴に付随するコンテキスト型。
+ */
 interface HistoryStoreOptions<TContext> {
+  /**
+   * 履歴に付随するコンテキストをバリデーションするための `zod` スキーマ。
+   * コンテキストを扱わない CLI もあるため、必須の制約を課さない目的で省略可能。
+   */
   contextSchema?: z.ZodType<TContext>;
+  /**
+   * 表示・削除対象を調整するためのエントリフィルタ。
+   * CLI モードごとの表示要件が異なるため、デフォルトでは適用せず任意に差し込めるよう省略可能。
+   */
   entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
 }
 
 /**
  * 履歴インデックスファイルを管理するユーティリティ。
+ *
+ * @template TContext CLI から保存される履歴コンテキスト型。
  */
 export class HistoryStore<TContext = unknown> {
   private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TContext>>>;
