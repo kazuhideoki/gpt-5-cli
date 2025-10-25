@@ -422,22 +422,4 @@ export class HistoryStore<TContext = unknown> {
     if (entries.length === 0) return undefined;
     return entries[0];
   }
-
-  /**
-   * 履歴エントリをIDで更新または追加する。
-   *
-   * @param entry 保存対象エントリ。
-   */
-  upsertEntry(entry: HistoryEntry<TContext>): void {
-    const entries = this.loadEntries();
-    const existingIndex = entries.findIndex(
-      (item) => item.last_response_id === entry.last_response_id,
-    );
-    if (existingIndex >= 0) {
-      entries[existingIndex] = entry;
-    } else {
-      entries.push(entry);
-    }
-    this.saveEntries(entries);
-  }
 }
