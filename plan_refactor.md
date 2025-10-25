@@ -38,6 +38,8 @@
 
 ## 契約(＊あくまでイメージ、詳細は今後検討)
 
+現在、CLI層で重複したロジックを持っていたり、各下位層のロジックの凝集性が低かったりする。これをまとめていきたい
+
 ```ts
 // 共通文脈（上位から注入される依存）
 export type Context = {
@@ -90,13 +92,6 @@ export type HandleResultFn = (
   result: ProcessResult,
   ctx: Context
 ) => Promise<ExitCode>;
-
-// パイプライン署名
-export type Pipeline = (
-  fns: { input: InputFn; process: ProcessFn; handleResult: HandleResultFn },
-  args: Args,
-  ctx: Context
-) => Promise<ExitCode>;
 ```
 
 ---
@@ -123,12 +118,30 @@ export type Pipeline = (
 - 整理案: `finalize/history-context.ts` に非ファイル成果物向けヘルパを追加し、ask も finalize 層の共通 API を利用する。
 - 効果: 履歴保存の扱いを層単位で統一し、フラグ継承ルールを一本化できる。
 
-### 入力層: 出力ファイルパス検証の共通化（難易度: 中〜高）
-- 現状: d2 / mermaid / sql でワークスペース内チェックやディレクトリ検証を個別実装している (`ensureD2Context` など)。
-- 整理案: `pipeline/input` もしくは `pipeline/finalize` にファイルパス正規化ユーティリティを追加し、CLI 側はモード固有メタデータのみ保持する。
-- 効果: パス制約の挙動差異を防ぎ、検証ロジックの変更を一度で反映可能にする。
+### 入力層: ファイル/DSN 検証ユーティリティの共通化（難易度: 中）
+- 現状: d2 / mermaid / sql が `ensureD2Context` などの個別関数でワークスペース内チェックや DSN 正規化を担い、CLI 内で条件分岐が増えている。
+- 整理案: `pipeline/input` にファイルパスと DSN の正規化・検証ヘルパーを集約し、CLI ではモード固有の差分設定だけを注入する。
+- 効果: 入力検証の仕様変更を一度で反映でき、CLI 側の処理分岐を削減して責務を明確化する。
 
-### 入力層: CLI オプションスキーマの重複解消（難易度: 高）
-- 現状: `src/cli/ask.ts`, `src/cli/d2.ts`, `src/cli/mermaid.ts`, `src/cli/sql.ts` がほぼ同じ Zod バリデーションを個別に保持しており、`--compact` 併用禁止などのルールが分散している。
-- 整理案: `pipeline/input` に共通スキーマビルダーを追加し、タスク固有フィールドだけを合成するファクトリ関数を導入する。
-- 効果: バリデーション仕様の一元管理と CLI 追加時の複製削減。エラーメッセージも一箇所で揃い、将来のフラグ追加が容易になる。
+### 入力層: CLI オプションスキーマのファクトリ化（難易度: 高）
+- 現状: `src/cli/*.ts` が Zod スキーマを複製し、`--compact` 排他制御など共通ルールの同期が散逸している。
+- 整理案: `pipeline/input` に共通スキーマビルダーを用意し、モード固有項目のみ後から合成できる仕組みにする（過度な抽象化は避け、差分注入に限定）。
+- 効果: バリデーション仕様を一元管理し、CLI 追加時の複製と同期コストを削減する。
+
+### 処理層: 履歴同期ハンドラの標準化（難易度: 中）
+- 現状: `computeContext` へ渡す `synchronizeWithHistory` が CLI ごとに匿名関数で重複し、履歴項目追加時に横断修正が必要。
+- 整理案: 処理層に共通ハンドラを公開し、CLI では差分のみ指定する形へ整理する。
+- 効果: 履歴同期ロジックの凝集度を高め、オプションや履歴項目の拡張を容易にする。
+
+### 結果処理層: 非ファイル成果物履歴の共通化（難易度: 中）
+- 現状: ask の `buildAskHistoryContext` が独自実装のまま残り、ファイル系との履歴保存 API が統一されていない。
+- 整理案: `pipeline/finalize` に非ファイル成果物向けの履歴ヘルパーを追加し、全モードで同じ API を利用する。
+- 効果: finalize 層で履歴処理を完結させ、CLI から残存ロジックを排除できる。
+
+## メモ
+
+- `determineInput`, `computeContext`, `ensure{CLI}Context` の責務の違いは何？
+  - 論理的にはCLI共通の processに渡すための input 処理と、CLI固有の処理の2つでいいか？
+  - それを処理しやすく流れをつけるのが良いと考えた。どうだろう？
+- buildRequest に prepareImageData を含めてもいい？ そうすると process層 はリクエストの準備 と 実行の２つでまとまる
+- finalize層は `resolveResultOutput`, `is{CLI}HistoryContext`, `finalizeResult`となっている。これを準備(事情注入)と実行に分けられそう。どう？

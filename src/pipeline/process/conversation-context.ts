@@ -13,6 +13,17 @@ export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask 
   synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
 }
 
+/**
+ * 履歴情報と入力テキストから会話コンテキストを構築し、履歴継続設定を調整する。
+ *
+ * @param options CLI オプション（履歴継承フラグを含む）。
+ * @param historyStore 履歴の検索・選択に使用するストア。
+ * @param inputText 今回ユーザーが送信するテキスト。
+ * @param initialActiveEntry `determineInput` が返した履歴エントリ候補。
+ * @param explicitPrevId 履歴再開時に明示されたレスポンス ID。
+ * @param explicitPrevTitle 履歴再開時に明示されたタイトル。
+ * @param config ログ設定と履歴同期コールバック。
+ */
 export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>(
   options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
