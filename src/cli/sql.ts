@@ -369,19 +369,24 @@ function resolveSqlDsn(
   throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
 }
 
-/** SQLシステムメッセージ生成時に必要なパラメータ群。 */
+/**
+ * SQL モードで追加システムメッセージを生成する際の入力情報。
+ */
 interface SqlInstructionParams {
+  /** 接続先のメタデータ。 */
   connection: SqlConnectionMetadata;
+  /** DSN をハッシュ化した値。 */
   dsnHash: string;
+  /** エージェントの最大試行回数。 */
   maxIterations: number;
+  /** 接続しているデータベースエンジン。 */
   engine: SqlEngine;
+  /** レスポンス出力先のアーティファクトパス。 */
   artifactPath: string;
 }
 
 /**
  * SQL モードで追加するシステムメッセージを生成する。
- *
- * @param params 接続メタデータと設定値。
  * @returns Responses API へ渡すシステムメッセージ配列。
  */
 export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenAIInputMessage[] {

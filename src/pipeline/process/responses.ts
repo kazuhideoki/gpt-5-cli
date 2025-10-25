@@ -17,18 +17,33 @@ import type {
   OpenAIInputMessage,
 } from "../../types.js";
 
+/**
+ * Responses API へ送るペイロードを構築する際に必要となる入力一式。
+ */
 interface BuildRequestParams {
+  /** CLI から引き継いだ実行設定。履歴継続時に `previous_response_id` を利用する。 */
   options: CliOptions;
+  /** 履歴検索やタイトル継承を反映済みの会話コンテキスト。 */
   context: ConversationContext;
+  /** ユーザーが今回送信するプロンプト文字列。 */
   inputText: string;
+  /** 初回会話でのみ付与されるシステムプロンプト（CLI 側で任意設定）。 */
   systemPrompt?: string;
+  /** CLI が許可した画像添付の Data URL。未指定時はテキストのみ。 */
   imageDataUrl?: string;
+  /** 既定モデルや推論スケールのログ出力に使用する環境値。 */
   defaults?: CliDefaults;
+  /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
+  /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
+  /** CLI 固有のツール構成。未指定なら共通ツールを組み立てる。 */
   tools?: ResponseCreateParamsNonStreaming["tools"];
 }
 
+/**
+ * Responses API へ送るペイロードを構築し、履歴指定や追加システムメッセージを詰め替える。
+ */
 export function buildRequest({
   options,
   context,

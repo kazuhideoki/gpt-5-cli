@@ -12,26 +12,38 @@ import { buildAgentsToolList } from "./tools/index.js";
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);
 
+/**
+ * runAgentConversation が必要とする実行パラメータ群。
+ */
 interface RunAgentConversationParams<TOptions extends CliOptions> {
+  /** OpenAI API クライアント。 */
   client: OpenAI;
+  /** Responses API へ送信するリクエスト。 */
   request: ResponseCreateParamsNonStreaming;
+  /** CLI で解析済みのオプション。 */
   options: TOptions;
+  /** ログ出力に使用する CLI 固有ラベル。 */
   logLabel: string;
+  /** CLI で登録したツール定義一覧。 */
   toolRegistrations: Iterable<ToolRegistration<any, any>>;
+  /** エージェント実行の最大ターン数。 */
   maxTurns?: number;
+  /** 追加で有効化する Agents SDK ツール群。 */
   additionalAgentTools?: AgentsSdkTool[];
 }
 
+/**
+ * runAgentConversation が返す応答結果。
+ */
 interface AgentConversationResult {
+  /** 最終的に得られたアシスタントのテキスト。 */
   assistantText: string;
+  /** 最後に取得した Responses API のレスポンス ID。 */
   responseId?: string;
 }
 
 /**
  * Agents SDK を利用してリクエストを実行し、最終応答テキストとレスポンス ID を返す。
- *
- * @param params エージェント実行に必要な情報。
- * @returns エージェントの最終応答とレスポンス ID。
  */
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,

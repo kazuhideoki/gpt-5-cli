@@ -2,14 +2,25 @@
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
+/**
+ * 履歴同期コールバックへ渡す情報セット。
+ */
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** 現在の CLI オプション。 */
   options: TOptions;
+  /** 選択中の履歴エントリ。 */
   activeEntry: HistoryEntry<THistoryTask>;
+  /** 警告ログを出力する関数。 */
   logWarning: (message: string) => void;
 }
 
+/**
+ * computeContext の挙動を調整する追加設定。
+ */
 export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
+  /** 履歴オプションを更新するときに呼び出す同期ハンドラ。 */
   synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
 }
 
@@ -22,7 +33,6 @@ export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask 
  * @param initialActiveEntry `determineInput` が返した履歴エントリ候補。
  * @param explicitPrevId 履歴再開時に明示されたレスポンス ID。
  * @param explicitPrevTitle 履歴再開時に明示されたタイトル。
- * @param config ログ設定と履歴同期コールバック。
  */
 export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>(
   options: TOptions,
