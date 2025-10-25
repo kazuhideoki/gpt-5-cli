@@ -39,8 +39,8 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     imagePath: undefined,
     operation: "ask",
     compactIndex: undefined,
-    finalOutputPath: "diagram.d2",
-    finalOutputExplicit: false,
+    responseOutputPath: "diagram.d2",
+    responseOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
     artifactPath: "diagram.d2",
@@ -63,7 +63,7 @@ describe("d2 parseArgs", () => {
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
     expect(options.artifactPath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
-    expect(options.finalOutputPath).toBe(options.artifactPath);
+    expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -84,7 +84,7 @@ describe("d2 parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.d2", "生成"], defaults);
     expect(options.artifactPath).toBe("diagram.d2");
-    expect(options.finalOutputExplicit).toBe(true);
+    expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {

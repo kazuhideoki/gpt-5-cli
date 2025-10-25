@@ -35,7 +35,7 @@ describe("parseArgs", () => {
     expect(options.artifactPath).toMatch(
       /^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u,
     );
-    expect(options.finalOutputPath).toBe(options.artifactPath);
+    expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -67,7 +67,7 @@ describe("parseArgs", () => {
       defaults,
     );
     expect(options.artifactPath).toBe("result.sql");
-    expect(options.finalOutputExplicit).toBe(true);
+    expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
@@ -220,7 +220,7 @@ describe("ensureSqlContext", () => {
     expect(context.absolutePath).toBe(path.resolve(process.cwd(), relativePath));
     expect(context.exists).toBe(false);
     expect(options.artifactPath).toBe(relativePath);
-    expect(options.finalOutputPath).toBe(relativePath);
+    expect(options.responseOutputPath).toBe(relativePath);
   });
 
   it("既存ファイルがある場合は exists=true を返す", () => {
@@ -240,7 +240,7 @@ describe("ensureSqlContext", () => {
     expect(context.absolutePath).toBe(absolutePath);
     expect(context.exists).toBe(true);
     expect(options.artifactPath).toBe(relativePath);
-    expect(options.finalOutputPath).toBe(relativePath);
+    expect(options.responseOutputPath).toBe(relativePath);
   });
 
   it("ワークスペース外のパスではエラーを投げる", () => {

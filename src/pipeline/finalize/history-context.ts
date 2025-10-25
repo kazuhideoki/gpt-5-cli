@@ -28,7 +28,7 @@ interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
    */
   previousContext?: FileHistoryContext;
   /**
-   * 履歴に保存したい Artifact のパス。`finalOutputPath ?? options.<artifactPath>` などを想定する。
+   * 履歴に保存したい Artifact のパス。`responseOutputPath ?? options.<artifactPath>` などを想定する。
    */
   historyArtifactPath?: string;
   /**

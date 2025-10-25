@@ -90,29 +90,29 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     previousResponseId,
   });
 
-  let finalOutput =
+  let responseText =
     typeof result.finalOutput === "string" && result.finalOutput.length > 0
       ? result.finalOutput
       : extractAllTextOutput(result.newItems);
 
-  if (!finalOutput || finalOutput.length === 0) {
+  if (!responseText || responseText.length === 0) {
     const latestProviderData = result.rawResponses.at(-1)?.providerData as
       | { output_text?: string | string[] }
       | undefined;
     const fallbackText = latestProviderData?.output_text;
     if (typeof fallbackText === "string" && fallbackText.length > 0) {
-      finalOutput = fallbackText;
+      responseText = fallbackText;
     } else if (Array.isArray(fallbackText) && fallbackText.length > 0) {
-      finalOutput = fallbackText.join("\n");
+      responseText = fallbackText.join("\n");
     }
   }
 
-  if (!finalOutput || finalOutput.length === 0) {
+  if (!responseText || responseText.length === 0) {
     throw new Error("Error: Failed to resolve agent response text");
   }
 
   return {
-    assistantText: finalOutput,
+    assistantText: responseText,
     responseId: result.lastResponseId,
   };
 }

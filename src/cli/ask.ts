@@ -53,7 +53,7 @@ function isAskHistoryContext(value: unknown): value is AskCliHistoryContext {
 
 interface BuildAskHistoryContextParams {
   previousContext?: AskCliHistoryContext;
-  finalOutputPath?: string;
+  responseOutputPath?: string;
   copyOutput: boolean;
 }
 
@@ -61,8 +61,8 @@ interface BuildAskHistoryContextParams {
  * ask CLI が履歴へ保存するコンテキストを構築する。
  */
 export function buildAskHistoryContext(params: BuildAskHistoryContextParams): AskCliHistoryContext {
-  const { previousContext, finalOutputPath, copyOutput } = params;
-  const historyFinalOutput = finalOutputPath ?? previousContext?.output?.file;
+  const { previousContext, responseOutputPath, copyOutput } = params;
+  const historyFinalOutput = responseOutputPath ?? previousContext?.output?.file;
 
   const nextContext: AskCliHistoryContext = {
     cli: "ask",
@@ -118,8 +118,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     debug: z.boolean(),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
-    finalOutputPath: z.string().min(1).optional(),
-    finalOutputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
@@ -223,8 +223,8 @@ async function main(): Promise<void> {
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
           const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
-          if (!nextOptions.finalOutputExplicit && historyContext?.output?.file) {
-            nextOptions.finalOutputPath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit && historyContext?.output?.file) {
+            nextOptions.responseOutputPath = historyContext.output.file;
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
             nextOptions.copyOutput = historyContext.output.copy;
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath = options.finalOutputPath;
+    const textOutputPath = options.responseOutputPath;
 
     const previousContextRaw = context.activeEntry?.context as
       | AskCliHistoryStoreContext
@@ -269,14 +269,14 @@ async function main(): Promise<void> {
 
     const historyContext = buildAskHistoryContext({
       previousContext,
-      finalOutputPath: options.finalOutputPath,
+      responseOutputPath: options.responseOutputPath,
       copyOutput: options.copyOutput,
     });
 
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath,
+      textOutputPath,
       copyOutput: options.copyOutput,
       history: agentResult.responseId
         ? {

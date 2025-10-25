@@ -103,8 +103,8 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
-    finalOutputPath: z.string().min(1).optional(),
-    finalOutputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
@@ -147,15 +147,15 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
   const program = createMermaidProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const resolvedFinalOutputPath =
-    commonOptions.finalOutputPath ??
+  const resolvedResponseOutputPath =
+    commonOptions.responseOutputPath ??
     generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "mermaid",
-      finalOutputPath: resolvedFinalOutputPath,
-      artifactPath: resolvedFinalOutputPath,
+      responseOutputPath: resolvedResponseOutputPath,
+      artifactPath: resolvedResponseOutputPath,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -193,7 +193,7 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
   options.artifactPath = relativePath;
-  options.finalOutputPath = relativePath;
+  options.responseOutputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
 }
@@ -289,10 +289,10 @@ async function main(): Promise<void> {
           nextOptions.taskMode = "mermaid";
           const historyContext = activeEntry.context as MermaidCliHistoryContext | undefined;
 
-          if (!nextOptions.finalOutputExplicit) {
+          if (!nextOptions.responseOutputExplicit) {
             const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
-              nextOptions.finalOutputPath = historyFile;
+              nextOptions.responseOutputPath = historyFile;
               nextOptions.artifactPath = historyFile;
             }
           }
@@ -329,11 +329,11 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const finalOutputPath =
-      options.finalOutputExplicit &&
-      options.finalOutputPath &&
-      options.finalOutputPath !== options.artifactPath
-        ? options.finalOutputPath
+    const responseOutputPath =
+      options.responseOutputExplicit &&
+      options.responseOutputPath &&
+      options.responseOutputPath !== options.artifactPath
+        ? options.responseOutputPath
         : undefined;
 
     const previousContextRaw = context.activeEntry?.context as
@@ -347,13 +347,13 @@ async function main(): Promise<void> {
       contextPath: mermaidContext.absolutePath,
       defaultFilePath: options.artifactPath,
       previousContext,
-      historyArtifactPath: finalOutputPath ?? options.artifactPath,
+      historyArtifactPath: responseOutputPath ?? options.artifactPath,
       copyOutput: options.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath: finalOutputPath,
+      textOutputPath: responseOutputPath,
       copyOutput: options.copyOutput,
       copySourceFilePath: options.artifactPath,
       history: agentResult.responseId

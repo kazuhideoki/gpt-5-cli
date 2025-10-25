@@ -161,8 +161,8 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
-    finalOutputPath: z.string().min(1).optional(),
-    finalOutputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
@@ -216,15 +216,15 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     }
     dsn = trimmed;
   }
-  const resolvedFinalOutputPath =
-    commonOptions.finalOutputPath ??
+  const resolvedResponseOutputPath =
+    commonOptions.responseOutputPath ??
     generateDefaultOutputPath({ mode: "sql", extension: "sql" }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "sql",
-      finalOutputPath: resolvedFinalOutputPath,
-      artifactPath: resolvedFinalOutputPath,
+      responseOutputPath: resolvedResponseOutputPath,
+      artifactPath: resolvedResponseOutputPath,
       dsn,
     });
   } catch (error) {
@@ -312,7 +312,7 @@ export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
   options.artifactPath = relativePath;
-  options.finalOutputPath = relativePath;
+  options.responseOutputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
 }
@@ -563,8 +563,8 @@ async function main(): Promise<void> {
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
           const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
-          if (!nextOptions.finalOutputExplicit && historyContext?.output?.file) {
-            nextOptions.finalOutputPath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit && historyContext?.output?.file) {
+            nextOptions.responseOutputPath = historyContext.output.file;
             nextOptions.artifactPath = historyContext.output.file;
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
@@ -621,11 +621,11 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const finalOutputPath =
-      options.finalOutputExplicit &&
-      options.finalOutputPath &&
-      options.finalOutputPath !== options.artifactPath
-        ? options.finalOutputPath
+    const responseOutputPath =
+      options.responseOutputExplicit &&
+      options.responseOutputPath &&
+      options.responseOutputPath !== options.artifactPath
+        ? options.responseOutputPath
         : undefined;
 
     const previousContextRaw = context.activeEntry?.context as
@@ -643,7 +643,7 @@ async function main(): Promise<void> {
       },
       previousContext,
       {
-        historyArtifactPath: finalOutputPath ?? options.artifactPath,
+        historyArtifactPath: responseOutputPath ?? options.artifactPath,
         copyOutput: options.copyOutput,
       },
     );
@@ -651,7 +651,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath: finalOutputPath,
+      textOutputPath: responseOutputPath,
       copyOutput: options.copyOutput,
       copySourceFilePath: options.artifactPath,
       history: agentResult.responseId

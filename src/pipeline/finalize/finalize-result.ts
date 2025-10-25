@@ -30,7 +30,7 @@ export interface FinalizeResultParams<TContext> {
   content: string;
   userText: string;
   stdout?: string;
-  summaryOutputPath?: string;
+  textOutputPath?: string;
   copyOutput: boolean;
   copySourceFilePath?: string;
   history?: FinalizeResultHistoryOptions<TContext>;
@@ -45,14 +45,14 @@ export interface FinalizeResultParams<TContext> {
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const { content, stdout, summaryOutputPath, copyOutput, copySourceFilePath, history, userText } =
+  const { content, stdout, textOutputPath, copyOutput, copySourceFilePath, history, userText } =
     params;
 
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
-    summaryOutputPath || copyOutput
+    textOutputPath || copyOutput
       ? ({
           params: {
-            ...(summaryOutputPath ? { filePath: summaryOutputPath } : {}),
+            ...(textOutputPath ? { filePath: textOutputPath } : {}),
             ...(copyOutput
               ? {
                   copy: true,

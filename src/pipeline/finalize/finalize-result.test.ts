@@ -46,7 +46,7 @@ describe("finalizeResult", () => {
     const outcome = await finalizeResult<D2HistoryContext>({
       content: "assistant-content",
       userText: "user-input",
-      summaryOutputPath: undefined,
+      textOutputPath: undefined,
       copyOutput: false,
       history: {
         responseId: "resp-1",
@@ -85,7 +85,7 @@ describe("finalizeResult", () => {
     await finalizeResult<MermaidHistoryContext>({
       content: "diagram",
       userText: "describe diagram",
-      summaryOutputPath: undefined,
+      textOutputPath: undefined,
       copyOutput: false,
       history: {
         responseId: "resp-2",
