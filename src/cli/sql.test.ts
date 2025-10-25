@@ -32,9 +32,8 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
-    expect(options.artifactPath).toMatch(
-      /^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u,
-    );
+    expect(options.artifactPath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
     expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 

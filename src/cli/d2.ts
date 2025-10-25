@@ -381,7 +381,7 @@ async function main(): Promise<void> {
 
     const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
     const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
-  const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
+    const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
       base: { cli: "d2" },
       contextPath: d2Context.absolutePath,
       defaultFilePath: options.artifactPath,

@@ -65,6 +65,7 @@ describe("mermaid parseArgs", () => {
     expect(options.artifactPath).toMatch(
       /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
     );
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
     expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 

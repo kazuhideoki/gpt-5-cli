@@ -63,6 +63,7 @@ describe("d2 parseArgs", () => {
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
     expect(options.artifactPath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
     expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
