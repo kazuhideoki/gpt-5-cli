@@ -22,7 +22,11 @@ import {
   WRITE_FILE_TOOL,
   setSqlEnvironment,
 } from "../pipeline/process/tools/index.js";
-import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
+import {
+  finalizeResult,
+  generateDefaultOutputPath,
+  resolveResultOutput,
+} from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { determineInput } from "../pipeline/input/cli-input.js";
@@ -621,12 +625,11 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const responseOutputPath =
-      options.responseOutputExplicit &&
-      options.responseOutputPath &&
-      options.responseOutputPath !== options.artifactPath
-        ? options.responseOutputPath
-        : undefined;
+    const outputResolution = resolveResultOutput({
+      responseOutputExplicit: options.responseOutputExplicit,
+      responseOutputPath: options.responseOutputPath,
+      artifactPath: options.artifactPath,
+    });
 
     const previousContextRaw = context.activeEntry?.context as
       | SqlCliHistoryStoreContext
@@ -643,7 +646,7 @@ async function main(): Promise<void> {
       },
       previousContext,
       {
-        historyArtifactPath: responseOutputPath ?? options.artifactPath,
+        historyArtifactPath: outputResolution.artifactReferencePath,
         copyOutput: options.copyOutput,
       },
     );
@@ -651,7 +654,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      textOutputPath: responseOutputPath,
+      textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: options.copyOutput,
       copySourceFilePath: options.artifactPath,
       history: agentResult.responseId

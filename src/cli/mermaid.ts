@@ -14,6 +14,7 @@ import {
   finalizeResult,
   generateDefaultOutputPath,
   buildFileHistoryContext,
+  resolveResultOutput,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -329,12 +330,11 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const responseOutputPath =
-      options.responseOutputExplicit &&
-      options.responseOutputPath &&
-      options.responseOutputPath !== options.artifactPath
-        ? options.responseOutputPath
-        : undefined;
+    const outputResolution = resolveResultOutput({
+      responseOutputExplicit: options.responseOutputExplicit,
+      responseOutputPath: options.responseOutputPath,
+      artifactPath: options.artifactPath,
+    });
 
     const previousContextRaw = context.activeEntry?.context as
       | MermaidCliHistoryStoreContext
@@ -347,13 +347,13 @@ async function main(): Promise<void> {
       contextPath: mermaidContext.absolutePath,
       defaultFilePath: options.artifactPath,
       previousContext,
-      historyArtifactPath: responseOutputPath ?? options.artifactPath,
+      historyArtifactPath: outputResolution.artifactReferencePath,
       copyOutput: options.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      textOutputPath: responseOutputPath,
+      textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: options.copyOutput,
       copySourceFilePath: options.artifactPath,
       history: agentResult.responseId
