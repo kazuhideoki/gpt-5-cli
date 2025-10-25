@@ -37,8 +37,8 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     continueConversation: false,
     debug: false,
     taskMode: "ask",
-    outputPath: undefined,
-    outputExplicit: false,
+    finalOutputPath: undefined,
+    finalOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
     resumeListOnly: false,
@@ -150,7 +150,7 @@ describe("parseArgs", () => {
 describe("buildAskHistoryContext", () => {
   it("records new output path when provided", () => {
     const context = buildAskHistoryContext({
-      outputPath: "/tmp/output.txt",
+      finalOutputPath: "/tmp/output.txt",
       copyOutput: false,
     });
 
@@ -183,7 +183,7 @@ describe("buildAskHistoryContext", () => {
 
   it("includes copy flag only when explicitly requested", () => {
     const context = buildAskHistoryContext({
-      outputPath: "/tmp/output.txt",
+      finalOutputPath: "/tmp/output.txt",
       copyOutput: true,
       previousContext: {
         cli: "ask",

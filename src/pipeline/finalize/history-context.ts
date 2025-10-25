@@ -28,9 +28,9 @@ interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
    */
   previousContext?: FileHistoryContext;
   /**
-   * 履歴に保存したい出力ファイルパス。`summaryOutputPath ?? options.<filePath>` などを想定する。
+   * 履歴に保存したい Artifact のパス。`finalOutputPath ?? options.<artifactPath>` などを想定する。
    */
-  historyOutputFile?: string;
+  historyArtifactPath?: string;
   /**
    * `--copy` フラグが有効かどうか。
    */
@@ -46,7 +46,7 @@ interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
 export function buildFileHistoryContext<TContext extends FileHistoryContext>(
   params: BuildFileHistoryContextParams<TContext>,
 ): TContext {
-  const { base, contextPath, defaultFilePath, previousContext, historyOutputFile, copyOutput } =
+  const { base, contextPath, defaultFilePath, previousContext, historyArtifactPath, copyOutput } =
     params;
 
   const result: TContext = {
@@ -61,9 +61,9 @@ export function buildFileHistoryContext<TContext extends FileHistoryContext>(
     delete result.file_path;
   }
 
-  if (historyOutputFile !== undefined || copyOutput) {
+  if (historyArtifactPath !== undefined || copyOutput) {
     result.output = {
-      file: historyOutputFile,
+      file: historyArtifactPath,
       ...(copyOutput ? { copy: true } : {}),
     };
   } else if (previousContext?.output) {

@@ -36,7 +36,7 @@ describe("buildFileHistoryContext", () => {
   it("copyOutput が true のとき output.copy を設定する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
       base: { cli: "d2" },
-      historyOutputFile: "result.d2",
+      historyArtifactPath: "result.d2",
       copyOutput: true,
     });
 
@@ -46,7 +46,7 @@ describe("buildFileHistoryContext", () => {
     });
   });
 
-  it("historyOutputFile / copyOutput が無い場合は previousContext.output を引き継ぐ", () => {
+  it("historyArtifactPath / copyOutput が無い場合は previousContext.output を引き継ぐ", () => {
     const previous: D2HistoryContext = {
       cli: "d2",
       output: { file: "previous.d2", copy: true },

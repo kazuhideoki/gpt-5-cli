@@ -53,7 +53,7 @@ function isAskHistoryContext(value: unknown): value is AskCliHistoryContext {
 
 interface BuildAskHistoryContextParams {
   previousContext?: AskCliHistoryContext;
-  outputPath?: string;
+  finalOutputPath?: string;
   copyOutput: boolean;
 }
 
@@ -61,16 +61,16 @@ interface BuildAskHistoryContextParams {
  * ask CLI が履歴へ保存するコンテキストを構築する。
  */
 export function buildAskHistoryContext(params: BuildAskHistoryContextParams): AskCliHistoryContext {
-  const { previousContext, outputPath, copyOutput } = params;
-  const historyOutputFile = outputPath ?? previousContext?.output?.file;
+  const { previousContext, finalOutputPath, copyOutput } = params;
+  const historyFinalOutput = finalOutputPath ?? previousContext?.output?.file;
 
   const nextContext: AskCliHistoryContext = {
     cli: "ask",
   };
 
-  if (historyOutputFile !== undefined || copyOutput) {
+  if (historyFinalOutput !== undefined || copyOutput) {
     nextContext.output = {
-      ...(historyOutputFile !== undefined ? { file: historyOutputFile } : {}),
+      ...(historyFinalOutput !== undefined ? { file: historyFinalOutput } : {}),
       ...(copyOutput ? { copy: true } : {}),
     };
     return nextContext;
@@ -118,8 +118,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     debug: z.boolean(),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
-    outputPath: z.string().min(1).optional(),
-    outputExplicit: z.boolean(),
+    finalOutputPath: z.string().min(1).optional(),
+    finalOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
@@ -223,8 +223,8 @@ async function main(): Promise<void> {
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
           const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
-          if (!nextOptions.outputExplicit && historyContext?.output?.file) {
-            nextOptions.outputPath = historyContext.output.file;
+          if (!nextOptions.finalOutputExplicit && historyContext?.output?.file) {
+            nextOptions.finalOutputPath = historyContext.output.file;
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
             nextOptions.copyOutput = historyContext.output.copy;
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath = options.outputPath;
+    const summaryOutputPath = options.finalOutputPath;
 
     const previousContextRaw = context.activeEntry?.context as
       | AskCliHistoryStoreContext
@@ -269,7 +269,7 @@ async function main(): Promise<void> {
 
     const historyContext = buildAskHistoryContext({
       previousContext,
-      outputPath: options.outputPath,
+      finalOutputPath: options.finalOutputPath,
       copyOutput: options.copyOutput,
     });
 

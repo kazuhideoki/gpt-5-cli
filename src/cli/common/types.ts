@@ -58,7 +58,7 @@ export interface CommonOptionSourceSnapshot {
   modelExplicit: boolean;
   effortExplicit: boolean;
   verbosityExplicit: boolean;
-  outputExplicit: boolean;
+  finalOutputExplicit: boolean;
   copyExplicit: boolean;
 }
 

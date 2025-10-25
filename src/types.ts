@@ -69,8 +69,8 @@ export interface CommonCliOptions {
   debug: boolean;
   maxIterations: number;
   maxIterationsExplicit: boolean;
-  outputPath?: string;
-  outputExplicit: boolean;
+  finalOutputPath?: string;
+  finalOutputExplicit: boolean;
   copyOutput: boolean;
   copyExplicit: boolean;
   resumeIndex?: number;

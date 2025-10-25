@@ -32,8 +32,10 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
-    expect(options.filePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
-    expect(options.outputPath).toBe(options.filePath);
+    expect(options.artifactPath).toMatch(
+      /^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u,
+    );
+    expect(options.finalOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -64,8 +66,8 @@ describe("parseArgs", () => {
       ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
       defaults,
     );
-    expect(options.filePath).toBe("result.sql");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.artifactPath).toBe("result.sql");
+    expect(options.finalOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
@@ -96,7 +98,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:abcd",
       maxIterations: 7,
       engine: "postgresql",
-      filePath: "query.sql",
+      artifactPath: "query.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -115,7 +117,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:mysql",
       maxIterations: 5,
       engine: "mysql",
-      filePath: "output.sql",
+      artifactPath: "output.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -164,7 +166,7 @@ describe("buildSqlHistoryContext", () => {
         engine: "postgresql",
       },
       existing,
-      { historyOutputFile: "result.sql", copyOutput: true },
+      { historyArtifactPath: "result.sql", copyOutput: true },
     );
     expect(updated.dsn_hash).toBe("sha256:new");
     expect(updated.connection?.host).toBe("next");
@@ -217,8 +219,8 @@ describe("ensureSqlContext", () => {
     expect(context.relativePath).toBe(relativePath);
     expect(context.absolutePath).toBe(path.resolve(process.cwd(), relativePath));
     expect(context.exists).toBe(false);
-    expect(options.filePath).toBe(relativePath);
-    expect(options.outputPath).toBe(relativePath);
+    expect(options.artifactPath).toBe(relativePath);
+    expect(options.finalOutputPath).toBe(relativePath);
   });
 
   it("既存ファイルがある場合は exists=true を返す", () => {
@@ -237,8 +239,8 @@ describe("ensureSqlContext", () => {
     expect(context.relativePath).toBe(relativePath);
     expect(context.absolutePath).toBe(absolutePath);
     expect(context.exists).toBe(true);
-    expect(options.filePath).toBe(relativePath);
-    expect(options.outputPath).toBe(relativePath);
+    expect(options.artifactPath).toBe(relativePath);
+    expect(options.finalOutputPath).toBe(relativePath);
   });
 
   it("ワークスペース外のパスではエラーを投げる", () => {

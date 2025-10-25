@@ -39,11 +39,11 @@ function createOptions(overrides: Partial<MermaidCliOptions> = {}): MermaidCliOp
     imagePath: undefined,
     operation: "ask",
     compactIndex: undefined,
-    outputPath: "diagram.mmd",
-    outputExplicit: false,
+    finalOutputPath: "diagram.mmd",
+    finalOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
-    filePath: "diagram.mmd",
+    artifactPath: "diagram.mmd",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -62,10 +62,10 @@ describe("mermaid parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.filePath).toMatch(
+    expect(options.artifactPath).toMatch(
       /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
     );
-    expect(options.outputPath).toBe(options.filePath);
+    expect(options.finalOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -85,8 +85,8 @@ describe("mermaid parseArgs", () => {
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.mmd", "生成"], defaults);
-    expect(options.filePath).toBe("diagram.mmd");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.artifactPath).toBe("diagram.mmd");
+    expect(options.finalOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {

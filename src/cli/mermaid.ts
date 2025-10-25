@@ -26,7 +26,7 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
-  filePath: string;
+  artifactPath: string;
 }
 
 /**
@@ -103,13 +103,13 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
-    outputPath: z.string().min(1).optional(),
-    outputExplicit: z.boolean(),
+    finalOutputPath: z.string().min(1).optional(),
+    finalOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    filePath: z.string().min(1),
+    artifactPath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
@@ -147,15 +147,15 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
   const program = createMermaidProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const resolvedOutputPath =
-    commonOptions.outputPath ??
+  const resolvedFinalOutputPath =
+    commonOptions.finalOutputPath ??
     generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "mermaid",
-      outputPath: resolvedOutputPath,
-      filePath: resolvedOutputPath,
+      finalOutputPath: resolvedFinalOutputPath,
+      artifactPath: resolvedFinalOutputPath,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -177,7 +177,7 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
     throw new Error("Invariant violation: ensureMermaidContext は mermaid モード専用です");
   }
   const cwd = process.cwd();
-  const rawPath = options.filePath;
+  const rawPath = options.artifactPath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -192,8 +192,8 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
     throw new Error(`Error: 指定した Mermaid ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.filePath = relativePath;
-  options.outputPath = relativePath;
+  options.artifactPath = relativePath;
+  options.finalOutputPath = relativePath;
   const exists = fs.existsSync(absolutePath);
   return { relativePath, absolutePath, exists };
 }
@@ -289,11 +289,11 @@ async function main(): Promise<void> {
           nextOptions.taskMode = "mermaid";
           const historyContext = activeEntry.context as MermaidCliHistoryContext | undefined;
 
-          if (!nextOptions.outputExplicit) {
+          if (!nextOptions.finalOutputExplicit) {
             const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
             if (historyFile) {
-              nextOptions.outputPath = historyFile;
-              nextOptions.filePath = historyFile;
+              nextOptions.finalOutputPath = historyFile;
+              nextOptions.artifactPath = historyFile;
             }
           }
           if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
@@ -329,9 +329,11 @@ async function main(): Promise<void> {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
-        ? options.outputPath
+    const finalOutputPath =
+      options.finalOutputExplicit &&
+      options.finalOutputPath &&
+      options.finalOutputPath !== options.artifactPath
+        ? options.finalOutputPath
         : undefined;
 
     const previousContextRaw = context.activeEntry?.context as
@@ -343,17 +345,17 @@ async function main(): Promise<void> {
     const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
       base: { cli: "mermaid" },
       contextPath: mermaidContext.absolutePath,
-      defaultFilePath: options.filePath,
+      defaultFilePath: options.artifactPath,
       previousContext,
-      historyOutputFile: summaryOutputPath ?? options.filePath,
+      historyArtifactPath: finalOutputPath ?? options.artifactPath,
       copyOutput: options.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath,
+      summaryOutputPath: finalOutputPath,
       copyOutput: options.copyOutput,
-      copySourceFilePath: options.filePath,
+      copySourceFilePath: options.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
@@ -372,7 +374,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = mermaidContext.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-mermaid] output file: ${options.filePath}`);
+      console.log(`[gpt-5-cli-mermaid] artifact file: ${options.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

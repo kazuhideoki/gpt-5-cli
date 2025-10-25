@@ -89,8 +89,8 @@ describe("parseCommonOptions", () => {
     expect(options.debug).toBe(true);
     expect(options.copyOutput).toBe(true);
     expect(options.copyExplicit).toBe(true);
-    expect(options.outputPath).toBe("/tmp/out.txt");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.finalOutputPath).toBe("/tmp/out.txt");
+    expect(options.finalOutputExplicit).toBe(true);
     expect(options.maxIterations).toBe(12);
     expect(options.maxIterationsExplicit).toBe(true);
     expect(options.args).toEqual(["質問"]);

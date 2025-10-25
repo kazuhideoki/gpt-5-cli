@@ -24,8 +24,8 @@ const commonCliOptionsSchema: z.ZodType<CommonCliOptions> = z.object({
   debug: z.boolean(),
   maxIterations: z.number(),
   maxIterationsExplicit: z.boolean(),
-  outputPath: z.string().min(1).optional(),
-  outputExplicit: z.boolean(),
+  finalOutputPath: z.string().min(1).optional(),
+  finalOutputExplicit: z.boolean(),
   copyOutput: z.boolean(),
   copyExplicit: z.boolean(),
   resumeIndex: z.number().optional(),
@@ -171,9 +171,9 @@ export function parseCommonOptions(
   let showIndex: number | undefined;
   let hasExplicitHistory = false;
   const imagePath = opts.image;
-  let outputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
-  if (outputPath && outputPath.length === 0) {
-    outputPath = undefined;
+  let finalOutputPath = typeof opts.output === "string" ? opts.output.trim() : undefined;
+  if (finalOutputPath && finalOutputPath.length === 0) {
+    finalOutputPath = undefined;
   }
   const copyOutput = Boolean(opts.copy);
   let operation: "ask" | "compact" = "ask";
@@ -213,7 +213,7 @@ export function parseCommonOptions(
   const modelExplicit = program.getOptionValueSource("model") === "cli";
   const effortExplicit = program.getOptionValueSource("effort") === "cli";
   const verbosityExplicit = program.getOptionValueSource("verbosity") === "cli";
-  const outputExplicit = program.getOptionValueSource("output") === "cli";
+  const finalOutputExplicit = program.getOptionValueSource("output") === "cli";
   const copyExplicit = program.getOptionValueSource("copy") === "cli";
   const maxIterationsExplicit = program.getOptionValueSource("iterations") === "cli";
   const maxIterations =
@@ -233,8 +233,8 @@ export function parseCommonOptions(
       debug,
       maxIterations,
       maxIterationsExplicit,
-      outputPath,
-      outputExplicit,
+      finalOutputPath,
+      finalOutputExplicit,
       copyOutput,
       copyExplicit,
       operation,
