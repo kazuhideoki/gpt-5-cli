@@ -26,6 +26,7 @@ interface LoadEnvironmentOptions {
  *
  * @param options.envSuffix CLIごとの追加環境ファイル接尾辞。
  * @param options.baseDir   ルートディレクトリをテストなどで上書きする場合に指定。
+ * @todo process.env ではなく、config 構造体にし、後工程に渡していけるようにする
  */
 export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
   const baseDir = options.baseDir ?? ROOT_DIR;
@@ -34,15 +35,14 @@ export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
   );
 
   const baseEnvPath = path.join(baseDir, ".env");
-  const baseParsed = fs.existsSync(baseEnvPath)
-    ? dotenv.parse(fs.readFileSync(baseEnvPath, "utf8"))
-    : undefined;
+  if (!fs.existsSync(baseEnvPath)) {
+    throw new Error(`.env file not found in ${baseDir}`);
+  }
+  const baseParsed = dotenv.parse(fs.readFileSync(baseEnvPath, "utf8"));
 
-  if (baseParsed) {
-    for (const [key, value] of Object.entries(baseParsed)) {
-      if (!existingEnv.has(key)) {
-        process.env[key] = value;
-      }
+  for (const [key, value] of Object.entries(baseParsed)) {
+    if (!existingEnv.has(key)) {
+      process.env[key] = value;
     }
   }
 
