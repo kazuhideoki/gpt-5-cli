@@ -9,7 +9,6 @@ import type {
 import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
-import { buildCliToolList } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -110,7 +109,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: tools ?? buildCliToolList([], { appendWebSearchPreview: true }),
+    tools,
     input: inputForRequest,
   };
 

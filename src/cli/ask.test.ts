@@ -236,6 +236,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      tools: buildAskResponseTools(),
     });
     const input = request.input as any[];
     expect(input[0]).toEqual({
@@ -264,6 +265,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      tools: buildAskResponseTools(),
     });
     const input = request.input as any[];
     const systemTexts = input
