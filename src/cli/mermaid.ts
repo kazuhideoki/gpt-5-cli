@@ -63,6 +63,7 @@ const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
 export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
 type MermaidCliHistoryStoreContext = z.infer<typeof mermaidCliHistoryContextSchema>;
 
+// TODO History ファイルを共有しないことを前提とし、シンプルにする。そうすればこれは不要
 function isMermaidHistoryContext(
   value: MermaidCliHistoryStoreContext | undefined,
 ): value is MermaidCliHistoryContext {
