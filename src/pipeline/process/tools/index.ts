@@ -2,6 +2,7 @@ export {
   buildAgentsToolList,
   buildCliToolList,
   type BuildCliToolListConfig,
+  type ConversationToolset,
   type ToolRegistration,
   type ToolResult,
   type ToolExecutionContext,

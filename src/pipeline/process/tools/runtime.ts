@@ -23,6 +23,21 @@ export interface ToolResult {
   [key: string]: unknown;
 }
 
+/**
+ * Responses API と Agents SDK の双方で利用するツール配列をまとめたセット。
+ * CLI 層ではこの型を用いて、API リクエストとエージェント実行に同じ構成を共有する。
+ */
+export interface ConversationToolset {
+  /**
+   * Responses API リクエストに添付する Function Tool / web_search_preview 定義群。
+   */
+  response: ResponseCreateParamsNonStreaming["tools"];
+  /**
+   * Agents SDK でアクティブにするツール定義群。
+   */
+  agents: AgentsSdkTool[];
+}
+
 export interface CommandResult extends ToolResult {
   command: string;
   args: string[];
