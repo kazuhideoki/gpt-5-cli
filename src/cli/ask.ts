@@ -201,14 +201,14 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): ask モードの履歴出力設定を input 層で共有できるよう整理する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: "[gpt-5-cli]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
@@ -224,7 +224,7 @@ async function main(): Promise<void> {
           }
         },
       },
-    );
+    });
 
     const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]");
     const request = buildRequest({

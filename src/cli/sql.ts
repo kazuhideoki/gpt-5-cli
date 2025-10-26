@@ -553,14 +553,14 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): SQL モード固有の DSN / 出力初期化の一部を input 層へ昇格させるか検討する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
@@ -577,7 +577,7 @@ async function main(): Promise<void> {
           }
         },
       },
-    );
+    });
 
     const sqlContext = ensureSqlContext(options);
     const sqlOutputAbsolutePath = sqlContext.absolutePath;

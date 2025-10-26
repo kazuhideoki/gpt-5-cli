@@ -273,14 +273,14 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): mermaid モード特有のファイル推論も将来的に input 層へ寄せる。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: "[gpt-5-cli-mermaid]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "mermaid";
@@ -298,7 +298,7 @@ async function main(): Promise<void> {
           }
         },
       },
-    );
+    });
 
     const mermaidContext = ensureMermaidContext(options);
 

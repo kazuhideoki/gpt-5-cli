@@ -314,14 +314,14 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): d2 固有の履歴継承やパス初期化を input 層で共通化できないか検討する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: "[gpt-5-cli-d2]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
@@ -339,7 +339,7 @@ async function main(): Promise<void> {
           }
         },
       },
-    );
+    });
 
     const d2Context = ensureD2Context(options);
 

@@ -20,8 +20,28 @@ interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = u
 export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
   /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
-  /** 履歴オプションを更新するときに呼び出す同期ハンドラ。 */
+  /** 履歴オプションを更新するときに呼び出す同期ハンドラ。CLI によっては不要なため任意。 */
   synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
+}
+
+/**
+ * computeContext へ渡す引数群。
+ */
+export interface ComputeContextParams<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** CLI オプション（履歴継承フラグを含む）。 */
+  options: TOptions;
+  /** 履歴の検索・選択に使用するストア。 */
+  historyStore: HistoryStore<THistoryTask>;
+  /** 今回ユーザーが送信するテキスト。 */
+  inputText: string;
+  /** resolveInputOrExecuteHistoryAction が履歴候補を返した場合のみ指定するため任意。 */
+  initialActiveEntry?: HistoryEntry<THistoryTask>;
+  /** 履歴再開時にレスポンス ID が明示された場合にのみ必要となるため任意。 */
+  explicitPrevId?: string;
+  /** 履歴再開時にタイトルが明示された場合にのみ必要となるため任意。 */
+  explicitPrevTitle?: string;
+  /** CLI 固有の挙動調整が不要な場合もあるため任意。 */
+  config?: ComputeContextConfig<TOptions, THistoryTask>;
 }
 
 /**
@@ -30,20 +50,21 @@ export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask 
  * @param options CLI オプション（履歴継承フラグを含む）。
  * @param historyStore 履歴の検索・選択に使用するストア。
  * @param inputText 今回ユーザーが送信するテキスト。
- * @param initialActiveEntry `determineInput` が返した履歴エントリ候補。
+ * @param initialActiveEntry `resolveInputOrExecuteHistoryAction` が返した履歴エントリ候補。
  * @param explicitPrevId 履歴再開時に明示されたレスポンス ID。
  * @param explicitPrevTitle 履歴再開時に明示されたタイトル。
  */
-export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>(
-  options: TOptions,
-  historyStore: HistoryStore<THistoryTask>,
-  inputText: string,
-  initialActiveEntry?: HistoryEntry<THistoryTask>,
-  explicitPrevId?: string,
-  explicitPrevTitle?: string,
-  config?: ComputeContextConfig<TOptions, THistoryTask>,
-): ConversationContext {
+export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>({
+  options,
+  historyStore,
+  inputText,
+  initialActiveEntry,
+  explicitPrevId,
+  explicitPrevTitle,
+  config,
+}: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
   const logLabel = config?.logLabel ?? "[gpt-5-cli]";
+  // TODO 横断的な logger を別途定義する
   const logWarning = (message: string): void => {
     console.error(`${logLabel} ${message}`);
   };

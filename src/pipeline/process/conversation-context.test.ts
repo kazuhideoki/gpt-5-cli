@@ -41,7 +41,11 @@ describe("computeContext", () => {
       findLatest: () => undefined,
     } as unknown as HistoryStore<TestHistoryTask>;
 
-    const context = computeContext(options, historyStore, "最初の 問い合わせ");
+    const context = computeContext({
+      options,
+      historyStore,
+      inputText: "最初の 問い合わせ",
+    });
 
     expect(context.isNewConversation).toBe(true);
     expect(context.previousResponseId).toBeUndefined();
@@ -78,21 +82,18 @@ describe("computeContext", () => {
       findLatest: () => latestEntry,
     } as unknown as HistoryStore<TestHistoryTask>;
 
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      "続きの質問をしたい",
-      undefined,
-      undefined,
-      undefined,
-      {
+      inputText: "続きの質問をしたい",
+      config: {
         logLabel: "[test-cli]",
         synchronizeWithHistory: ({ activeEntry }) => {
           expect(activeEntry).toBe(latestEntry);
           synchronized = true;
         },
       },
-    );
+    });
 
     expect(context.isNewConversation).toBe(false);
     expect(context.previousResponseId).toBe("resp_prev");
