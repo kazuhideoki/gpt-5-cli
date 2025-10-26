@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type OpenAI from "openai";
 import type { CliOptions } from "../../types.js";
 import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import type { ToolRegistration } from "./tools/index.js";
 
 class FakeResponsesClient {
   public readonly createCalls: any[] = [];
@@ -64,7 +64,7 @@ describe("runAgentConversation", () => {
       request: BASE_REQUEST,
       options: BASE_OPTIONS,
       logLabel: "[agent-test]",
-      toolRegistrations: [] as ToolRegistration[],
+      agentTools: [] as AgentsSdkTool[],
       maxTurns: 2,
     });
 
@@ -96,7 +96,7 @@ describe("runAgentConversation", () => {
         request,
         options: BASE_OPTIONS,
         logLabel: "[agent-test]",
-        toolRegistrations: [] as ToolRegistration[],
+        agentTools: [] as AgentsSdkTool[],
       }),
     ).rejects.toThrow("Error: No user input found for agent execution");
   });

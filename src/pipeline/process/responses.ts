@@ -9,7 +9,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
-import { buildCliToolList } from "./tools/index.js";
+import type { ConversationToolset } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -37,8 +37,18 @@ interface BuildRequestParams {
   logLabel: string;
   /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
-  /** CLI 固有のツール構成。未指定なら共通ツールを組み立てる。 */
-  tools?: ResponseCreateParamsNonStreaming["tools"];
+  /** CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。 */
+  toolset: ConversationToolset;
+}
+
+/**
+ * buildRequest が組み立てたリクエストと、エージェント実行時に必要なツール配列。
+ */
+export interface BuildRequestArtifacts {
+  /** Responses API へ送信する完成済みペイロード。 */
+  request: ResponseCreateParamsNonStreaming;
+  /** Agents SDK 実行に利用するツール配列。 */
+  agentTools: ConversationToolset["agents"];
 }
 
 /**
@@ -53,8 +63,8 @@ export function buildRequest({
   defaults,
   logLabel,
   additionalSystemMessages,
-  tools,
-}: BuildRequestParams): ResponseCreateParamsNonStreaming {
+  toolset,
+}: BuildRequestParams): BuildRequestArtifacts {
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
@@ -110,7 +120,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: tools ?? buildCliToolList([], { appendWebSearchPreview: true }),
+    tools: toolset.response,
     input: inputForRequest,
   };
 
@@ -126,7 +136,10 @@ export function buildRequest({
     );
   }
 
-  return request;
+  return {
+    request,
+    agentTools: toolset.agents,
+  };
 }
 
 export function extractResponseText(response: Response): string | null {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type OpenAI from "openai";
 import type {
   CliDefaults,
@@ -86,13 +87,29 @@ describe("buildRequest", () => {
     const options = createOptions();
     const context = createContext();
 
-    const request = buildRequest({
+    const toolset = {
+      response: [
+        {
+          type: "function",
+          name: "sample_tool",
+          description: "sample tool",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+      agents: [],
+    };
+
+    const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: "質問内容",
       systemPrompt: "system message",
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
+      toolset,
     });
 
     expect(Array.isArray(request.input)).toBe(true);
@@ -105,7 +122,8 @@ describe("buildRequest", () => {
     expect(lastMessage?.role).toBe("user");
     expect(lastMessage?.content?.[0]).toEqual({ type: "input_text", text: "質問内容" });
     expect(request.previous_response_id).toBeUndefined();
-    expect(request.tools?.at(-1)).toEqual({ type: "web_search_preview" });
+    expect(request.tools).toEqual(toolset.response);
+    expect(agentTools).toEqual(toolset.agents);
   });
 
   it("継続会話では previous_response_id と追加の system メッセージを含める", () => {
@@ -121,7 +139,24 @@ describe("buildRequest", () => {
       { role: "system", content: [{ type: "input_text", text: "追加指示" }] },
     ];
 
-    const request = buildRequest({
+    const agentTool = { name: "dummy_tool" } as AgentsSdkTool;
+
+    const toolset = {
+      response: [
+        {
+          type: "function",
+          name: "sample_tool",
+          description: "sample tool",
+          parameters: {
+            type: "object",
+            properties: {},
+          },
+        },
+      ],
+      agents: [agentTool],
+    };
+
+    const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: "続きの質問",
@@ -130,6 +165,7 @@ describe("buildRequest", () => {
       logLabel: "[test-cli]",
       additionalSystemMessages: additional,
       imageDataUrl: "data:image/png;base64,AAA",
+      toolset,
     });
 
     const inputMessages = request.input as OpenAIInputMessage[];
@@ -143,6 +179,39 @@ describe("buildRequest", () => {
       detail: "auto",
     });
     expect(request.previous_response_id).toBe("resp_prev");
+    expect(request.tools).toEqual(toolset.response);
+    expect(agentTools).toEqual(toolset.agents);
+  });
+
+  it("toolset を受け取り request.tools と agentTools の両方へ反映する", () => {
+    const options = createOptions();
+    const context = createContext();
+    const agentTool = { name: "dummy_tool" } as AgentsSdkTool;
+    const toolDefinition = {
+      type: "function",
+      name: "custom_tool",
+      description: "custom tool",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    };
+    const toolset = {
+      response: [toolDefinition],
+      agents: [agentTool],
+    };
+
+    const { request, agentTools } = buildRequest({
+      options,
+      context,
+      inputText: "tool check",
+      defaults: DEFAULTS,
+      logLabel: "[test-cli]",
+      toolset,
+    });
+
+    expect(request.tools).toBe(toolset.response);
+    expect(agentTools).toBe(toolset.agents);
   });
 });
 

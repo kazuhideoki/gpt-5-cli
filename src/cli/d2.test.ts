@@ -1,7 +1,13 @@
 import { describe, expect, it } from "bun:test";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import path from "node:path";
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
-import { buildD2ResponseTools, createD2WebSearchTool, ensureD2Context, parseArgs } from "./d2.js";
+import {
+  buildD2ConversationToolset,
+  createD2WebSearchTool,
+  ensureD2Context,
+  parseArgs,
+} from "./d2.js";
 import type { CliDefaults } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
@@ -208,10 +214,19 @@ describe("d2 web search integration", () => {
     expect(allowedDomains).toEqual(["d2lang.com"]);
   });
 
-  it("Responses API 用ツールから web_search_preview を除外する", () => {
-    const tools = buildD2ResponseTools();
-    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+  it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
+    const toolset = buildD2ConversationToolset({
+      logLabel: "[test-cli-d2]",
+      debug: false,
+    });
+    const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
+    const agentHasWebSearch = toolset.agents.some((tool: AgentsSdkTool) => {
+      return (
+        typeof tool === "object" && tool !== null && "name" in tool && tool.name === "web_search"
+      );
+    });
+    expect(agentHasWebSearch).toBe(true);
   });
 });
 

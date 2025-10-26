@@ -6,9 +6,6 @@ import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { CliOptions, OpenAIInputMessage } from "../../types.js";
-import type { ToolRegistration } from "./tools/index.js";
-import { buildAgentsToolList } from "./tools/index.js";
-
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);
 
@@ -24,12 +21,10 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
   options: TOptions;
   /** ログ出力に使用する CLI 固有ラベル。 */
   logLabel: string;
-  /** CLI で登録したツール定義一覧。 */
-  toolRegistrations: Iterable<ToolRegistration<any, any>>;
+  /** Agents SDK で利用するツール配列。 */
+  agentTools: AgentsSdkTool[];
   /** エージェント実行の最大ターン数。 */
   maxTurns?: number;
-  /** 追加で有効化する Agents SDK ツール群。 */
-  additionalAgentTools?: AgentsSdkTool[];
 }
 
 /**
@@ -48,8 +43,7 @@ interface AgentConversationResult {
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
 ): Promise<AgentConversationResult> {
-  const { client, request, options, logLabel, toolRegistrations, maxTurns, additionalAgentTools } =
-    params;
+  const { client, request, options, logLabel, agentTools, maxTurns } = params;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
   const userInputs = buildUserInputs(messages);
@@ -57,28 +51,7 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     throw new Error("Error: No user input found for agent execution");
   }
 
-  const debugLog = options.debug
-    ? (message: string) => {
-        console.error(`${logLabel} debug: ${message}`);
-      }
-    : undefined;
-
   ensureResponsesOutputCompatibility(client);
-
-  const agentToolsBase = buildAgentsToolList(toolRegistrations, {
-    logLabel,
-    createExecutionContext: () => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${logLabel} ${message}`);
-      },
-    }),
-    debugLog,
-  });
-  const agentTools =
-    additionalAgentTools && additionalAgentTools.length > 0
-      ? [...agentToolsBase, ...additionalAgentTools]
-      : agentToolsBase;
 
   const modelSettings = buildModelSettings(request);
   const previousResponseId =
@@ -95,7 +68,11 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     outputType: "text",
   });
 
-  debugLog?.(`agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`);
+  if (options.debug) {
+    console.error(
+      `${logLabel} debug: agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
+    );
+  }
   const runner = new Runner({ tracingDisabled: true });
   const result = await runner.run(agent, userInputs, {
     maxTurns,
