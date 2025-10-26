@@ -9,6 +9,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
+import { buildCliToolList } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -36,8 +37,8 @@ interface BuildRequestParams {
   logLabel: string;
   /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
-  /** CLI が構築したツール定義一覧。Responses API へそのまま送信する。 */
-  tools: ResponseCreateParamsNonStreaming["tools"];
+  /** CLI 固有のツール構成。未指定なら共通ツールを組み立てる。 */
+  tools?: ResponseCreateParamsNonStreaming["tools"];
 }
 
 /**
@@ -109,7 +110,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools,
+    tools: tools ?? buildCliToolList([], { appendWebSearchPreview: true }),
     input: inputForRequest,
   };
 

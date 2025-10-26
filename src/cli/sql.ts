@@ -20,7 +20,6 @@ import {
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
-  buildCliToolList,
   setSqlEnvironment,
 } from "../pipeline/process/tools/index.js";
 import {
@@ -35,7 +34,6 @@ import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 
@@ -98,15 +96,6 @@ const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATION
   postgresql: POSTGRES_SQL_TOOL_REGISTRATIONS,
   mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
 };
-
-/**
- * SQL モードで Responses API へ渡すツール定義を構築する。
- */
-function buildSqlResponseTools(engine: SqlEngine): ResponseCreateParamsNonStreaming["tools"] {
-  const registrations = SQL_TOOL_REGISTRY[engine];
-  const functionTools = buildCliToolList(registrations);
-  return [...functionTools, { type: "web_search_preview" as const }];
-}
 
 const connectionSchema = z
   .object({
@@ -640,7 +629,6 @@ async function main(): Promise<void> {
         engine: sqlEnv.engine,
         artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
-      tools: buildSqlResponseTools(sqlEnv.engine),
     });
 
     const agentResult = await runAgentConversation({

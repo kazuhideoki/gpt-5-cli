@@ -145,15 +145,15 @@ export function buildAgentsToolList(
   });
 }
 
-/**
- * CLI が Responses API へ渡す Function Tool 定義を列挙する。
- *
- * 重複する関数名を除外し、登録順のまま返却する。
- */
+export interface BuildCliToolListConfig {
+  appendWebSearchPreview: boolean;
+}
+
 export function buildCliToolList(
   registrations: Iterable<ToolRegistration<any, any>>,
-): FunctionTool[] {
-  const functionTools: FunctionTool[] = [];
+  config: BuildCliToolListConfig,
+): ResponseCreateParamsNonStreaming["tools"] {
+  const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
   const seen = new Set<string>();
 
   for (const registration of registrations) {
@@ -166,6 +166,10 @@ export function buildCliToolList(
     }
     functionTools.push(definition);
     seen.add(definition.name);
+  }
+
+  if (config.appendWebSearchPreview) {
+    return [...functionTools, { type: "web_search_preview" as const }];
   }
 
   return functionTools;
