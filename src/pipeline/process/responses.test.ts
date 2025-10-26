@@ -93,6 +93,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
+      tools: [],
     });
 
     expect(Array.isArray(request.input)).toBe(true);
@@ -105,7 +106,7 @@ describe("buildRequest", () => {
     expect(lastMessage?.role).toBe("user");
     expect(lastMessage?.content?.[0]).toEqual({ type: "input_text", text: "質問内容" });
     expect(request.previous_response_id).toBeUndefined();
-    expect(request.tools?.at(-1)).toEqual({ type: "web_search_preview" });
+    expect(request.tools).toEqual([]);
   });
 
   it("継続会話では previous_response_id と追加の system メッセージを含める", () => {
@@ -130,6 +131,7 @@ describe("buildRequest", () => {
       logLabel: "[test-cli]",
       additionalSystemMessages: additional,
       imageDataUrl: "data:image/png;base64,AAA",
+      tools: [{ type: "web_search_preview" }],
     });
 
     const inputMessages = request.input as OpenAIInputMessage[];
@@ -143,7 +145,10 @@ describe("buildRequest", () => {
       detail: "auto",
     });
     expect(request.previous_response_id).toBe("resp_prev");
+    expect(request.tools).toEqual([{ type: "web_search_preview" }]);
   });
+
+  it("CLI で構築したツール配列をそのまま保持する");
 });
 
 describe("extractResponseText", () => {
