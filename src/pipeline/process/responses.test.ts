@@ -148,7 +148,31 @@ describe("buildRequest", () => {
     expect(request.tools).toEqual([{ type: "web_search_preview" }]);
   });
 
-  it("CLI で構築したツール配列をそのまま保持する");
+  it("CLI で構築したツール配列をそのまま保持する", () => {
+    const options = createOptions();
+    const context = createContext();
+    const cliTools = [
+      {
+        type: "function" as const,
+        name: "read_file",
+        strict: true,
+        description: "Read file",
+        parameters: { type: "object", properties: {}, required: [] },
+      },
+      { type: "web_search_preview" as const },
+    ];
+
+    const request = buildRequest({
+      options,
+      context,
+      inputText: "質問",
+      defaults: DEFAULTS,
+      logLabel: "[test-cli]",
+      tools: cliTools,
+    });
+
+    expect(request.tools).toBe(cliTools);
+  });
 });
 
 describe("extractResponseText", () => {
