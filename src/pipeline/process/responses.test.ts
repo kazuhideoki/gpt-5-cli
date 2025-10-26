@@ -144,6 +144,14 @@ describe("buildRequest", () => {
     });
     expect(request.previous_response_id).toBe("resp_prev");
   });
+
+  it("toolset を指定すると request と agentTools に同じ定義を反映する", () => {
+    throw new Error("TODO: 実装時にテスト内容を記述する");
+  });
+
+  it("toolset を省略した場合は既定の構成と空の agentTools を返す", () => {
+    throw new Error("TODO: 実装時にテスト内容を記述する");
+  });
 });
 
 describe("extractResponseText", () => {
