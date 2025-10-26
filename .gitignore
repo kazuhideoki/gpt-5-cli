@@ -16,3 +16,4 @@ prompts/
 .DS_Store
 .mcp.json
 output
+tmp

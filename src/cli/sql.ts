@@ -63,6 +63,14 @@ interface SqlContextInfo {
   exists: boolean;
 }
 
+/**
+ * ensureSqlContext の実行結果。context に検証済みパス情報、normalizedOptions に正規化後のオプションを保持する。
+ */
+interface SqlContextResolution {
+  context: SqlContextInfo;
+  normalizedOptions: SqlCliOptions;
+}
+
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
   dsn?: string;
@@ -292,7 +300,7 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
  * @param options CLI オプション。
  * @returns SQL ファイルの存在情報。
  */
-export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
+export function ensureSqlContext(options: SqlCliOptions): SqlContextResolution {
   if (options.taskMode !== "sql") {
     throw new Error("Invariant violation: ensureSqlContext は sql モード専用です");
   }
@@ -312,10 +320,16 @@ export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
     throw new Error(`Error: 指定した SQL ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.artifactPath = relativePath;
-  options.responseOutputPath = relativePath;
+  const normalizedOptions: SqlCliOptions = {
+    ...options,
+    artifactPath: relativePath,
+    responseOutputPath: relativePath,
+  };
   const exists = fs.existsSync(absolutePath);
-  return { relativePath, absolutePath, exists };
+  return {
+    context: { relativePath, absolutePath, exists },
+    normalizedOptions,
+  };
 }
 
 /** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
@@ -579,7 +593,8 @@ async function main(): Promise<void> {
       },
     });
 
-    const sqlContext = ensureSqlContext(options);
+    const { context: sqlContext, normalizedOptions } = ensureSqlContext(options);
+    const resolvedOptions = normalizedOptions;
     const sqlOutputAbsolutePath = sqlContext.absolutePath;
 
     const determineActiveEntry = determine.activeEntry as
@@ -590,14 +605,17 @@ async function main(): Promise<void> {
       | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
+    const resolvedOptionsWithDsn: SqlCliOptions = {
+      ...resolvedOptions,
+      dsn: sqlEnv.dsn,
+      engine: sqlEnv.engine,
+    };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
-    options.dsn = sqlEnv.dsn;
-    options.engine = sqlEnv.engine;
     const toolRegistrations = SQL_TOOL_REGISTRY[sqlEnv.engine];
 
-    const imageDataUrl = prepareImageData(options.imagePath, LOG_LABEL);
+    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL);
     const request = buildRequest({
-      options,
+      options: resolvedOptionsWithDsn,
       context,
       inputText: determine.inputText,
       systemPrompt,
@@ -607,19 +625,19 @@ async function main(): Promise<void> {
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
         dsnHash: sqlEnv.hash,
-        maxIterations: options.maxIterations,
+        maxIterations: resolvedOptionsWithDsn.maxIterations,
         engine: sqlEnv.engine,
-        artifactPath: options.artifactPath,
+        artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
     });
 
     const agentResult = await runAgentConversation({
       client,
       request,
-      options,
+      options: resolvedOptionsWithDsn,
       logLabel: LOG_LABEL,
       toolRegistrations,
-      maxTurns: options.maxIterations,
+      maxTurns: resolvedOptionsWithDsn.maxIterations,
     });
     const content = agentResult.assistantText;
     if (!content) {
@@ -627,9 +645,9 @@ async function main(): Promise<void> {
     }
 
     const outputResolution = resolveResultOutput({
-      responseOutputExplicit: options.responseOutputExplicit,
-      responseOutputPath: options.responseOutputPath,
-      artifactPath: options.artifactPath,
+      responseOutputExplicit: resolvedOptionsWithDsn.responseOutputExplicit,
+      responseOutputPath: resolvedOptionsWithDsn.responseOutputPath,
+      artifactPath: resolvedOptionsWithDsn.artifactPath,
     });
 
     const previousContextRaw = context.activeEntry?.context as
@@ -648,7 +666,7 @@ async function main(): Promise<void> {
       previousContext,
       {
         historyArtifactPath: outputResolution.artifactReferencePath,
-        copyOutput: options.copyOutput,
+        copyOutput: resolvedOptionsWithDsn.copyOutput,
       },
     );
 
@@ -656,17 +674,17 @@ async function main(): Promise<void> {
       content,
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.artifactPath,
+      copyOutput: resolvedOptionsWithDsn.copyOutput,
+      copySourceFilePath: resolvedOptionsWithDsn.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
             store: historyStore,
             conversation: context,
             metadata: {
-              model: options.model,
-              effort: options.effort,
-              verbosity: options.verbosity,
+              model: resolvedOptionsWithDsn.model,
+              effort: resolvedOptionsWithDsn.effort,
+              verbosity: resolvedOptionsWithDsn.verbosity,
             },
             previousContextRaw,
             contextData: historyContext,
@@ -675,7 +693,7 @@ async function main(): Promise<void> {
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {
-      console.log(`[gpt-5-cli-sql] artifact file: ${options.artifactPath}`);
+      console.log(`[gpt-5-cli-sql] artifact file: ${resolvedOptionsWithDsn.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

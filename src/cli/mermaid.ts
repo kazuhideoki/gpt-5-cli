@@ -39,6 +39,14 @@ interface MermaidContextInfo {
   exists: boolean;
 }
 
+/**
+ * ensureMermaidContext の実行結果。context にファイル情報、normalizedOptions に正規化済みオプションを保持する。
+ */
+interface MermaidContextResolution {
+  context: MermaidContextInfo;
+  normalizedOptions: MermaidCliOptions;
+}
+
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 
 const mermaidCliHistoryContextStrictSchema = z.object({
@@ -169,7 +177,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOpti
  * @param options CLIオプション。
  * @returns Mermaidファイルの存在情報。
  */
-function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
+export function ensureMermaidContext(options: MermaidCliOptions): MermaidContextResolution {
   if (options.taskMode !== "mermaid") {
     throw new Error("Invariant violation: ensureMermaidContext は mermaid モード専用です");
   }
@@ -189,10 +197,16 @@ function ensureMermaidContext(options: MermaidCliOptions): MermaidContextInfo {
     throw new Error(`Error: 指定した Mermaid ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.artifactPath = relativePath;
-  options.responseOutputPath = relativePath;
+  const normalizedOptions: MermaidCliOptions = {
+    ...options,
+    artifactPath: relativePath,
+    responseOutputPath: relativePath,
+  };
   const exists = fs.existsSync(absolutePath);
-  return { relativePath, absolutePath, exists };
+  return {
+    context: { relativePath, absolutePath, exists },
+    normalizedOptions,
+  };
 }
 
 /**
@@ -300,11 +314,12 @@ async function main(): Promise<void> {
       },
     });
 
-    const mermaidContext = ensureMermaidContext(options);
+    const { context: mermaidContext, normalizedOptions } = ensureMermaidContext(options);
+    const resolvedOptions = normalizedOptions;
 
-    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli-mermaid]");
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-mermaid]");
     const request = buildRequest({
-      options,
+      options: resolvedOptions,
       context,
       inputText: determine.inputText,
       systemPrompt,
@@ -316,10 +331,10 @@ async function main(): Promise<void> {
     const agentResult = await runAgentConversation({
       client,
       request,
-      options,
+      options: resolvedOptions,
       logLabel: "[gpt-5-cli-mermaid]",
       toolRegistrations: MERMAID_TOOL_REGISTRATIONS,
-      maxTurns: options.maxIterations,
+      maxTurns: resolvedOptions.maxIterations,
     });
     const content = agentResult.assistantText;
     if (!content) {
@@ -327,9 +342,9 @@ async function main(): Promise<void> {
     }
 
     const outputResolution = resolveResultOutput({
-      responseOutputExplicit: options.responseOutputExplicit,
-      responseOutputPath: options.responseOutputPath,
-      artifactPath: options.artifactPath,
+      responseOutputExplicit: resolvedOptions.responseOutputExplicit,
+      responseOutputPath: resolvedOptions.responseOutputPath,
+      artifactPath: resolvedOptions.artifactPath,
     });
 
     const previousContextRaw = context.activeEntry?.context as
@@ -341,26 +356,26 @@ async function main(): Promise<void> {
     const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
       base: { cli: "mermaid" },
       contextPath: mermaidContext.absolutePath,
-      defaultFilePath: options.artifactPath,
+      defaultFilePath: resolvedOptions.artifactPath,
       previousContext,
       historyArtifactPath: outputResolution.artifactReferencePath,
-      copyOutput: options.copyOutput,
+      copyOutput: resolvedOptions.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.artifactPath,
+      copyOutput: resolvedOptions.copyOutput,
+      copySourceFilePath: resolvedOptions.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
             store: historyStore,
             conversation: context,
             metadata: {
-              model: options.model,
-              effort: options.effort,
-              verbosity: options.verbosity,
+              model: resolvedOptions.model,
+              effort: resolvedOptions.effort,
+              verbosity: resolvedOptions.verbosity,
             },
             previousContextRaw,
             contextData: historyContext,
@@ -370,7 +385,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = mermaidContext.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-mermaid] artifact file: ${options.artifactPath}`);
+      console.log(`[gpt-5-cli-mermaid] artifact file: ${resolvedOptions.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

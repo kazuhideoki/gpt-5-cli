@@ -43,6 +43,15 @@ interface D2ContextInfo {
   exists: boolean;
 }
 
+/**
+ * ensureD2Context の実行結果をまとめた構造体。
+ * context にはファイル情報を、normalizedOptions には正規化後の CLI オプションを保持する。
+ */
+interface D2ContextResolution {
+  context: D2ContextInfo;
+  normalizedOptions: D2CliOptions;
+}
+
 const D2_TOOL_REGISTRATIONS = [
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
@@ -199,7 +208,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
  * @param options CLIオプション。
  * @returns d2ファイルの存在情報。
  */
-function ensureD2Context(options: D2CliOptions): D2ContextInfo {
+export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
   if (options.taskMode !== "d2") {
     throw new Error("Invariant violation: ensureD2Context は d2 モード専用です");
   }
@@ -219,10 +228,16 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.artifactPath = relativePath;
-  options.responseOutputPath = relativePath;
+  const normalizedOptions: D2CliOptions = {
+    ...options,
+    artifactPath: relativePath,
+    responseOutputPath: relativePath,
+  };
   const exists = fs.existsSync(absolutePath);
-  return { relativePath, absolutePath, exists };
+  return {
+    context: { relativePath, absolutePath, exists },
+    normalizedOptions,
+  };
 }
 
 /**
@@ -341,11 +356,13 @@ async function main(): Promise<void> {
       },
     });
 
-    const d2Context = ensureD2Context(options);
+    const { context: d2Context, normalizedOptions } = ensureD2Context(options);
 
-    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli-d2]");
+    const resolvedOptions = normalizedOptions;
+
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]");
     const request = buildRequest({
-      options,
+      options: resolvedOptions,
       context,
       inputText: determine.inputText,
       systemPrompt,
@@ -358,10 +375,10 @@ async function main(): Promise<void> {
     const agentResult = await runAgentConversation({
       client,
       request,
-      options,
+      options: resolvedOptions,
       logLabel: "[gpt-5-cli-d2]",
       toolRegistrations: D2_TOOL_REGISTRATIONS,
-      maxTurns: options.maxIterations,
+      maxTurns: resolvedOptions.maxIterations,
       additionalAgentTools: [createD2WebSearchTool()],
     });
     const content = agentResult.assistantText;
@@ -370,9 +387,9 @@ async function main(): Promise<void> {
     }
 
     const outputResolution = resolveResultOutput({
-      responseOutputExplicit: options.responseOutputExplicit,
-      responseOutputPath: options.responseOutputPath,
-      artifactPath: options.artifactPath,
+      responseOutputExplicit: resolvedOptions.responseOutputExplicit,
+      responseOutputPath: resolvedOptions.responseOutputPath,
+      artifactPath: resolvedOptions.artifactPath,
     });
 
     const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
@@ -380,26 +397,26 @@ async function main(): Promise<void> {
     const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
       base: { cli: "d2" },
       contextPath: d2Context.absolutePath,
-      defaultFilePath: options.artifactPath,
+      defaultFilePath: resolvedOptions.artifactPath,
       previousContext,
       historyArtifactPath: outputResolution.artifactReferencePath,
-      copyOutput: options.copyOutput,
+      copyOutput: resolvedOptions.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
       content,
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.artifactPath,
+      copyOutput: resolvedOptions.copyOutput,
+      copySourceFilePath: resolvedOptions.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
             store: historyStore,
             conversation: context,
             metadata: {
-              model: options.model,
-              effort: options.effort,
-              verbosity: options.verbosity,
+              model: resolvedOptions.model,
+              effort: resolvedOptions.effort,
+              verbosity: resolvedOptions.verbosity,
             },
             previousContextRaw,
             contextData: historyContext,
@@ -409,7 +426,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = d2Context.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-d2] artifact file: ${options.artifactPath}`);
+      console.log(`[gpt-5-cli-d2] artifact file: ${resolvedOptions.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

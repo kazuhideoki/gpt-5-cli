@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import path from "node:path";
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
-import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js";
+import { buildD2ResponseTools, createD2WebSearchTool, ensureD2Context, parseArgs } from "./d2.js";
 import type { CliDefaults } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
@@ -212,4 +213,38 @@ describe("d2 web search integration", () => {
     const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
   });
+});
+
+describe("ensureD2Context", () => {
+  it("正規化済みオプションを返す", () => {
+    // Step3 で実装
+  });
+
+  it("ファイル検証結果を context に含める", () => {
+    // Step3 で実装
+  });
+});
+it("正規化済みオプションを返す", () => {
+  const input = createOptions({
+    artifactPath: "./diagram.d2",
+    responseOutputPath: "./diagram.d2",
+  });
+  const snapshot = { ...input };
+
+  const result = ensureD2Context(input);
+
+  expect(result.normalizedOptions).not.toBe(input);
+  expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
+  expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
+  expect(input).toEqual(snapshot);
+});
+
+it("ファイル検証結果を context に含める", () => {
+  const input = createOptions({ artifactPath: "./diagram.d2" });
+
+  const result = ensureD2Context(input);
+
+  expect(result.context.relativePath).toBe("diagram.d2");
+  expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
+  expect(result.context.exists).toBe(false);
 });
