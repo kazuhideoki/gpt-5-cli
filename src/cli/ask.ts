@@ -20,7 +20,7 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
 export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  return buildCliToolList(ASK_TOOL_REGISTRATIONS, { appendWebSearchPreview: false });
+  return buildCliToolList(ASK_TOOL_REGISTRATIONS);
 }
 
 export function createAskWebSearchTool(): AgentsSdkTool {

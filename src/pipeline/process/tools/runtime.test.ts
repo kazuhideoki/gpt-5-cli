@@ -73,21 +73,17 @@ describe("buildCliToolList", () => {
     SQL_FORMAT_TOOL,
   ] as const;
 
-  it("コアツールとプレビュー検索を含む", () => {
-    const tools = buildCliToolList(MINIMAL_TOOLSET, { appendWebSearchPreview: true });
-    expect(tools).toEqual([MINIMAL_TOOLSET[0].definition, { type: "web_search_preview" as const }]);
-  });
-
-  it("appendWebSearchPreview=false の場合はプレビューを追加しない", () => {
-    const tools = buildCliToolList(MINIMAL_TOOLSET, { appendWebSearchPreview: false });
+  it("Function ツール定義のみを返す", () => {
+    const tools = buildCliToolList(MINIMAL_TOOLSET);
     expect(tools).toEqual([MINIMAL_TOOLSET[0].definition]);
   });
 
-  it("追加ツール登録を引数で拡張できる", () => {
-    const tools = buildCliToolList(
-      [...D2_TOOL_REGISTRATIONS, ...MERMAID_TOOL_REGISTRATIONS, ...SQL_TOOL_REGISTRATIONS],
-      { appendWebSearchPreview: true },
-    );
+  it("複数レジストレーションを順番通りに連結する", () => {
+    const tools = buildCliToolList([
+      ...D2_TOOL_REGISTRATIONS,
+      ...MERMAID_TOOL_REGISTRATIONS,
+      ...SQL_TOOL_REGISTRATIONS,
+    ]);
     const functionNames = tools.filter((tool) => tool.type === "function").map((tool) => tool.name);
     expect(functionNames).toEqual([
       "read_file",
@@ -102,6 +98,11 @@ describe("buildCliToolList", () => {
       "sql_dry_run",
       "sql_format",
     ]);
-    expect(tools?.at(-1)).toEqual({ type: "web_search_preview" as const });
+  });
+
+  it("重複登録された Function 名を除外する", () => {
+    const tools = buildCliToolList([...D2_TOOL_REGISTRATIONS, READ_FILE_TOOL, WRITE_FILE_TOOL]);
+    const functionNames = tools.filter((tool) => tool.type === "function").map((tool) => tool.name);
+    expect(functionNames).toEqual(["read_file", "write_file", "d2_check", "d2_fmt"]);
   });
 });

@@ -152,8 +152,8 @@ export function buildAgentsToolList(
  */
 export function buildCliToolList(
   registrations: Iterable<ToolRegistration<any, any>>,
-): ResponseCreateParamsNonStreaming["tools"] {
-  const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
+): FunctionTool[] {
+  const functionTools: FunctionTool[] = [];
   const seen = new Set<string>();
 
   for (const registration of registrations) {
