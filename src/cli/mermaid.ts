@@ -9,6 +9,9 @@ import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
 } from "../pipeline/process/tools/index.js";
 import {
   finalizeResult,
@@ -48,6 +51,37 @@ interface MermaidContextResolution {
 }
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
+
+interface BuildMermaidToolsetParams {
+  logLabel: string;
+  debug: boolean;
+}
+
+export function buildMermaidConversationToolset(
+  params: BuildMermaidToolsetParams,
+): ConversationToolset {
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(MERMAID_TOOL_REGISTRATIONS, {
+    cli: { appendWebSearchPreview: true },
+    agents: agentOptions,
+    additionalAgentTools: [],
+  });
+}
 
 const mermaidCliHistoryContextStrictSchema = z.object({
   cli: z.literal("mermaid"),
@@ -318,7 +352,11 @@ async function main(): Promise<void> {
     const resolvedOptions = normalizedOptions;
 
     const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-mermaid]");
-    const request = buildRequest({
+    const toolset = buildMermaidConversationToolset({
+      logLabel: "[gpt-5-cli-mermaid]",
+      debug: resolvedOptions.debug,
+    });
+    const { request, agentTools } = buildRequest({
       options: resolvedOptions,
       context,
       inputText: determine.inputText,
@@ -327,13 +365,14 @@ async function main(): Promise<void> {
       defaults,
       logLabel: "[gpt-5-cli-mermaid]",
       additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
+      toolset,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
       logLabel: "[gpt-5-cli-mermaid]",
-      toolRegistrations: MERMAID_TOOL_REGISTRATIONS,
+      agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });
     const content = agentResult.assistantText;

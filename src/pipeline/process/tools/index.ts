@@ -1,7 +1,10 @@
 export {
   buildAgentsToolList,
   buildCliToolList,
+  buildConversationToolset,
   type BuildCliToolListConfig,
+  type BuildAgentsToolListOptions,
+  type BuildConversationToolsetOptions,
   type ConversationToolset,
   type ToolRegistration,
   type ToolResult,

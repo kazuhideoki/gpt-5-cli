@@ -11,7 +11,9 @@ import {
   D2_FMT_TOOL,
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
-  buildCliToolList,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
 } from "../pipeline/process/tools/index.js";
 import {
   finalizeResult,
@@ -26,7 +28,6 @@ import { runAgentConversation } from "../pipeline/process/agent-conversation.js"
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
@@ -73,11 +74,36 @@ export function createD2WebSearchTool(): AgentsSdkTool {
   });
 }
 
+interface BuildD2ToolsetParams {
+  logLabel: string;
+  debug: boolean;
+}
+
 /**
- * d2 モードで Responses API へ渡すツール配列を生成する。
+ * d2 モードで使用するツールセットを生成する。
  */
-export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  return buildCliToolList(D2_TOOL_REGISTRATIONS, { appendWebSearchPreview: false });
+export function buildD2ConversationToolset(params: BuildD2ToolsetParams): ConversationToolset {
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(D2_TOOL_REGISTRATIONS, {
+    cli: { appendWebSearchPreview: false },
+    agents: agentOptions,
+    additionalAgentTools: [createD2WebSearchTool()],
+  });
 }
 
 const d2CliHistoryContextStrictSchema = z.object({
@@ -361,7 +387,11 @@ async function main(): Promise<void> {
     const resolvedOptions = normalizedOptions;
 
     const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]");
-    const request = buildRequest({
+    const toolset = buildD2ConversationToolset({
+      logLabel: "[gpt-5-cli-d2]",
+      debug: resolvedOptions.debug,
+    });
+    const { request, agentTools } = buildRequest({
       options: resolvedOptions,
       context,
       inputText: determine.inputText,
@@ -370,16 +400,15 @@ async function main(): Promise<void> {
       defaults,
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
-      tools: buildD2ResponseTools(),
+      toolset,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
       logLabel: "[gpt-5-cli-d2]",
-      toolRegistrations: D2_TOOL_REGISTRATIONS,
+      agentTools,
       maxTurns: resolvedOptions.maxIterations,
-      additionalAgentTools: [createD2WebSearchTool()],
     });
     const content = agentResult.assistantText;
     if (!content) {

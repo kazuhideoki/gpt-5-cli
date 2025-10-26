@@ -6,7 +6,12 @@ import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import { finalizeResult } from "../pipeline/finalize/index.js";
-import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
+import {
+  READ_FILE_TOOL,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
+} from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
@@ -14,13 +19,37 @@ import { runAgentConversation } from "../pipeline/process/agent-conversation.js"
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
-export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  return buildCliToolList(ASK_TOOL_REGISTRATIONS, { appendWebSearchPreview: false });
+interface BuildAskToolsetParams {
+  logLabel: string;
+  debug: boolean;
+}
+
+export function buildAskConversationToolset(params: BuildAskToolsetParams): ConversationToolset {
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(ASK_TOOL_REGISTRATIONS, {
+    cli: { appendWebSearchPreview: false },
+    agents: agentOptions,
+    additionalAgentTools: [createAskWebSearchTool()],
+  });
 }
 
 export function createAskWebSearchTool(): AgentsSdkTool {
@@ -227,7 +256,12 @@ async function main(): Promise<void> {
     });
 
     const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]");
-    const request = buildRequest({
+    const toolset = buildAskConversationToolset({
+      logLabel: "[gpt-5-cli]",
+      debug: options.debug,
+    });
+
+    const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: determine.inputText,
@@ -235,16 +269,15 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
-      tools: buildAskResponseTools(),
+      toolset,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options,
       logLabel: "[gpt-5-cli]",
-      toolRegistrations: ASK_TOOL_REGISTRATIONS,
+      agentTools,
       maxTurns: options.maxIterations,
-      additionalAgentTools: [createAskWebSearchTool()],
     });
     const content = agentResult.assistantText;
     if (!content) {

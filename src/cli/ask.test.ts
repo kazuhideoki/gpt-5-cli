@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { buildRequest } from "../pipeline/process/responses.js";
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import {
   buildAskHistoryContext,
-  buildAskResponseTools,
+  buildAskConversationToolset,
   createAskWebSearchTool,
   parseArgs,
 } from "./ask.js";
@@ -229,13 +230,17 @@ describe("buildRequest", () => {
     const defaults = createDefaults();
     const options = createOptions();
     const context = createContext();
-    const request = buildRequest({
+    const { request } = buildRequest({
       options,
       context,
       inputText: "最初の質問",
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      toolset: buildAskConversationToolset({
+        logLabel: "[test-cli]",
+        debug: false,
+      }),
     });
     const input = request.input as any[];
     expect(input[0]).toEqual({
@@ -257,13 +262,17 @@ describe("buildRequest", () => {
         },
       ],
     });
-    const request = buildRequest({
+    const { request } = buildRequest({
       options,
       context,
       inputText: "続きの質問",
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      toolset: buildAskConversationToolset({
+        logLabel: "[test-cli]",
+        debug: false,
+      }),
     });
     const input = request.input as any[];
     const systemTexts = input
@@ -404,9 +413,18 @@ describe("ask web search integration", () => {
     expect(name).toBe("web_search");
   });
 
-  it("Responses API 用ツールから web_search_preview を除外する", () => {
-    const tools = buildAskResponseTools();
-    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+  it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
+    const toolset = buildAskConversationToolset({
+      logLabel: "[test-cli]",
+      debug: false,
+    });
+    const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
+    const agentHasWebSearch = toolset.agents.some((tool: AgentsSdkTool) => {
+      return (
+        typeof tool === "object" && tool !== null && "name" in tool && tool.name === "web_search"
+      );
+    });
+    expect(agentHasWebSearch).toBe(true);
   });
 });

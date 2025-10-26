@@ -20,6 +20,9 @@ import {
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
   setSqlEnvironment,
 } from "../pipeline/process/tools/index.js";
 import {
@@ -96,6 +99,37 @@ const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATION
   postgresql: POSTGRES_SQL_TOOL_REGISTRATIONS,
   mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
 };
+
+interface BuildSqlToolsetParams {
+  logLabel: string;
+  debug: boolean;
+  engine: SqlEngine;
+}
+
+function buildSqlConversationToolset(params: BuildSqlToolsetParams): ConversationToolset {
+  const registrations = SQL_TOOL_REGISTRY[params.engine];
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(registrations, {
+    cli: { appendWebSearchPreview: true },
+    agents: agentOptions,
+    additionalAgentTools: [],
+  });
+}
 
 const connectionSchema = z
   .object({
@@ -611,10 +645,13 @@ async function main(): Promise<void> {
       engine: sqlEnv.engine,
     };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
-    const toolRegistrations = SQL_TOOL_REGISTRY[sqlEnv.engine];
-
     const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL);
-    const request = buildRequest({
+    const toolset = buildSqlConversationToolset({
+      logLabel: LOG_LABEL,
+      debug: resolvedOptionsWithDsn.debug,
+      engine: sqlEnv.engine,
+    });
+    const { request, agentTools } = buildRequest({
       options: resolvedOptionsWithDsn,
       context,
       inputText: determine.inputText,
@@ -629,6 +666,7 @@ async function main(): Promise<void> {
         engine: sqlEnv.engine,
         artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
+      toolset,
     });
 
     const agentResult = await runAgentConversation({
@@ -636,7 +674,7 @@ async function main(): Promise<void> {
       request,
       options: resolvedOptionsWithDsn,
       logLabel: LOG_LABEL,
-      toolRegistrations,
+      agentTools,
       maxTurns: resolvedOptionsWithDsn.maxIterations,
     });
     const content = agentResult.assistantText;

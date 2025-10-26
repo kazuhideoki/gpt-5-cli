@@ -61,7 +61,7 @@ export interface ToolRegistration<
   handler: ToolHandler<TArgs, TResult, TContext>;
 }
 
-interface BuildAgentsToolListOptions {
+export interface BuildAgentsToolListOptions {
   createExecutionContext?: () => ToolExecutionContext;
   debugLog?: (message: string) => void;
   logLabel?: string;
@@ -188,4 +188,29 @@ export function buildCliToolList(
   }
 
   return functionTools;
+}
+
+export interface BuildConversationToolsetOptions {
+  cli: BuildCliToolListConfig;
+  agents: BuildAgentsToolListOptions;
+  additionalAgentTools: AgentsSdkTool[];
+}
+
+/**
+ * Responses API 用と Agents SDK 用のツール配列を同時に構築する。
+ */
+export function buildConversationToolset(
+  registrations: Iterable<ToolRegistration<any, any>>,
+  options: BuildConversationToolsetOptions,
+): ConversationToolset {
+  const responseTools = buildCliToolList(registrations, options.cli);
+  const agentBaseTools = buildAgentsToolList(registrations, options.agents);
+  const agentTools =
+    options.additionalAgentTools.length > 0
+      ? [...agentBaseTools, ...options.additionalAgentTools]
+      : agentBaseTools;
+  return {
+    response: responseTools,
+    agents: agentTools,
+  };
 }
