@@ -77,7 +77,7 @@ export function createD2WebSearchTool(): AgentsSdkTool {
  * d2 モードで Responses API へ渡すツール配列を生成する。
  */
 export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  return buildCliToolList(D2_TOOL_REGISTRATIONS);
+  return buildCliToolList(D2_TOOL_REGISTRATIONS, { appendWebSearchPreview: false });
 }
 
 const d2CliHistoryContextStrictSchema = z.object({

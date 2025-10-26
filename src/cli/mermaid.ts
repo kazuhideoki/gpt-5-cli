@@ -9,7 +9,6 @@ import {
   MERMAID_CHECK_TOOL,
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
-  buildCliToolList,
 } from "../pipeline/process/tools/index.js";
 import {
   finalizeResult,
@@ -25,7 +24,6 @@ import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 
 /** Mermaidモードの解析済みCLIオプションを表す型。 */
 export interface MermaidCliOptions extends CliOptions {
@@ -51,14 +49,6 @@ interface MermaidContextResolution {
 
 const MERMAID_TOOL_REGISTRATIONS = [READ_FILE_TOOL, WRITE_FILE_TOOL, MERMAID_CHECK_TOOL] as const;
 
-/**
- * Mermaid モードで Responses API へ渡すツール定義を構築する。
- */
-function buildMermaidResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  const functionTools = buildCliToolList(MERMAID_TOOL_REGISTRATIONS);
-  return [...functionTools, { type: "web_search_preview" as const }];
-}
-
 const mermaidCliHistoryContextStrictSchema = z.object({
   cli: z.literal("mermaid"),
   relative_path: z.string().optional(),
@@ -73,7 +63,6 @@ const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
 export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
 type MermaidCliHistoryStoreContext = z.infer<typeof mermaidCliHistoryContextSchema>;
 
-// TODO History ファイルを共有しないことを前提とし、シンプルにする。そうすればこれは不要
 function isMermaidHistoryContext(
   value: MermaidCliHistoryStoreContext | undefined,
 ): value is MermaidCliHistoryContext {
@@ -338,7 +327,6 @@ async function main(): Promise<void> {
       defaults,
       logLabel: "[gpt-5-cli-mermaid]",
       additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
-      tools: buildMermaidResponseTools(),
     });
     const agentResult = await runAgentConversation({
       client,
