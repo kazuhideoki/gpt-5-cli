@@ -1,7 +1,6 @@
 export {
   buildAgentsToolList,
   buildCliToolList,
-  type BuildCliToolListConfig,
   type ToolRegistration,
   type ToolResult,
   type ToolExecutionContext,

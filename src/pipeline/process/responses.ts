@@ -37,8 +37,8 @@ interface BuildRequestParams {
   logLabel: string;
   /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
-  /** CLI 固有のツール構成。未指定なら共通ツールを組み立てる。 */
-  tools?: ResponseCreateParamsNonStreaming["tools"];
+  /** CLI が構築したツール定義一覧。Responses API へそのまま送信する。 */
+  tools: ResponseCreateParamsNonStreaming["tools"];
 }
 
 /**
