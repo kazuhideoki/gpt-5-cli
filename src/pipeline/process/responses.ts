@@ -9,7 +9,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
-import { buildCliToolList, type ConversationToolset } from "./tools/index.js";
+import type { ConversationToolset } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -37,11 +37,8 @@ interface BuildRequestParams {
   logLabel: string;
   /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
-  /**
-   * CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。
-   * 既存 CLI から順次移行するため、移行中は未指定の場合も従来通り共通ツールを構成する。
-   */
-  toolset?: ConversationToolset;
+  /** CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。 */
+  toolset: ConversationToolset;
 }
 
 /**
@@ -67,7 +64,7 @@ export function buildRequest({
   logLabel,
   additionalSystemMessages,
   toolset,
-}: BuildRequestParams): ResponseCreateParamsNonStreaming {
+}: BuildRequestParams): BuildRequestArtifacts {
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
@@ -123,8 +120,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools:
-      toolset?.response ?? buildCliToolList([], { appendWebSearchPreview: true }),
+    tools: toolset.response,
     input: inputForRequest,
   };
 
@@ -140,7 +136,10 @@ export function buildRequest({
     );
   }
 
-  return request;
+  return {
+    request,
+    agentTools: toolset.agents,
+  };
 }
 
 export function extractResponseText(response: Response): string | null {
