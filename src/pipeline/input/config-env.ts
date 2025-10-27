@@ -7,6 +7,62 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { ROOT_DIR } from "../../foundation/paths.js";
 
+/**
+ * ConfigEnv が認識する環境変数キーを列挙するリスト。
+ * 実際にアプリケーション層で参照されるキーのみを対象にする。
+ */
+export const CONFIG_ENV_KNOWN_KEYS = [
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL_MAIN",
+  "OPENAI_MODEL_MINI",
+  "OPENAI_MODEL_NANO",
+  "OPENAI_DEFAULT_EFFORT",
+  "OPENAI_DEFAULT_VERBOSITY",
+  "GPT_5_CLI_PROMPTS_DIR",
+  "GPT_5_CLI_MAX_ITERATIONS",
+  "GPT_5_CLI_HISTORY_INDEX_FILE",
+  "GPT_5_CLI_OUTPUT_DIR",
+  "SQRUFF_BIN",
+  "NO_COLOR",
+] as const;
+
+/** ConfigEnv が扱う環境変数キーのユニオン型。 */
+export type ConfigEnvKey = (typeof CONFIG_ENV_KNOWN_KEYS)[number];
+
+/**
+ * ConfigEnv で提供する環境変数の値マップ。
+ * 未指定が許容されるキーは `undefined` を含める（利用側で存在確認を要求するため）。
+ */
+export interface ConfigEnvValueMap {
+  /** API クライアントで必須となる OpenAI の API キー。 */
+  readonly OPENAI_API_KEY: string | undefined;
+  /** メインモデル指定は任意のため未設定を許容する。 */
+  readonly OPENAI_MODEL_MAIN: string | undefined;
+  /** 軽量モデル指定は任意のため未設定を許容する。 */
+  readonly OPENAI_MODEL_MINI: string | undefined;
+  /** ナノモデル指定は任意のため未設定を許容する。 */
+  readonly OPENAI_MODEL_NANO: string | undefined;
+  /** 既定 effort は省略可能なので `undefined` を許容する。 */
+  readonly OPENAI_DEFAULT_EFFORT: string | undefined;
+  /** 既定 verbosity も省略可能なので `undefined` を許容する。 */
+  readonly OPENAI_DEFAULT_VERBOSITY: string | undefined;
+  /** プロンプトディレクトリは外部設定が任意のため未設定を許容する。 */
+  readonly GPT_5_CLI_PROMPTS_DIR: string | undefined;
+  /** 反復上限は環境で省略可能なため未設定を許容する。 */
+  readonly GPT_5_CLI_MAX_ITERATIONS: string | undefined;
+  /** 履歴パスは環境で指定される想定だがテスト環境で未設定があり得るため許容する。 */
+  readonly GPT_5_CLI_HISTORY_INDEX_FILE: string | undefined;
+  /** 出力ディレクトリ指定はオプションのため未設定を許容する。 */
+  readonly GPT_5_CLI_OUTPUT_DIR: string | undefined;
+  /** SQL フォーマッタのバイナリ指定は任意のため未設定を許容する。 */
+  readonly SQRUFF_BIN: string | undefined;
+  /** NO_COLOR はフラグ用途で省略可能なため未設定を許容する。 */
+  readonly NO_COLOR: string | undefined;
+}
+
+/** ConfigEnv が提供するエントリ配列の型。 */
+export type ConfigEnvEntries = ReadonlyArray<readonly [ConfigEnvKey, string]>;
+
 /** `.env` 群の読み込み挙動を調整する初期化オプション。 */
 export interface ConfigEnvInitOptions {
   /**
