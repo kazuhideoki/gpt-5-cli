@@ -68,13 +68,22 @@ export class ConfigEnv implements ConfigEnvContract {
    */
   static async create(options: ConfigEnvInitOptions = {}): Promise<ConfigEnv> {
     const baseDir = options.baseDir ?? ROOT_DIR;
-    const resolvedValues = new Map<string, string>();
+    const initialValues = new Map<string, string>();
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === "string") {
+        initialValues.set(key, value);
+      }
+    }
+    const resolvedValues = new Map(initialValues);
 
     const baseEnvPath = path.join(baseDir, ".env");
     const baseEntries = await parseEnvFile(baseEnvPath);
+    const baseValueMap = new Map(baseEntries ?? []);
     if (baseEntries !== null) {
       for (const [key, value] of baseEntries) {
-        resolvedValues.set(key, value);
+        if (!initialValues.has(key)) {
+          resolvedValues.set(key, value);
+        }
       }
     }
 
@@ -84,7 +93,14 @@ export class ConfigEnv implements ConfigEnvContract {
       const overrideEntries = await parseEnvFile(overrideEnvPath);
       if (overrideEntries !== null) {
         for (const [key, value] of overrideEntries) {
-          resolvedValues.set(key, value);
+          if (!initialValues.has(key)) {
+            resolvedValues.set(key, value);
+            continue;
+          }
+          const baseValue = baseValueMap.get(key);
+          if (baseValue !== undefined && initialValues.get(key) === baseValue) {
+            resolvedValues.set(key, value);
+          }
         }
       }
     }
