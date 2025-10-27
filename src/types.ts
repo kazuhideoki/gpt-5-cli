@@ -44,9 +44,9 @@ export interface ConfigEnvironment {
   /**
    * 保持している全てのキーと値を列挙する。
    *
-   * @returns イテレータで表現したキーと値のペア。
+   * @returns イテレータで表現したキーと値のペア。値は読み取り専用として扱う。
    */
-  entries(): IterableIterator<[key: string, value: string]>;
+  entries(): IterableIterator<readonly [key: string, value: string]>;
 }
 
 // 以降は CLI/Session 双方から参照される共通型
