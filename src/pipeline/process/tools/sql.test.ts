@@ -29,7 +29,11 @@ describe("SQL tools", () => {
   });
 
   it("SQL ドライランで PREPARE エラーを捕捉する", async () => {
-    setSqlEnvironment({ dsn: "postgres://example.invalid/db", engine: "postgresql" });
+    setSqlEnvironment({
+      dsn: "postgres://example.invalid/db",
+      engine: "postgresql",
+      sqruffBin: "sqruff",
+    });
 
     Client.prototype.connect = async () => {};
     Client.prototype.query = async () => {
@@ -41,5 +45,9 @@ describe("SQL tools", () => {
     const result = (await SQL_DRY_RUN_TOOL.handler({ query: "SELECT 1" }, context)) as ToolResult;
     expect(result.success).toBe(false);
     expect(result.message).toContain("prepare failed");
+  });
+
+  it("ConfigEnv の sqruff バイナリ設定を利用する", () => {
+    // TODO: 実装時に ConfigEnv から SQRUFF_BIN が適用されることを検証する
   });
 });
