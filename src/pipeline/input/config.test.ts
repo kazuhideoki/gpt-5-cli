@@ -60,12 +60,11 @@ describe("loadEnvironment", () => {
     delete process.env[targetEnv];
   });
 
-  it(".env が存在しない場合はエラーになる", () => {
+  it(".env が存在しなくても読み込みを継続する", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
-      expect(() => loadEnvironment({ baseDir: dir, envSuffix: "ask" })).toThrow(
-        `.env file not found in ${dir}`,
-      );
+      expect(() => loadEnvironment({ baseDir: dir, envSuffix: "ask" })).not.toThrow();
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -36,7 +36,7 @@ export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
 
   const baseEnvPath = path.join(baseDir, ".env");
   if (!fs.existsSync(baseEnvPath)) {
-    throw new Error(`.env file not found in ${baseDir}`);
+    return;
   }
   const baseParsed = dotenv.parse(fs.readFileSync(baseEnvPath, "utf8"));
 
