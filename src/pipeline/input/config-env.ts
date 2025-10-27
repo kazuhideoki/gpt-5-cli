@@ -158,12 +158,14 @@ export class ConfigEnv implements ConfigEnvContract {
   }
 
   get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
+  // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
   get(key: string): string | undefined;
   get(key: string): string | undefined {
     return this.values.get(key);
   }
 
   has(key: ConfigEnvKey): boolean;
+  // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
   has(key: string): boolean;
   has(key: string): boolean {
     return this.values.has(key);
