@@ -2,68 +2,37 @@
  * CLI 起動時に利用する環境ロードと既定値解決を担うモジュール。
  * Input 層で共通化された初期化ロジックをまとめる。
  */
-import fs from "node:fs";
 import path from "node:path";
-import dotenv from "dotenv";
 import { ZodError } from "zod";
-import type { CliDefaults } from "../../types.js";
+import type { CliDefaults, ConfigEnvironment } from "../../types.js";
 import { envConfigSchema, type EnvConfig } from "../../foundation/env.js";
 import { ROOT_DIR, expandHome } from "../../foundation/paths.js";
 import { resolveHistoryPath } from "../history/store.js";
+import type { ConfigEnvContract, ConfigEnvInitOptions } from "./config-env.js";
+import { ConfigEnv } from "./config-env.js";
 
 const DEFAULT_PROMPTS_DIR = "prompts";
 
 /** ツール呼び出し回数のデフォルト上限。 */
 export const DEFAULT_MAX_ITERATIONS = 10;
 
-interface LoadEnvironmentOptions {
-  envSuffix?: string;
-  baseDir?: string;
-}
+type LoadEnvironmentOptions = ConfigEnvInitOptions;
 
 /**
  * リポジトリ直下の`.env`を読み込み、必要に応じて`.env.{suffix}`で上書きする。
  *
  * @param options.envSuffix CLIごとの追加環境ファイル接尾辞。
  * @param options.baseDir   ルートディレクトリをテストなどで上書きする場合に指定。
- * @todo process.env ではなく、config 構造体にし、後工程に渡していけるようにする
  */
-export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
+export async function loadEnvironment(
+  options: LoadEnvironmentOptions = {},
+): Promise<ConfigEnvContract> {
   const baseDir = options.baseDir ?? ROOT_DIR;
-  const existingEnv = new Map<string, string | undefined>(
-    Object.entries(process.env).map(([key, value]) => [key, value]),
-  );
-
-  const baseEnvPath = path.join(baseDir, ".env");
-  if (!fs.existsSync(baseEnvPath)) {
-    return;
+  const configEnv = await ConfigEnv.create({ ...options, baseDir });
+  for (const [key, value] of configEnv.entries()) {
+    process.env[key] = value;
   }
-  const baseParsed = dotenv.parse(fs.readFileSync(baseEnvPath, "utf8"));
-
-  for (const [key, value] of Object.entries(baseParsed)) {
-    if (!existingEnv.has(key)) {
-      process.env[key] = value;
-    }
-  }
-
-  const suffix = options.envSuffix?.trim();
-  if (suffix && suffix.length > 0) {
-    const overrideEnvPath = path.join(baseDir, `.env.${suffix}`);
-    if (fs.existsSync(overrideEnvPath)) {
-      const overrideParsed = dotenv.parse(fs.readFileSync(overrideEnvPath, "utf8"));
-      for (const [key, value] of Object.entries(overrideParsed)) {
-        const existedAtStart = existingEnv.has(key);
-        if (!existedAtStart) {
-          process.env[key] = value;
-          continue;
-        }
-        const baseValue = baseParsed?.[key];
-        if (baseValue !== undefined && existingEnv.get(key) === baseValue) {
-          process.env[key] = value;
-        }
-      }
-    }
-  }
+  return configEnv;
 }
 
 /**
@@ -72,8 +41,8 @@ export function loadEnvironment(options: LoadEnvironmentOptions = {}): void {
  * @param defaultPath 既定パス。
  * @returns 解析済みの絶対パス。
  */
-export function resolvePromptsDir(defaultPath: string): string {
-  const configured = process.env.GPT_5_CLI_PROMPTS_DIR;
+export function resolvePromptsDir(configEnv: ConfigEnvironment, defaultPath: string): string {
+  const configured = configEnv.get("GPT_5_CLI_PROMPTS_DIR");
   if (typeof configured === "string") {
     const trimmed = configured.trim();
     if (trimmed.length === 0) {
@@ -91,10 +60,11 @@ export function resolvePromptsDir(defaultPath: string): string {
  *
  * @returns CLIデフォルト値。
  */
-export function loadDefaults(): CliDefaults {
+export function loadDefaults(configEnv: ConfigEnvironment): CliDefaults {
+  const envEntries = Object.fromEntries(configEnv.entries());
   let envConfig: EnvConfig;
   try {
-    envConfig = envConfigSchema.parse(process.env);
+    envConfig = envConfigSchema.parse(envEntries);
   } catch (error) {
     if (error instanceof ZodError) {
       const firstIssue = error.issues[0];
@@ -105,8 +75,8 @@ export function loadDefaults(): CliDefaults {
     throw error;
   }
 
-  const historyIndexPath = resolveHistoryPath();
-  const promptsDir = resolvePromptsDir(path.join(ROOT_DIR, DEFAULT_PROMPTS_DIR));
+  const historyIndexPath = resolveHistoryPath(configEnv);
+  const promptsDir = resolvePromptsDir(configEnv, path.join(ROOT_DIR, DEFAULT_PROMPTS_DIR));
 
   const config = envConfig;
   return {

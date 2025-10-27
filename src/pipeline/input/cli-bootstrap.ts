@@ -4,8 +4,9 @@ import type { HistoryEntry } from "../history/store.js";
 import { HistoryStore } from "../history/store.js";
 import { loadDefaults, loadEnvironment } from "./config.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";
-import type { CliDefaults, CliOptions } from "../../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
 import type { z } from "zod";
+import type { ConfigEnvInitOptions } from "./config-env.js";
 
 /**
  * `bootstrapCli` に供給する CLI 初期化パラメータ群。
@@ -25,6 +26,8 @@ interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {
   historyEntryFilter?: (entry: HistoryEntry<THistoryContext>) => boolean;
   /**環境ファイルのサフィックス。追加環境設定が不要な CLI もあるため省略可。*/
   envFileSuffix?: string;
+  /**ConfigEnv 初期化挙動を上書きするためのオプション。テストなどで利用する。*/
+  configEnvOptions?: Omit<ConfigEnvInitOptions, "envSuffix">;
 }
 
 /**
@@ -42,6 +45,8 @@ interface CliBootstrapHelpResult<TOptions extends CliOptions> {
   systemPrompt?: string;
   /**システムプロンプトの解決パス。*/
   promptPath: string;
+  /**読み込んだ ConfigEnv。後続処理へ引き渡す。*/
+  configEnv: ConfigEnvironment;
 }
 
 /**
@@ -62,6 +67,8 @@ interface CliBootstrapReadyResult<TOptions extends CliOptions, THistoryContext> 
   promptPath: string;
   /**履歴ストアインスタンス。文脈検証済みの状態で返す。*/
   historyStore: HistoryStore<THistoryContext>;
+  /**読み込んだ ConfigEnv。後続処理へ引き渡す。*/
+  configEnv: ConfigEnvironment;
 }
 
 /**
@@ -76,11 +83,14 @@ type CliBootstrapResult<TOptions extends CliOptions, THistoryContext> =
 /**
  * CLIエントリーポイントで共通となる初期化処理を実行する。
  */
-export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unknown>(
+export async function bootstrapCli<TOptions extends CliOptions, THistoryContext = unknown>(
   params: CliBootstrapParams<TOptions, THistoryContext>,
-): CliBootstrapResult<TOptions, THistoryContext> {
-  loadEnvironment({ envSuffix: params.envFileSuffix });
-  const defaults = loadDefaults();
+): Promise<CliBootstrapResult<TOptions, THistoryContext>> {
+  const configEnv = await loadEnvironment({
+    envSuffix: params.envFileSuffix,
+    ...params.configEnvOptions,
+  });
+  const defaults = loadDefaults(configEnv);
   console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
 
   const options = params.parseArgs(params.argv, defaults);
@@ -100,6 +110,7 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unkn
       options,
       systemPrompt,
       promptPath,
+      configEnv,
     };
   }
 
@@ -115,5 +126,6 @@ export function bootstrapCli<TOptions extends CliOptions, THistoryContext = unkn
     systemPrompt,
     promptPath,
     historyStore,
+    configEnv,
   };
 }

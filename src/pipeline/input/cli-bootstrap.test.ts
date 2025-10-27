@@ -128,6 +128,11 @@ describe("bootstrapCli", () => {
     const historyPath = path.join(historyDir, "history-index.json");
     fs.writeFileSync(path.join(promptsDir, "ask.md"), "prompt from env", "utf8");
 
+    const previousHistoryEnv = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+    const previousPromptsEnv = process.env.GPT_5_CLI_PROMPTS_DIR;
+    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+    delete process.env.GPT_5_CLI_PROMPTS_DIR;
+
     fs.writeFileSync(
       path.join(envRoot, ".env"),
       [
@@ -167,6 +172,16 @@ describe("bootstrapCli", () => {
       expect(result.configEnv.get("GPT_5_CLI_PROMPTS_DIR")).toBe(promptsDir);
       expect(result.options.args).toEqual(["--mode"]);
     } finally {
+      if (previousHistoryEnv === undefined) {
+        delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+      } else {
+        process.env.GPT_5_CLI_HISTORY_INDEX_FILE = previousHistoryEnv;
+      }
+      if (previousPromptsEnv === undefined) {
+        delete process.env.GPT_5_CLI_PROMPTS_DIR;
+      } else {
+        process.env.GPT_5_CLI_PROMPTS_DIR = previousPromptsEnv;
+      }
       fs.rmSync(envRoot, { recursive: true, force: true });
       fs.rmSync(promptsDir, { recursive: true, force: true });
       fs.rmSync(historyDir, { recursive: true, force: true });

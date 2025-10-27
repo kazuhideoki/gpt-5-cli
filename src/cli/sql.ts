@@ -569,7 +569,7 @@ export function buildSqlHistoryContext(
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const bootstrap = bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
+    const bootstrap = await bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
       argv,
       logLabel: LOG_LABEL,
       parseArgs,

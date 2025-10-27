@@ -325,7 +325,7 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const bootstrap = bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
+    const bootstrap = await bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-d2]",
       parseArgs,

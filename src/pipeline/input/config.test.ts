@@ -71,66 +71,69 @@ afterAll(() => {
 describe("loadEnvironment", () => {
   const targetEnv = "OPENAI_DEFAULT_EFFORT";
 
-  afterEach(() => {
-    delete process.env[targetEnv];
-  });
-
-  it(".env が存在しなくても読み込みを継続する", () => {
+  it(".env が存在しなくても読み込みを継続する", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
-      expect(() => loadEnvironment({ baseDir: dir, envSuffix: "ask" })).not.toThrow();
+      const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      expect(configEnv.has(targetEnv)).toBe(false);
       expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it(".env の値が設定される", () => {
+  it(".env の値が設定される", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
-      loadEnvironment({ baseDir: dir });
+      const configEnv = await loadEnvironment({ baseDir: dir });
+      expect(configEnv.get(targetEnv)).toBe("medium");
       expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("medium");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it(".env.{suffix} が .env を上書きする", () => {
+  it(".env.{suffix} が .env を上書きする", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
-      loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      expect(configEnv.get(targetEnv)).toBe("high");
       expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it(".env と同じ値が事前設定されていても .env.{suffix} の値で上書きされる", () => {
+  it(".env と同じ値が事前設定されていても .env.{suffix} の値で上書きされる", async () => {
     process.env[targetEnv] = "medium";
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
-      loadEnvironment({ baseDir: dir, envSuffix: "ask" });
-      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
+      const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
+      expect(configEnv.get(targetEnv)).toBe("high");
+      expect(process.env[targetEnv]).toBe("high");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+      delete process.env[targetEnv];
     }
   });
 
-  it("既に環境変数が設定されていれば維持される", () => {
+  it("既に環境変数が設定されていれば維持される", async () => {
     process.env.OPENAI_DEFAULT_EFFORT = "low";
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
     try {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
       fs.writeFileSync(path.join(dir, ".env.sql"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
-      loadEnvironment({ baseDir: dir, envSuffix: "sql" });
+      const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "sql" });
+      expect(configEnv.get(targetEnv)).toBe("low");
       expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("low");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+      delete process.env.OPENAI_DEFAULT_EFFORT;
     }
   });
 });
