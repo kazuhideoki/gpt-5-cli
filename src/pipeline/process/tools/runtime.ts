@@ -23,6 +23,21 @@ export interface ToolResult {
   [key: string]: unknown;
 }
 
+/**
+ * Responses API と Agents SDK の双方で利用するツール配列をまとめたセット。
+ * CLI 層ではこの型を用いて、API リクエストとエージェント実行に同じ構成を共有する。
+ */
+export interface ConversationToolset {
+  /**
+   * Responses API リクエストに添付する Function Tool / web_search_preview 定義群。
+   */
+  response: ResponseCreateParamsNonStreaming["tools"];
+  /**
+   * Agents SDK でアクティブにするツール定義群。
+   */
+  agents: AgentsSdkTool[];
+}
+
 export interface CommandResult extends ToolResult {
   command: string;
   args: string[];
@@ -46,7 +61,7 @@ export interface ToolRegistration<
   handler: ToolHandler<TArgs, TResult, TContext>;
 }
 
-interface BuildAgentsToolListOptions {
+export interface BuildAgentsToolListOptions {
   createExecutionContext?: () => ToolExecutionContext;
   debugLog?: (message: string) => void;
   logLabel?: string;
@@ -145,8 +160,13 @@ export function buildAgentsToolList(
   });
 }
 
+export interface BuildCliToolListConfig {
+  appendWebSearchPreview: boolean;
+}
+
 export function buildCliToolList(
   registrations: Iterable<ToolRegistration<any, any>>,
+  config: BuildCliToolListConfig,
 ): ResponseCreateParamsNonStreaming["tools"] {
   const functionTools: ResponseCreateParamsNonStreaming["tools"] = [];
   const seen = new Set<string>();
@@ -163,5 +183,34 @@ export function buildCliToolList(
     seen.add(definition.name);
   }
 
-  return [...functionTools, { type: "web_search_preview" as const }];
+  if (config.appendWebSearchPreview) {
+    return [...functionTools, { type: "web_search_preview" as const }];
+  }
+
+  return functionTools;
+}
+
+export interface BuildConversationToolsetOptions {
+  cli: BuildCliToolListConfig;
+  agents: BuildAgentsToolListOptions;
+  additionalAgentTools: AgentsSdkTool[];
+}
+
+/**
+ * Responses API 用と Agents SDK 用のツール配列を同時に構築する。
+ */
+export function buildConversationToolset(
+  registrations: Iterable<ToolRegistration<any, any>>,
+  options: BuildConversationToolsetOptions,
+): ConversationToolset {
+  const responseTools = buildCliToolList(registrations, options.cli);
+  const agentBaseTools = buildAgentsToolList(registrations, options.agents);
+  const agentTools =
+    options.additionalAgentTools.length > 0
+      ? [...agentBaseTools, ...options.additionalAgentTools]
+      : agentBaseTools;
+  return {
+    response: responseTools,
+    agents: agentTools,
+  };
 }

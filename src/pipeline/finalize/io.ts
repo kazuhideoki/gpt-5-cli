@@ -49,11 +49,18 @@ export interface DeliverOutputParams {
   copySource?: CopySource;
 }
 
+/**
+ * deliverOutput の保存・コピー処理結果。
+ */
 export interface DeliverOutputResult {
+  /** ファイルへ書き出した場合の結果メタデータ。 */
   file?: {
+    /** 書き込み先の絶対パス。 */
     absolutePath: string;
+    /** 書き込んだバイト数。 */
     bytesWritten: number;
   };
+  /** クリップボードコピーを実行した場合は true。 */
   copied?: boolean;
 }
 
@@ -154,9 +161,6 @@ async function copyWithPbcopy(content: string): Promise<void> {
 
 /**
  * CLI 応答をファイル保存・クリップボードコピーへ分配する。
- *
- * @param params 出力条件。
- * @returns 保存・コピーの結果メタデータ。
  */
 export async function deliverOutput(params: DeliverOutputParams): Promise<DeliverOutputResult> {
   const cwd = params.cwd ?? process.cwd();

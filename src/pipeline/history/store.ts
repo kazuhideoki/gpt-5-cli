@@ -141,13 +141,28 @@ interface HistoryConversationUpsert<TContext> {
   contextData?: TContext;
 }
 
+/**
+ * 履歴ストアの動作構成。CLI から保存されるコンテキストの検証やフィルタを切り替える。
+ *
+ * @template TContext CLI 履歴に付随するコンテキスト型。
+ */
 interface HistoryStoreOptions<TContext> {
+  /**
+   * 履歴に付随するコンテキストをバリデーションするための `zod` スキーマ。
+   * コンテキストを扱わない CLI もあるため、必須の制約を課さない目的で省略可能。
+   */
   contextSchema?: z.ZodType<TContext>;
+  /**
+   * 表示・削除対象を調整するためのエントリフィルタ。
+   * CLI モードごとの表示要件が異なるため、デフォルトでは適用せず任意に差し込めるよう省略可能。
+   */
   entryFilter?: (entry: HistoryEntry<TContext>) => boolean;
 }
 
 /**
  * 履歴インデックスファイルを管理するユーティリティ。
+ *
+ * @template TContext CLI から保存される履歴コンテキスト型。
  */
 export class HistoryStore<TContext = unknown> {
   private readonly entriesSchema: z.ZodArray<z.ZodType<HistoryEntry<TContext>>>;
@@ -406,23 +421,5 @@ export class HistoryStore<TContext = unknown> {
     const entries = this.getFilteredEntries();
     if (entries.length === 0) return undefined;
     return entries[0];
-  }
-
-  /**
-   * 履歴エントリをIDで更新または追加する。
-   *
-   * @param entry 保存対象エントリ。
-   */
-  upsertEntry(entry: HistoryEntry<TContext>): void {
-    const entries = this.loadEntries();
-    const existingIndex = entries.findIndex(
-      (item) => item.last_response_id === entry.last_response_id,
-    );
-    if (existingIndex >= 0) {
-      entries[existingIndex] = entry;
-    } else {
-      entries.push(entry);
-    }
-    this.saveEntries(entries);
   }
 }

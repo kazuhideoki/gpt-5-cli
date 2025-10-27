@@ -9,7 +9,7 @@ import type {
 import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
-import { buildCliToolList } from "./tools/index.js";
+import type { ConversationToolset } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -17,18 +17,43 @@ import type {
   OpenAIInputMessage,
 } from "../../types.js";
 
+/**
+ * Responses API へ送るペイロードを構築する際に必要となる入力一式。
+ */
 interface BuildRequestParams {
+  /** CLI から引き継いだ実行設定。履歴継続時に `previous_response_id` を利用する。 */
   options: CliOptions;
+  /** 履歴検索やタイトル継承を反映済みの会話コンテキスト。 */
   context: ConversationContext;
+  /** ユーザーが今回送信するプロンプト文字列。 */
   inputText: string;
+  /** 初回会話でのみ付与されるシステムプロンプト（CLI 側で任意設定）。 */
   systemPrompt?: string;
+  /** CLI が許可した画像添付の Data URL。未指定時はテキストのみ。 */
   imageDataUrl?: string;
+  /** 既定モデルや推論スケールのログ出力に使用する環境値。 */
   defaults?: CliDefaults;
+  /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
+  /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
-  tools?: ResponseCreateParamsNonStreaming["tools"];
+  /** CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。 */
+  toolset: ConversationToolset;
 }
 
+/**
+ * buildRequest が組み立てたリクエストと、エージェント実行時に必要なツール配列。
+ */
+export interface BuildRequestArtifacts {
+  /** Responses API へ送信する完成済みペイロード。 */
+  request: ResponseCreateParamsNonStreaming;
+  /** Agents SDK 実行に利用するツール配列。 */
+  agentTools: ConversationToolset["agents"];
+}
+
+/**
+ * Responses API へ送るペイロードを構築し、履歴指定や追加システムメッセージを詰め替える。
+ */
 export function buildRequest({
   options,
   context,
@@ -38,8 +63,8 @@ export function buildRequest({
   defaults,
   logLabel,
   additionalSystemMessages,
-  tools,
-}: BuildRequestParams): ResponseCreateParamsNonStreaming {
+  toolset,
+}: BuildRequestParams): BuildRequestArtifacts {
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
@@ -95,7 +120,7 @@ export function buildRequest({
     model: options.model,
     reasoning: { effort: options.effort },
     text: textConfig,
-    tools: tools ?? buildCliToolList([]),
+    tools: toolset.response,
     input: inputForRequest,
   };
 
@@ -111,7 +136,10 @@ export function buildRequest({
     );
   }
 
-  return request;
+  return {
+    request,
+    agentTools: toolset.agents,
+  };
 }
 
 export function extractResponseText(response: Response): string | null {

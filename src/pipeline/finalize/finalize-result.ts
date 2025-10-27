@@ -11,48 +11,70 @@ import type {
   FinalizeOutcome,
 } from "./types.js";
 
+/**
+ * 履歴へ保存する際に必要となるモデル情報のスナップショット。
+ */
 interface FinalizeResultMetadata {
+  /** 実行に利用したモデル名。 */
   model: string;
+  /** 実行時の reasoning effort レベル。 */
   effort: EffortLevel;
+  /** 応答生成に使用した verbosity レベル。 */
   verbosity: VerbosityLevel;
 }
 
+/**
+ * finalizeResult が履歴更新を行うためのオプション。
+ */
 export interface FinalizeResultHistoryOptions<TContext> {
+  /** 更新対象となるレスポンス ID。 */
   responseId?: string;
+  /** 履歴エントリを操作するストア。 */
   store: HistoryStore<TContext>;
+  /** 現在の会話コンテキスト。 */
   conversation: ConversationContext;
+  /** 履歴保存時に引き継ぐモデル関連メタデータ。 */
   metadata: FinalizeResultMetadata;
+  /** 直前の履歴コンテキスト。 */
   previousContextRaw?: TContext;
+  /** 保存する履歴コンテキスト本体。 */
   contextData: TContext;
 }
 
+/**
+ * finalizeResult へ渡す CLI 固有の終了処理パラメータ。
+ */
 export interface FinalizeResultParams<TContext> {
+  /** 応答テキスト本体。 */
   content: string;
+  /** 今回のユーザー入力。 */
   userText: string;
+  /** 標準出力へそのまま流したい補足テキスト。 */
   stdout?: string;
-  summaryOutputPath?: string;
+  /** ファイル保存先の相対または絶対パス。 */
+  textOutputPath?: string;
+  /** クリップボードへコピーするかどうか。 */
   copyOutput: boolean;
+  /** コピー元をファイルへ切り替える場合のパス。 */
   copySourceFilePath?: string;
+  /** 履歴更新を実施する場合の追加オプション。 */
   history?: FinalizeResultHistoryOptions<TContext>;
 }
 
 /**
  * CLI 固有のオプションを考慮して結果の保存・履歴更新を実行する。
- *
- * @param params 終了処理に必要な情報。
- * @returns `handleResult` が返す実行結果。
  */
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const { content, stdout, summaryOutputPath, copyOutput, copySourceFilePath, history, userText } =
+  const { content, stdout, textOutputPath, copyOutput, copySourceFilePath, history, userText } =
     params;
 
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
-    summaryOutputPath || copyOutput
+    textOutputPath || copyOutput
       ? ({
           params: {
-            ...(summaryOutputPath ? { filePath: summaryOutputPath } : {}),
+            ...(textOutputPath ? { filePath: textOutputPath } : {}),
             ...(copyOutput
               ? {
                   copy: true,

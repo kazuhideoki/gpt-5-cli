@@ -2,27 +2,130 @@
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
+/**
+ * 履歴エントリに記録された値を CLI オプションへ転写する。
+ */
+function applyHistoryOverrides<TOptions extends CliOptions, THistoryTask>(
+  options: TOptions,
+  activeEntry: HistoryEntry<THistoryTask>,
+): void {
+  if (!options.continueConversation) {
+    return;
+  }
+
+  if (!options.modelExplicit && typeof activeEntry.model === "string" && activeEntry.model) {
+    options.model = activeEntry.model;
+  }
+
+  if (!options.effortExplicit && typeof activeEntry.effort === "string" && activeEntry.effort) {
+    const lower = String(activeEntry.effort).toLowerCase();
+    if (lower === "low" || lower === "medium" || lower === "high") {
+      options.effort = lower as CliOptions["effort"];
+    }
+  }
+
+  if (
+    !options.verbosityExplicit &&
+    typeof activeEntry.verbosity === "string" &&
+    activeEntry.verbosity
+  ) {
+    const lower = String(activeEntry.verbosity).toLowerCase();
+    if (lower === "low" || lower === "medium" || lower === "high") {
+      options.verbosity = lower as CliOptions["verbosity"];
+    }
+  }
+}
+
+/**
+ * 履歴エントリから再開に必要な情報を抽出する。
+ */
+function extractResumeState<THistoryTask>(activeEntry: HistoryEntry<THistoryTask>): {
+  resumeMode: string;
+  resumePrev: string | undefined;
+  resumeSummaryText: string | undefined;
+  resumeSummaryCreatedAt: string | undefined;
+  resumeSummaryMessage: OpenAIInputMessage | undefined;
+  previousTitle: string | undefined;
+} {
+  const resumeMode = activeEntry.resume?.mode ?? "";
+  const resumePrev = activeEntry.resume?.previous_response_id ?? undefined;
+  const resumeSummaryText = activeEntry.resume?.summary?.text ?? undefined;
+  const resumeSummaryCreatedAt = activeEntry.resume?.summary?.created_at ?? undefined;
+  const resumeSummaryMessage = resumeSummaryText
+    ? {
+        role: "system" as const,
+        content: [{ type: "input_text" as const, text: resumeSummaryText }],
+      }
+    : undefined;
+
+  return {
+    resumeMode,
+    resumePrev,
+    resumeSummaryText,
+    resumeSummaryCreatedAt,
+    resumeSummaryMessage,
+    previousTitle: activeEntry.title ?? undefined,
+  };
+}
+
+/**
+ * 履歴同期コールバックへ渡す情報セット。
+ */
 interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** 現在の CLI オプション。 */
   options: TOptions;
+  /** 選択中の履歴エントリ。 */
   activeEntry: HistoryEntry<THistoryTask>;
+  /** 警告ログを出力する関数。 */
   logWarning: (message: string) => void;
 }
 
+/**
+ * computeContext の挙動を調整する追加設定。
+ */
 export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
+  /** 履歴オプションを更新するときに呼び出す同期ハンドラ。CLI によっては不要なため任意。 */
   synchronizeWithHistory?: (params: SynchronizeHistoryParams<TOptions, THistoryTask>) => void;
 }
 
-export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>(
-  options: TOptions,
-  historyStore: HistoryStore<THistoryTask>,
-  inputText: string,
-  initialActiveEntry?: HistoryEntry<THistoryTask>,
-  explicitPrevId?: string,
-  explicitPrevTitle?: string,
-  config?: ComputeContextConfig<TOptions, THistoryTask>,
-): ConversationContext {
+/**
+ * computeContext へ渡す引数群。
+ */
+export interface ComputeContextParams<TOptions extends CliOptions, THistoryTask = unknown> {
+  /** CLI オプション（履歴継承フラグを含む）。 */
+  options: TOptions;
+  /** 履歴の検索・選択に使用するストア。 */
+  historyStore: HistoryStore<THistoryTask>;
+  /** 今回ユーザーが送信するテキスト。 */
+  inputText: string;
+  /** resolveInputOrExecuteHistoryAction が履歴候補を返した場合のみ指定するため任意。 */
+  initialActiveEntry?: HistoryEntry<THistoryTask>;
+  /** 履歴再開時にレスポンス ID が明示された場合にのみ必要となるため任意。 */
+  explicitPrevId?: string;
+  /** 履歴再開時にタイトルが明示された場合にのみ必要となるため任意。 */
+  explicitPrevTitle?: string;
+  /** CLI 固有の挙動調整が不要な場合もあるため任意。 */
+  config?: ComputeContextConfig<TOptions, THistoryTask>;
+}
+
+/**
+ * 履歴情報と入力テキストから会話コンテキストを構築し、履歴継続設定を調整する。
+ *
+ * @param params 会話構築に必要な情報セット。
+ */
+export function computeContext<TOptions extends CliOptions, THistoryTask = unknown>({
+  options,
+  historyStore,
+  inputText,
+  initialActiveEntry,
+  explicitPrevId,
+  explicitPrevTitle,
+  config,
+}: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
   const logLabel = config?.logLabel ?? "[gpt-5-cli]";
+  // TODO 横断的な logger を別途定義する
   const logWarning = (message: string): void => {
     console.error(`${logLabel} ${message}`);
   };
@@ -45,59 +148,42 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
   let resumeSummaryText: string | undefined;
   let resumeSummaryCreatedAt: string | undefined;
   let resumeMode = "";
-  let resumePrev = "";
   const resumeBaseMessages: OpenAIInputMessage[] = [];
 
   if (activeEntry) {
-    if (options.continueConversation) {
-      if (!options.modelExplicit && typeof activeEntry.model === "string" && activeEntry.model) {
-        options.model = activeEntry.model;
-      }
-      if (!options.effortExplicit && typeof activeEntry.effort === "string" && activeEntry.effort) {
-        const lower = String(activeEntry.effort).toLowerCase();
-        if (lower === "low" || lower === "medium" || lower === "high") {
-          options.effort = lower as CliOptions["effort"];
-        }
-      }
-      if (
-        !options.verbosityExplicit &&
-        typeof activeEntry.verbosity === "string" &&
-        activeEntry.verbosity
-      ) {
-        const lower = String(activeEntry.verbosity).toLowerCase();
-        if (lower === "low" || lower === "medium" || lower === "high") {
-          options.verbosity = lower as CliOptions["verbosity"];
-        }
-      }
-    }
-
+    applyHistoryOverrides(options, activeEntry);
     config?.synchronizeWithHistory?.({
       options,
       activeEntry,
       logWarning,
     });
 
-    resumeMode = activeEntry.resume?.mode ?? "";
-    resumePrev = activeEntry.resume?.previous_response_id ?? "";
-    resumeSummaryText = activeEntry.resume?.summary?.text ?? undefined;
-    resumeSummaryCreatedAt = activeEntry.resume?.summary?.created_at ?? undefined;
+    const {
+      resumeMode: modeFromHistory,
+      resumePrev,
+      resumeSummaryText: summaryText,
+      resumeSummaryCreatedAt: summaryCreatedAt,
+      resumeSummaryMessage,
+      previousTitle: resolvedTitle,
+    } = extractResumeState(activeEntry);
 
-    if (resumeSummaryText) {
-      resumeBaseMessages.push({
-        role: "system",
-        content: [{ type: "input_text", text: resumeSummaryText }],
-      });
+    resumeMode = modeFromHistory;
+    resumeSummaryText = summaryText;
+    resumeSummaryCreatedAt = summaryCreatedAt;
+
+    if (resumeSummaryMessage) {
+      resumeBaseMessages.push(resumeSummaryMessage);
     }
 
     if (resumePrev) {
       previousResponseId = resumePrev;
     }
 
-    if (!previousTitle && activeEntry.title) {
-      previousTitle = activeEntry.title;
+    if (!previousTitle && resolvedTitle) {
+      previousTitle = resolvedTitle;
     }
 
-    if (resumeMode === "new_request") {
+    if (modeFromHistory === "new_request") {
       previousResponseId = undefined;
     }
   }

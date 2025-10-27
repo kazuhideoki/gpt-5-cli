@@ -49,6 +49,12 @@ function detectImageMime(filePath: string): string {
   }
 }
 
+/**
+ * CLI から指定された画像パスを検証し、Responses API 用の Data URL を生成する。
+ *
+ * @param imagePath `-i` フラグで渡された画像パス。未指定なら添付なしとして `undefined` を返す。
+ * @param logLabel ログ識別に利用する CLI ラベル。
+ */
 export function prepareImageData(
   imagePath: string | undefined,
   logLabel: string,

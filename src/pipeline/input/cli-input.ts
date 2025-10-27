@@ -6,12 +6,12 @@ import type { CliDefaults, CliOptions } from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { printHistoryDetail, printHistoryList } from "../history/output.js";
 
-interface DetermineInputExit {
+interface ResolveInputOrExecuteHistoryActionExit {
   kind: "exit";
   code: number;
 }
 
-interface DetermineInputResult<THistoryTask = unknown> {
+interface ResolveInputOrExecuteHistoryActionResult<THistoryTask = unknown> {
   kind: "input";
   inputText: string;
   activeEntry?: HistoryEntry<THistoryTask>;
@@ -19,11 +19,11 @@ interface DetermineInputResult<THistoryTask = unknown> {
   previousTitle?: string;
 }
 
-type DetermineResult<THistoryTask = unknown> =
-  | DetermineInputExit
-  | DetermineInputResult<THistoryTask>;
+type ResolveInputOrExecuteHistoryActionOutcome<THistoryTask = unknown> =
+  | ResolveInputOrExecuteHistoryActionExit
+  | ResolveInputOrExecuteHistoryActionResult<THistoryTask>;
 
-export interface DetermineInputDependencies<
+export interface ResolveInputOrExecuteHistoryActionDependencies<
   TOptions extends CliOptions = CliOptions,
   THistoryTask = unknown,
 > {
@@ -43,7 +43,7 @@ async function promptForInput(): Promise<string> {
 }
 
 /**
- * CLI のフラグと履歴ストアの状態から次の処理ステップを決定する。
+ * CLI のフラグと履歴ストアの状態から、履歴操作を即時実行するかプロンプト入力を返すかを分岐する。
  *
  * @param options 解析済み CLI オプション。
  * @param historyStore 履歴エントリの参照・更新を担うストア。
@@ -51,12 +51,15 @@ async function promptForInput(): Promise<string> {
  * @param deps ヘルプ出力など CLI 実装側が差し込む依存性。
  * @throws {Error} 履歴再開時に取得した入力が空文字だった場合。
  */
-export async function determineInput<TOptions extends CliOptions, THistoryTask = unknown>(
+export async function resolveInputOrExecuteHistoryAction<
+  TOptions extends CliOptions,
+  THistoryTask = unknown,
+>(
   options: TOptions,
   historyStore: HistoryStore<THistoryTask>,
   defaults: CliDefaults,
-  deps: DetermineInputDependencies<TOptions, THistoryTask>,
-): Promise<DetermineResult<THistoryTask>> {
+  deps: ResolveInputOrExecuteHistoryActionDependencies<TOptions, THistoryTask>,
+): Promise<ResolveInputOrExecuteHistoryActionOutcome<THistoryTask>> {
   const renderHistoryList = deps.printHistoryList ?? printHistoryList;
   const renderHistoryDetail = deps.printHistoryDetail ?? printHistoryDetail;
 

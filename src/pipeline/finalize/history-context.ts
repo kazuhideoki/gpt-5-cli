@@ -6,11 +6,12 @@ import type { TaskMode } from "../../types.js";
 
 export interface FileHistoryContext {
   cli: TaskMode;
-  file_path?: string;
-  output?: {
-    file?: string;
-    copy?: boolean;
-  };
+  /** 絶対パスでのファイル参照。 */
+  absolute_path?: string;
+  /** ワークスペース基準の相対パス。 */
+  relative_path?: string;
+  /** コピー指示フラグ。 */
+  copy?: boolean;
 }
 
 interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
@@ -28,9 +29,9 @@ interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
    */
   previousContext?: FileHistoryContext;
   /**
-   * 履歴に保存したい出力ファイルパス。`summaryOutputPath ?? options.<filePath>` などを想定する。
+   * 履歴に保存したい Artifact のパス。`responseOutputPath ?? options.<artifactPath>` などを想定する。
    */
-  historyOutputFile?: string;
+  historyArtifactPath?: string;
   /**
    * `--copy` フラグが有効かどうか。
    */
@@ -46,31 +47,32 @@ interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
 export function buildFileHistoryContext<TContext extends FileHistoryContext>(
   params: BuildFileHistoryContextParams<TContext>,
 ): TContext {
-  const { base, contextPath, defaultFilePath, previousContext, historyOutputFile, copyOutput } =
+  const { base, contextPath, defaultFilePath, previousContext, historyArtifactPath, copyOutput } =
     params;
 
   const result: TContext = {
     ...base,
   };
 
-  const fallbackPath = defaultFilePath ?? previousContext?.file_path;
-  const resolvedFilePath = contextPath ?? fallbackPath;
-  if (resolvedFilePath !== undefined) {
-    result.file_path = resolvedFilePath;
+  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path;
+  if (resolvedAbsolutePath !== undefined) {
+    result.absolute_path = resolvedAbsolutePath;
   } else {
-    delete result.file_path;
+    delete result.absolute_path;
   }
 
-  if (historyOutputFile !== undefined || copyOutput) {
-    result.output = {
-      file: historyOutputFile,
-      ...(copyOutput ? { copy: true } : {}),
-    };
-  } else if (previousContext?.output) {
-    // copy フラグなど以前の情報をそのまま引き継ぐ。
-    result.output = { ...previousContext.output };
+  const resolvedRelativePath =
+    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path;
+  if (resolvedRelativePath !== undefined) {
+    result.relative_path = resolvedRelativePath;
   } else {
-    delete result.output;
+    delete result.relative_path;
+  }
+
+  if (copyOutput || previousContext?.copy) {
+    result.copy = true;
+  } else {
+    delete result.copy;
   }
 
   return result;

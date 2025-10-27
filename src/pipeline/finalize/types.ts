@@ -3,6 +3,28 @@
  */
 import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.js";
 
+/**
+ * サマリ出力先を決定するために finalize 層へ渡される情報。
+ */
+export interface ResultOutputResolutionParams {
+  /** ユーザーが --output を明示した場合に true。 */
+  responseOutputExplicit: boolean;
+  /** CLI 解析で得た出力パス。未指定時は undefined。 */
+  responseOutputPath: string | undefined;
+  /** 成果物ファイルの相対パス。 */
+  artifactPath: string;
+}
+
+/**
+ * finalize 層が CLI へ返すサマリ出力判定結果。
+ */
+export interface ResultOutputResolution {
+  /** テキスト出力ファイルのパス。保存不要なら null。 */
+  textOutputPath: string | null;
+  /** 履歴や成果物参照に用いるパス。必ず提供される。 */
+  artifactReferencePath: string;
+}
+
 export type FinalizeExitCode = 0 | 1;
 
 export type FinalizeCopySource = CopySource;

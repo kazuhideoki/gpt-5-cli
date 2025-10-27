@@ -19,7 +19,7 @@ mock.module("node:readline/promises", () => ({
   }),
 }));
 
-const { determineInput } = await import("./cli-input.js");
+const { resolveInputOrExecuteHistoryAction } = await import("./cli-input.js");
 
 const defaults: CliDefaults = {
   modelMain: "gpt-5-main",
@@ -95,7 +95,7 @@ afterEach(() => {
   mock.restore();
 });
 
-describe("determineInput", () => {
+describe("resolveInputOrExecuteHistoryAction", () => {
   it("deleteIndexが指定されたとき履歴を削除して終了する", async () => {
     const logs: string[] = [];
     const originalLog = console.log;
@@ -116,7 +116,7 @@ describe("determineInput", () => {
     });
 
     try {
-      const result = await determineInput(
+      const result = await resolveInputOrExecuteHistoryAction(
         createOptions({ deleteIndex: 2 }),
         historyStore,
         defaults,
@@ -142,7 +142,7 @@ describe("determineInput", () => {
     const deps = createDeps({ printHistoryDetail: showDetail });
 
     try {
-      const result = await determineInput(
+      const result = await resolveInputOrExecuteHistoryAction(
         createOptions({ showIndex: 3 }),
         historyStore,
         defaults,
@@ -166,7 +166,7 @@ describe("determineInput", () => {
     const historyStore = createHistoryStore();
     const deps = createDeps({ printHistoryList: listHistory });
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       createOptions({ resumeListOnly: true }),
       historyStore,
       defaults,
@@ -189,7 +189,7 @@ describe("determineInput", () => {
     const historyStore = createHistoryStore({ selectByNumber });
     const deps = createDeps();
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       createOptions({ resumeIndex: 4, args: ["続き", "お願いします"] }),
       historyStore,
       defaults,
@@ -216,7 +216,7 @@ describe("determineInput", () => {
     const historyStore = createHistoryStore({ selectByNumber });
     const deps = createDeps();
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       createOptions({ resumeIndex: 1 }),
       historyStore,
       defaults,
@@ -244,7 +244,12 @@ describe("determineInput", () => {
     const deps = createDeps();
 
     await expect(
-      determineInput(createOptions({ resumeIndex: 1 }), historyStore, defaults, deps),
+      resolveInputOrExecuteHistoryAction(
+        createOptions({ resumeIndex: 1 }),
+        historyStore,
+        defaults,
+        deps,
+      ),
     ).rejects.toThrow("プロンプトが空です。");
     expect(promptCloseCount).toBe(1);
   });
@@ -257,7 +262,12 @@ describe("determineInput", () => {
     const deps = createDeps({ printHelp });
     const historyStore = createHistoryStore();
 
-    const result = await determineInput(createOptions(), historyStore, defaults, deps);
+    const result = await resolveInputOrExecuteHistoryAction(
+      createOptions(),
+      historyStore,
+      defaults,
+      deps,
+    );
 
     expect(result).toEqual({ kind: "exit", code: 1 });
     expect(printHelp).toHaveBeenCalledTimes(1);
@@ -267,7 +277,7 @@ describe("determineInput", () => {
     const historyStore = createHistoryStore();
     const deps = createDeps();
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       createOptions({ args: ["bun", "test"] }),
       historyStore,
       defaults,

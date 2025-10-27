@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { buildRequest } from "../pipeline/process/responses.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import {
   buildAskHistoryContext,
-  buildAskResponseTools,
+  buildAskConversationToolset,
   createAskWebSearchTool,
   parseArgs,
 } from "./ask.js";
@@ -37,8 +38,8 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
     continueConversation: false,
     debug: false,
     taskMode: "ask",
-    outputPath: undefined,
-    outputExplicit: false,
+    responseOutputPath: undefined,
+    responseOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
     resumeListOnly: false,
@@ -150,15 +151,13 @@ describe("parseArgs", () => {
 describe("buildAskHistoryContext", () => {
   it("records new output path when provided", () => {
     const context = buildAskHistoryContext({
-      outputPath: "/tmp/output.txt",
+      responseOutputPath: "/tmp/output.txt",
       copyOutput: false,
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/output.txt",
-      },
+      relative_path: "/tmp/output.txt",
     });
   });
 
@@ -166,56 +165,47 @@ describe("buildAskHistoryContext", () => {
     const context = buildAskHistoryContext({
       previousContext: {
         cli: "ask",
-        output: {
-          file: "/tmp/previous.txt",
-        },
+        relative_path: "/tmp/previous.txt",
       },
       copyOutput: false,
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/previous.txt",
-      },
+      relative_path: "/tmp/previous.txt",
     });
   });
 
   it("includes copy flag only when explicitly requested", () => {
     const context = buildAskHistoryContext({
-      outputPath: "/tmp/output.txt",
+      responseOutputPath: "/tmp/output.txt",
       copyOutput: true,
       previousContext: {
         cli: "ask",
-        output: {
-          file: "/tmp/previous.txt",
-          copy: true,
-        },
+        relative_path: "/tmp/previous.txt",
+        copy: true,
       },
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
-      output: {
-        file: "/tmp/output.txt",
-        copy: true,
-      },
+      relative_path: "/tmp/output.txt",
+      copy: true,
     });
   });
 
-  it("drops stale copy-only output when no file is present", () => {
+  it("preserves previous copy flag even when no file is present", () => {
     const context = buildAskHistoryContext({
       copyOutput: false,
       previousContext: {
         cli: "ask",
-        output: {
-          copy: true,
-        },
+        copy: true,
       },
     });
 
     expect(context).toEqual<AskCliHistoryContext>({
       cli: "ask",
+      copy: true,
     });
   });
 });
@@ -240,13 +230,17 @@ describe("buildRequest", () => {
     const defaults = createDefaults();
     const options = createOptions();
     const context = createContext();
-    const request = buildRequest({
+    const { request } = buildRequest({
       options,
       context,
       inputText: "最初の質問",
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      toolset: buildAskConversationToolset({
+        logLabel: "[test-cli]",
+        debug: false,
+      }),
     });
     const input = request.input as any[];
     expect(input[0]).toEqual({
@@ -268,13 +262,17 @@ describe("buildRequest", () => {
         },
       ],
     });
-    const request = buildRequest({
+    const { request } = buildRequest({
       options,
       context,
       inputText: "続きの質問",
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      toolset: buildAskConversationToolset({
+        logLabel: "[test-cli]",
+        debug: false,
+      }),
     });
     const input = request.input as any[];
     const systemTexts = input
@@ -286,12 +284,12 @@ describe("buildRequest", () => {
   });
 });
 
-describe("determineInput", () => {
+describe("resolveInputOrExecuteHistoryAction", () => {
   it("削除フラグで対象履歴を削除して終了する", async () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -313,10 +311,15 @@ describe("determineInput", () => {
       expect(index).toBe(5);
       expect(noColor).toBe(Boolean(process.env.NO_COLOR));
     };
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
-      ...noopDeps,
-      printHistoryDetail: printDetail,
-    });
+    const result = await resolveInputOrExecuteHistoryAction(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      {
+        ...noopDeps,
+        printHistoryDetail: printDetail,
+      },
+    );
     expect(result.kind).toBe("exit");
   });
 
@@ -327,10 +330,15 @@ describe("determineInput", () => {
     const printList = (historyStore: HistoryStoreLike) => {
       expect(historyStore).toBe(store);
     };
-    const result = await determineInput(options, store as unknown as HistoryStoreLike, defaults, {
-      ...noopDeps,
-      printHistoryList: printList,
-    });
+    const result = await resolveInputOrExecuteHistoryAction(
+      options,
+      store as unknown as HistoryStoreLike,
+      defaults,
+      {
+        ...noopDeps,
+        printHistoryList: printList,
+      },
+    );
     expect(result.kind).toBe("exit");
   });
 
@@ -347,7 +355,7 @@ describe("determineInput", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -372,7 +380,7 @@ describe("determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -405,9 +413,18 @@ describe("ask web search integration", () => {
     expect(name).toBe("web_search");
   });
 
-  it("Responses API 用ツールから web_search_preview を除外する", () => {
-    const tools = buildAskResponseTools();
-    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+  it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
+    const toolset = buildAskConversationToolset({
+      logLabel: "[test-cli]",
+      debug: false,
+    });
+    const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
+    const agentHasWebSearch = toolset.agents.some((tool: AgentsSdkTool) => {
+      return (
+        typeof tool === "object" && tool !== null && "name" in tool && tool.name === "web_search"
+      );
+    });
+    expect(agentHasWebSearch).toBe(true);
   });
 });

@@ -72,6 +72,9 @@ describe("sql CLI integration", () => {
         dsn?: string;
         dsn_hash?: string;
         connection?: Record<string, unknown>;
+        relative_path?: string;
+        copy?: boolean;
+        absolute_path?: string;
       };
       turns?: Array<{ role?: string; text?: string }>;
       request_count?: number;
@@ -90,8 +93,8 @@ describe("sql CLI integration", () => {
       database: "analytics",
       user: "analyst",
     });
-    expect(typeof entry.context?.output?.file).toBe("string");
-    expect(entry.context?.output?.file?.endsWith(".sql")).toBe(true);
+    expect(typeof entry.context?.relative_path).toBe("string");
+    expect(entry.context?.relative_path?.endsWith(".sql")).toBe(true);
     expect(entry.turns?.length).toBe(2);
     expect(entry.turns?.[0]?.role).toBe("user");
     expect(entry.turns?.[0]?.text).toBe("集計クエリを最適化して");
@@ -168,7 +171,7 @@ describe("sql CLI integration", () => {
       user: "analyst",
     });
     expect(firstEntry.request_count).toBe(1);
-    expect(firstEntry.context?.output?.file?.endsWith(".sql")).toBe(true);
+    expect(firstEntry.context?.relative_path?.endsWith(".sql")).toBe(true);
 
     const second = await runSqlCli(["-c", "2回目"], env);
     expect(second.exitCode).toBe(0);
@@ -181,7 +184,7 @@ describe("sql CLI integration", () => {
     expect(secondEntry.request_count).toBe(2);
     expect(secondEntry.context?.dsn_hash).toBe(expectedHash);
     expect(secondEntry.context?.dsn).toBe(testDsn);
-    expect(secondEntry.context?.output?.file?.endsWith(".sql")).toBe(true);
+    expect(secondEntry.context?.relative_path?.endsWith(".sql")).toBe(true);
 
     const third = await runSqlCli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
@@ -194,7 +197,7 @@ describe("sql CLI integration", () => {
     expect(thirdEntry.request_count).toBe(3);
     expect(thirdEntry.context?.dsn_hash).toBe(expectedHash);
     expect(thirdEntry.context?.dsn).toBe(testDsn);
-    expect(thirdEntry.context?.output?.file?.endsWith(".sql")).toBe(true);
+    expect(thirdEntry.context?.relative_path?.endsWith(".sql")).toBe(true);
 
     const summary = await runSqlCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
@@ -210,7 +213,7 @@ describe("sql CLI integration", () => {
     expect(summaryEntry.turns?.[0]?.role).toBe("system");
     expect(summaryEntry.turns?.[0]?.text).toBe("SQL Summary");
     expect(summaryEntry.resume?.summary?.text).toBe("SQL Summary");
-    expect(summaryEntry.context?.output?.file?.endsWith(".sql")).toBe(true);
+    expect(summaryEntry.context?.relative_path?.endsWith(".sql")).toBe(true);
     expect(callIndex).toBe(responses.length);
   });
 

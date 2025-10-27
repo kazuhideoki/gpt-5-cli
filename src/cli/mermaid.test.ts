@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "../pipeline/input/cli-input.js";
-import { parseArgs } from "./mermaid.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
+import path from "node:path";
+import { ensureMermaidContext, parseArgs } from "./mermaid.js";
 import type { CliDefaults } from "../types.js";
 import type { MermaidCliOptions } from "./mermaid.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
@@ -39,11 +40,11 @@ function createOptions(overrides: Partial<MermaidCliOptions> = {}): MermaidCliOp
     imagePath: undefined,
     operation: "ask",
     compactIndex: undefined,
-    outputPath: "diagram.mmd",
-    outputExplicit: false,
+    responseOutputPath: "diagram.mmd",
+    responseOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
-    filePath: "diagram.mmd",
+    artifactPath: "diagram.mmd",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -62,10 +63,11 @@ describe("mermaid parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("mermaid");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.filePath).toMatch(
+    expect(options.artifactPath).toMatch(
       /^output[/\\]mermaid[/\\]mermaid-\d{8}-\d{6}-[0-9a-f]{4}\.mmd$/u,
     );
-    expect(options.outputPath).toBe(options.filePath);
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
+    expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -85,8 +87,8 @@ describe("mermaid parseArgs", () => {
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.mmd", "生成"], defaults);
-    expect(options.filePath).toBe("diagram.mmd");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.artifactPath).toBe("diagram.mmd");
+    expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
@@ -130,13 +132,13 @@ class StubHistoryStore {
   }
 }
 
-describe("mermaid determineInput", () => {
+describe("mermaid resolveInputOrExecuteHistoryAction", () => {
   it("履歴番号指定で既存の mermaid コンテキストを保持したまま返す", async () => {
     const defaults = createDefaults();
     const entry: MermaidHistoryEntry = {
       last_response_id: "resp-mermaid",
       title: "diagram",
-      context: { cli: "mermaid", file_path: "/tmp/out.mmd" },
+      context: { cli: "mermaid", absolute_path: "/tmp/out.mmd" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({
@@ -146,7 +148,7 @@ describe("mermaid determineInput", () => {
       args: ["続けよう"],
     });
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -171,7 +173,7 @@ describe("mermaid determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -183,5 +185,32 @@ describe("mermaid determineInput", () => {
     }
     expect(store.listed).toBe(false);
     expect(helpCalled).toBe(true);
+  });
+});
+
+describe("ensureMermaidContext", () => {
+  it("正規化済みオプションを返す", () => {
+    const input = createOptions({
+      artifactPath: "./diagram.mmd",
+      responseOutputPath: "./diagram.mmd",
+    });
+    const snapshot = { ...input };
+
+    const result = ensureMermaidContext(input);
+
+    expect(result.normalizedOptions).not.toBe(input);
+    expect(result.normalizedOptions.artifactPath).toBe("diagram.mmd");
+    expect(result.normalizedOptions.responseOutputPath).toBe("diagram.mmd");
+    expect(input).toEqual(snapshot);
+  });
+
+  it("ファイル検証結果を context に含める", () => {
+    const input = createOptions({ artifactPath: "./diagram.mmd" });
+
+    const result = ensureMermaidContext(input);
+
+    expect(result.context.relativePath).toBe("diagram.mmd");
+    expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.mmd"));
+    expect(result.context.exists).toBe(false);
   });
 });

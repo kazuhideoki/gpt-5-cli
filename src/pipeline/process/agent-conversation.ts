@@ -6,38 +6,44 @@ import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { CliOptions, OpenAIInputMessage } from "../../types.js";
-import type { ToolRegistration } from "./tools/index.js";
-import { buildAgentsToolList } from "./tools/index.js";
-
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);
 
+/**
+ * runAgentConversation が必要とする実行パラメータ群。
+ */
 interface RunAgentConversationParams<TOptions extends CliOptions> {
+  /** OpenAI API クライアント。 */
   client: OpenAI;
+  /** Responses API へ送信するリクエスト。 */
   request: ResponseCreateParamsNonStreaming;
+  /** CLI で解析済みのオプション。 */
   options: TOptions;
+  /** ログ出力に使用する CLI 固有ラベル。 */
   logLabel: string;
-  toolRegistrations: Iterable<ToolRegistration<any, any>>;
+  /** Agents SDK で利用するツール配列。 */
+  agentTools: AgentsSdkTool[];
+  /** エージェント実行の最大ターン数。 */
   maxTurns?: number;
-  additionalAgentTools?: AgentsSdkTool[];
 }
 
+/**
+ * runAgentConversation が返す応答結果。
+ */
 interface AgentConversationResult {
+  /** 最終的に得られたアシスタントのテキスト。 */
   assistantText: string;
+  /** 最後に取得した Responses API のレスポンス ID。 */
   responseId?: string;
 }
 
 /**
  * Agents SDK を利用してリクエストを実行し、最終応答テキストとレスポンス ID を返す。
- *
- * @param params エージェント実行に必要な情報。
- * @returns エージェントの最終応答とレスポンス ID。
  */
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
 ): Promise<AgentConversationResult> {
-  const { client, request, options, logLabel, toolRegistrations, maxTurns, additionalAgentTools } =
-    params;
+  const { client, request, options, logLabel, agentTools, maxTurns } = params;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
   const userInputs = buildUserInputs(messages);
@@ -45,28 +51,7 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     throw new Error("Error: No user input found for agent execution");
   }
 
-  const debugLog = options.debug
-    ? (message: string) => {
-        console.error(`${logLabel} debug: ${message}`);
-      }
-    : undefined;
-
   ensureResponsesOutputCompatibility(client);
-
-  const agentToolsBase = buildAgentsToolList(toolRegistrations, {
-    logLabel,
-    createExecutionContext: () => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${logLabel} ${message}`);
-      },
-    }),
-    debugLog,
-  });
-  const agentTools =
-    additionalAgentTools && additionalAgentTools.length > 0
-      ? [...agentToolsBase, ...additionalAgentTools]
-      : agentToolsBase;
 
   const modelSettings = buildModelSettings(request);
   const previousResponseId =
@@ -83,36 +68,40 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     outputType: "text",
   });
 
-  debugLog?.(`agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`);
+  if (options.debug) {
+    console.error(
+      `${logLabel} debug: agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
+    );
+  }
   const runner = new Runner({ tracingDisabled: true });
   const result = await runner.run(agent, userInputs, {
     maxTurns,
     previousResponseId,
   });
 
-  let finalOutput =
+  let responseText =
     typeof result.finalOutput === "string" && result.finalOutput.length > 0
       ? result.finalOutput
       : extractAllTextOutput(result.newItems);
 
-  if (!finalOutput || finalOutput.length === 0) {
+  if (!responseText || responseText.length === 0) {
     const latestProviderData = result.rawResponses.at(-1)?.providerData as
       | { output_text?: string | string[] }
       | undefined;
     const fallbackText = latestProviderData?.output_text;
     if (typeof fallbackText === "string" && fallbackText.length > 0) {
-      finalOutput = fallbackText;
+      responseText = fallbackText;
     } else if (Array.isArray(fallbackText) && fallbackText.length > 0) {
-      finalOutput = fallbackText.join("\n");
+      responseText = fallbackText.join("\n");
     }
   }
 
-  if (!finalOutput || finalOutput.length === 0) {
+  if (!responseText || responseText.length === 0) {
     throw new Error("Error: Failed to resolve agent response text");
   }
 
   return {
-    assistantText: finalOutput,
+    assistantText: responseText,
     responseId: result.lastResponseId,
   };
 }

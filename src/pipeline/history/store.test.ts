@@ -8,8 +8,9 @@ import { printHistoryDetail, printHistoryList } from "./output.js";
 
 interface TestContext {
   cli: string;
-  file_path?: string;
-  output?: { file?: string; copy?: boolean };
+  absolute_path?: string;
+  relative_path?: string;
+  copy?: boolean;
 }
 
 let tempDir: string;
@@ -62,12 +63,12 @@ describe("HistoryStore", () => {
     const entry: HistoryEntry<TestContext> = {
       title: "ask conversation",
       last_response_id: "resp-1",
-      context: { cli: "ask", output: { copy: true } },
+      context: { cli: "ask", copy: true },
     };
     store.saveEntries([entry]);
     const [loaded] = store.loadEntries();
     expect(loaded.context?.cli).toBe("ask");
-    expect(loaded.context?.output?.copy).toBe(true);
+    expect(loaded.context?.copy).toBe(true);
   });
 
   it("selectByNumber は更新日時でソートする", () => {
@@ -187,7 +188,7 @@ describe("HistoryStore", () => {
 
   it("upsertConversation は context を指定しない場合に previousContext を引き継ぐ", () => {
     const absPath = path.join(tempDir, "keep.d2");
-    const existingContext: TestContext = { cli: "d2", file_path: absPath };
+    const existingContext: TestContext = { cli: "d2", absolute_path: absPath };
     const existing: HistoryEntry<TestContext> = {
       title: "diagram",
       last_response_id: "resp-prev",
@@ -215,7 +216,7 @@ describe("HistoryStore", () => {
     });
 
     const [updated] = store.loadEntries();
-    expect(updated.context?.file_path).toBe(absPath);
+    expect(updated.context?.absolute_path).toBe(absPath);
     expect(updated.context).toEqual(existingContext);
   });
 
@@ -242,12 +243,12 @@ describe("HistoryStore", () => {
       responseId: "resp-next",
       userText: "更新",
       assistantText: "完了",
-      contextData: { cli: "d2", file_path: "/tmp/new.d2" },
+      contextData: { cli: "d2", absolute_path: "/tmp/new.d2" },
     });
 
     const [updated] = store.loadEntries();
     expect(updated.context?.cli).toBe("d2");
-    expect(updated.context?.file_path).toBe("/tmp/new.d2");
+    expect(updated.context?.absolute_path).toBe("/tmp/new.d2");
   });
 
   it("upsertConversation が d2 タスクメタデータを保存する", () => {
@@ -266,12 +267,12 @@ describe("HistoryStore", () => {
       responseId: "resp-d2",
       userText: "draw",
       assistantText: "done",
-      contextData: { cli: "d2", file_path: absPath },
+      contextData: { cli: "d2", absolute_path: absPath },
     });
 
     const entry = store.loadEntries()[0];
     expect(entry.context?.cli).toBe("d2");
-    expect(entry.context?.file_path).toBe(absPath);
+    expect(entry.context?.absolute_path).toBe(absPath);
   });
 });
 
@@ -329,10 +330,8 @@ describe("printHistoryList / printHistoryDetail", () => {
       request_count: 1,
       context: {
         cli: "ask",
-        output: {
-          file: "diagram.d2",
-          copy: true,
-        },
+        relative_path: "diagram.d2",
+        copy: true,
       },
     };
     store.saveEntries([entry]);
@@ -346,7 +345,7 @@ describe("printHistoryList / printHistoryDetail", () => {
     } finally {
       console.log = original;
     }
-    expect(logs.some((line) => line.includes("output[file=diagram.d2, copy]"))).toBe(true);
+    expect(logs.some((line) => line.includes("paths[relative=diagram.d2, copy]"))).toBe(true);
   });
 
   it("printHistoryDetail が出力情報を表示する", () => {
@@ -361,10 +360,8 @@ describe("printHistoryList / printHistoryDetail", () => {
       ],
       context: {
         cli: "ask",
-        output: {
-          file: "diagram.d2",
-          copy: false,
-        },
+        relative_path: "diagram.d2",
+        copy: false,
       },
     };
     store.saveEntries([entry]);
@@ -378,6 +375,6 @@ describe("printHistoryList / printHistoryDetail", () => {
     } finally {
       console.log = original;
     }
-    expect(logs.some((line) => line.includes("出力: file=diagram.d2"))).toBe(true);
+    expect(logs.some((line) => line.includes("出力: relative=diagram.d2"))).toBe(true);
   });
 });

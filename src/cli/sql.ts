@@ -20,12 +20,19 @@ import {
   SQL_FETCH_TABLE_SCHEMA_TOOL,
   SQL_FORMAT_TOOL,
   WRITE_FILE_TOOL,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
   setSqlEnvironment,
 } from "../pipeline/process/tools/index.js";
-import { finalizeResult, generateDefaultOutputPath } from "../pipeline/finalize/index.js";
+import {
+  finalizeResult,
+  generateDefaultOutputPath,
+  resolveResultOutput,
+} from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
@@ -59,11 +66,19 @@ interface SqlContextInfo {
   exists: boolean;
 }
 
+/**
+ * ensureSqlContext の実行結果。context に検証済みパス情報、normalizedOptions に正規化後のオプションを保持する。
+ */
+interface SqlContextResolution {
+  context: SqlContextInfo;
+  normalizedOptions: SqlCliOptions;
+}
+
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
   dsn?: string;
   engine?: SqlEngine;
-  filePath: string;
+  artifactPath: string;
 }
 
 const POSTGRES_SQL_TOOL_REGISTRATIONS = [
@@ -85,6 +100,37 @@ const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATION
   mysql: MYSQL_SQL_TOOL_REGISTRATIONS,
 };
 
+interface BuildSqlToolsetParams {
+  logLabel: string;
+  debug: boolean;
+  engine: SqlEngine;
+}
+
+function buildSqlConversationToolset(params: BuildSqlToolsetParams): ConversationToolset {
+  const registrations = SQL_TOOL_REGISTRY[params.engine];
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(registrations, {
+    cli: { appendWebSearchPreview: true },
+    agents: agentOptions,
+    additionalAgentTools: [],
+  });
+}
+
 const connectionSchema = z
   .object({
     host: z.string().optional(),
@@ -100,12 +146,9 @@ const sqlCliHistoryContextStrictSchema = z.object({
   dsn_hash: z.string().min(1),
   dsn: z.string().optional(),
   connection: connectionSchema,
-  output: z
-    .object({
-      file: z.string(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
+  relative_path: z.string().optional(),
+  copy: z.boolean().optional(),
+  absolute_path: z.string().optional(),
 });
 
 const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
@@ -161,14 +204,14 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
-    outputPath: z.string().min(1).optional(),
-    outputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
     dsn: z.string().min(1, "Error: --dsn は空にできません").optional(),
-    filePath: z.string().min(1),
+    artifactPath: z.string().min(1),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -216,15 +259,15 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
     }
     dsn = trimmed;
   }
-  const resolvedOutputPath =
-    commonOptions.outputPath ??
+  const resolvedResponseOutputPath =
+    commonOptions.responseOutputPath ??
     generateDefaultOutputPath({ mode: "sql", extension: "sql" }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "sql",
-      outputPath: resolvedOutputPath,
-      filePath: resolvedOutputPath,
+      responseOutputPath: resolvedResponseOutputPath,
+      artifactPath: resolvedResponseOutputPath,
       dsn,
     });
   } catch (error) {
@@ -291,12 +334,12 @@ function extractConnectionMetadata(dsn: string): SqlConnectionMetadata {
  * @param options CLI オプション。
  * @returns SQL ファイルの存在情報。
  */
-export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
+export function ensureSqlContext(options: SqlCliOptions): SqlContextResolution {
   if (options.taskMode !== "sql") {
     throw new Error("Invariant violation: ensureSqlContext は sql モード専用です");
   }
   const cwd = process.cwd();
-  const rawPath = options.filePath;
+  const rawPath = options.artifactPath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -311,10 +354,16 @@ export function ensureSqlContext(options: SqlCliOptions): SqlContextInfo {
     throw new Error(`Error: 指定した SQL ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.filePath = relativePath;
-  options.outputPath = relativePath;
+  const normalizedOptions: SqlCliOptions = {
+    ...options,
+    artifactPath: relativePath,
+    responseOutputPath: relativePath,
+  };
   const exists = fs.existsSync(absolutePath);
-  return { relativePath, absolutePath, exists };
+  return {
+    context: { relativePath, absolutePath, exists },
+    normalizedOptions,
+  };
 }
 
 /** DSN の正規化・ハッシュ化結果と接続メタデータをまとめたスナップショットを生成する。 */
@@ -368,19 +417,24 @@ function resolveSqlDsn(
   throw new Error("Error: --dsn は必須です（履歴にも DSN が保存されていません）");
 }
 
-/** SQLシステムメッセージ生成時に必要なパラメータ群。 */
+/**
+ * SQL モードで追加システムメッセージを生成する際の入力情報。
+ */
 interface SqlInstructionParams {
+  /** 接続先のメタデータ。 */
   connection: SqlConnectionMetadata;
+  /** DSN をハッシュ化した値。 */
   dsnHash: string;
+  /** エージェントの最大試行回数。 */
   maxIterations: number;
+  /** 接続しているデータベースエンジン。 */
   engine: SqlEngine;
-  filePath: string;
+  /** レスポンス出力先のアーティファクトパス。 */
+  artifactPath: string;
 }
 
 /**
  * SQL モードで追加するシステムメッセージを生成する。
- *
- * @param params 接続メタデータと設定値。
  * @returns Responses API へ渡すシステムメッセージ配列。
  */
 export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenAIInputMessage[] {
@@ -436,7 +490,7 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
   const systemText = [
     `あなたは ${engineLabel} SELECT クエリの専門家です。`,
     "許可されたツール以外は利用せず、ローカルワークスペース外へアクセスしないでください。",
-    `成果物ファイル: ${params.filePath} (ワークスペース相対パス)`,
+    `成果物ファイル: ${params.artifactPath} (ワークスペース相対パス)`,
     `接続情報: ${connectionLine} (dsn hash=${params.dsnHash})`,
     `イテレーション上限の目安: ${params.maxIterations} 回`,
     toolSummary,
@@ -452,7 +506,7 @@ export function buildSqlInstructionMessages(params: SqlInstructionParams): OpenA
 }
 
 interface SqlHistoryContextExtras {
-  historyOutputFile?: string;
+  historyArtifactPath?: string;
   copyOutput?: boolean;
 }
 
@@ -491,24 +545,20 @@ export function buildSqlHistoryContext(
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
   }
-  let nextOutput: SqlCliHistoryContext["output"] | undefined;
-  if (extras.historyOutputFile !== undefined) {
-    nextOutput = {
-      file: extras.historyOutputFile,
-      ...(extras.copyOutput ? { copy: true } : {}),
-    };
-  } else if (extras.copyOutput && previousContext?.output?.file) {
-    nextOutput = {
-      file: previousContext.output.file,
-      copy: true,
-    };
-  } else if (previousContext?.output) {
-    nextOutput = { ...previousContext.output };
-  }
-  if (nextOutput) {
-    nextContext.output = nextOutput;
+  if (extras.historyArtifactPath !== undefined) {
+    nextContext.relative_path = extras.historyArtifactPath;
+  } else if (previousContext?.relative_path) {
+    nextContext.relative_path = previousContext.relative_path;
   } else {
-    delete nextContext.output;
+    delete nextContext.relative_path;
+  }
+
+  if (extras.copyOutput) {
+    nextContext.copy = true;
+  } else if (previousContext?.copy) {
+    nextContext.copy = true;
+  } else {
+    delete nextContext.copy;
   }
   return nextContext;
 }
@@ -542,7 +592,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await determineInput(options, historyStore, defaults, {
+    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
       printHelp: outputHelp,
     });
     if (determine.kind === "exit") {
@@ -551,30 +601,34 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): SQL モード固有の DSN / 出力初期化の一部を input 層へ昇格させるか検討する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
           const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
-          if (!nextOptions.outputExplicit && historyContext?.output?.file) {
-            nextOptions.outputPath = historyContext.output.file;
-            nextOptions.filePath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit) {
+            const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
+            if (historyFile) {
+              nextOptions.responseOutputPath = historyFile;
+              nextOptions.artifactPath = historyFile;
+            }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },
-    );
+    });
 
-    const sqlContext = ensureSqlContext(options);
+    const { context: sqlContext, normalizedOptions } = ensureSqlContext(options);
+    const resolvedOptions = normalizedOptions;
     const sqlOutputAbsolutePath = sqlContext.absolutePath;
 
     const determineActiveEntry = determine.activeEntry as
@@ -585,14 +639,20 @@ async function main(): Promise<void> {
       | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
+    const resolvedOptionsWithDsn: SqlCliOptions = {
+      ...resolvedOptions,
+      dsn: sqlEnv.dsn,
+      engine: sqlEnv.engine,
+    };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
-    options.dsn = sqlEnv.dsn;
-    options.engine = sqlEnv.engine;
-    const toolRegistrations = SQL_TOOL_REGISTRY[sqlEnv.engine];
-
-    const imageDataUrl = prepareImageData(options.imagePath, LOG_LABEL);
-    const request = buildRequest({
-      options,
+    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL);
+    const toolset = buildSqlConversationToolset({
+      logLabel: LOG_LABEL,
+      debug: resolvedOptionsWithDsn.debug,
+      engine: sqlEnv.engine,
+    });
+    const { request, agentTools } = buildRequest({
+      options: resolvedOptionsWithDsn,
       context,
       inputText: determine.inputText,
       systemPrompt,
@@ -602,29 +662,31 @@ async function main(): Promise<void> {
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
         dsnHash: sqlEnv.hash,
-        maxIterations: options.maxIterations,
+        maxIterations: resolvedOptionsWithDsn.maxIterations,
         engine: sqlEnv.engine,
-        filePath: options.filePath,
+        artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
+      toolset,
     });
 
     const agentResult = await runAgentConversation({
       client,
       request,
-      options,
+      options: resolvedOptionsWithDsn,
       logLabel: LOG_LABEL,
-      toolRegistrations,
-      maxTurns: options.maxIterations,
+      agentTools,
+      maxTurns: resolvedOptionsWithDsn.maxIterations,
     });
     const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
-        ? options.outputPath
-        : undefined;
+    const outputResolution = resolveResultOutput({
+      responseOutputExplicit: resolvedOptionsWithDsn.responseOutputExplicit,
+      responseOutputPath: resolvedOptionsWithDsn.responseOutputPath,
+      artifactPath: resolvedOptionsWithDsn.artifactPath,
+    });
 
     const previousContextRaw = context.activeEntry?.context as
       | SqlCliHistoryStoreContext
@@ -641,26 +703,26 @@ async function main(): Promise<void> {
       },
       previousContext,
       {
-        historyOutputFile: summaryOutputPath ?? options.filePath,
-        copyOutput: options.copyOutput,
+        historyArtifactPath: outputResolution.artifactReferencePath,
+        copyOutput: resolvedOptionsWithDsn.copyOutput,
       },
     );
 
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.filePath,
+      textOutputPath: outputResolution.textOutputPath ?? undefined,
+      copyOutput: resolvedOptionsWithDsn.copyOutput,
+      copySourceFilePath: resolvedOptionsWithDsn.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
             store: historyStore,
             conversation: context,
             metadata: {
-              model: options.model,
-              effort: options.effort,
-              verbosity: options.verbosity,
+              model: resolvedOptionsWithDsn.model,
+              effort: resolvedOptionsWithDsn.effort,
+              verbosity: resolvedOptionsWithDsn.verbosity,
             },
             previousContextRaw,
             contextData: historyContext,
@@ -669,7 +731,7 @@ async function main(): Promise<void> {
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {
-      console.log(`[gpt-5-cli-sql] output file: ${options.filePath}`);
+      console.log(`[gpt-5-cli-sql] artifact file: ${resolvedOptionsWithDsn.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

@@ -6,22 +6,50 @@ import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import { finalizeResult } from "../pipeline/finalize/index.js";
-import { READ_FILE_TOOL, buildCliToolList } from "../pipeline/process/tools/index.js";
+import {
+  READ_FILE_TOOL,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
+} from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
 
-export function buildAskResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  const tools = buildCliToolList(ASK_TOOL_REGISTRATIONS) ?? [];
-  return tools.filter((tool) => tool.type !== "web_search_preview");
+interface BuildAskToolsetParams {
+  logLabel: string;
+  debug: boolean;
+}
+
+export function buildAskConversationToolset(params: BuildAskToolsetParams): ConversationToolset {
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(ASK_TOOL_REGISTRATIONS, {
+    cli: { appendWebSearchPreview: false },
+    agents: agentOptions,
+    additionalAgentTools: [createAskWebSearchTool()],
+  });
 }
 
 export function createAskWebSearchTool(): AgentsSdkTool {
@@ -33,12 +61,9 @@ export function createAskWebSearchTool(): AgentsSdkTool {
 
 const askCliHistoryContextStrictSchema = z.object({
   cli: z.literal("ask"),
-  output: z
-    .object({
-      file: z.string().optional(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
+  relative_path: z.string().optional(),
+  absolute_path: z.string().optional(),
+  copy: z.boolean().optional(),
 });
 
 const askCliHistoryContextSchema = askCliHistoryContextStrictSchema
@@ -54,7 +79,7 @@ function isAskHistoryContext(value: unknown): value is AskCliHistoryContext {
 
 interface BuildAskHistoryContextParams {
   previousContext?: AskCliHistoryContext;
-  outputPath?: string;
+  responseOutputPath?: string;
   copyOutput: boolean;
 }
 
@@ -62,28 +87,21 @@ interface BuildAskHistoryContextParams {
  * ask CLI が履歴へ保存するコンテキストを構築する。
  */
 export function buildAskHistoryContext(params: BuildAskHistoryContextParams): AskCliHistoryContext {
-  const { previousContext, outputPath, copyOutput } = params;
-  const historyOutputFile = outputPath ?? previousContext?.output?.file;
+  const { previousContext, responseOutputPath, copyOutput } = params;
+  const resolvedPath = responseOutputPath ?? previousContext?.relative_path;
 
   const nextContext: AskCliHistoryContext = {
     cli: "ask",
   };
 
-  if (historyOutputFile !== undefined || copyOutput) {
-    nextContext.output = {
-      ...(historyOutputFile !== undefined ? { file: historyOutputFile } : {}),
-      ...(copyOutput ? { copy: true } : {}),
-    };
-    return nextContext;
+  if (resolvedPath !== undefined) {
+    nextContext.relative_path = resolvedPath;
+  } else if (previousContext?.relative_path !== undefined) {
+    nextContext.relative_path = previousContext.relative_path;
   }
 
-  const previousFile = previousContext?.output?.file;
-  if (previousFile !== undefined) {
-    const previousCopy = previousContext?.output?.copy;
-    nextContext.output = {
-      file: previousFile,
-      ...(previousCopy ? { copy: previousCopy } : {}),
-    };
+  if (copyOutput || previousContext?.copy) {
+    nextContext.copy = true;
   }
 
   return nextContext;
@@ -119,8 +137,8 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
     debug: z.boolean(),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
-    outputPath: z.string().min(1).optional(),
-    outputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
@@ -203,7 +221,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await determineInput(options, historyStore, defaults, {
+    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
       printHelp: outputHelp,
     });
     if (determine.kind === "exit") {
@@ -212,30 +230,38 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): ask モードの履歴出力設定を input 層で共有できるよう整理する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: "[gpt-5-cli]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
           const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
-          if (!nextOptions.outputExplicit && historyContext?.output?.file) {
-            nextOptions.outputPath = historyContext.output.file;
+          if (!nextOptions.responseOutputExplicit) {
+            const historyPath = historyContext?.relative_path ?? historyContext?.absolute_path;
+            if (historyPath) {
+              nextOptions.responseOutputPath = historyPath;
+            }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },
-    );
+    });
 
     const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]");
-    const request = buildRequest({
+    const toolset = buildAskConversationToolset({
+      logLabel: "[gpt-5-cli]",
+      debug: options.debug,
+    });
+
+    const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: determine.inputText,
@@ -243,23 +269,22 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
-      tools: buildAskResponseTools(),
+      toolset,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options,
       logLabel: "[gpt-5-cli]",
-      toolRegistrations: ASK_TOOL_REGISTRATIONS,
+      agentTools,
       maxTurns: options.maxIterations,
-      additionalAgentTools: [createAskWebSearchTool()],
     });
     const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath = options.outputPath;
+    const textOutputPath = options.responseOutputPath;
 
     const previousContextRaw = context.activeEntry?.context as
       | AskCliHistoryStoreContext
@@ -270,14 +295,14 @@ async function main(): Promise<void> {
 
     const historyContext = buildAskHistoryContext({
       previousContext,
-      outputPath: options.outputPath,
+      responseOutputPath: options.responseOutputPath,
       copyOutput: options.copyOutput,
     });
 
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath,
+      textOutputPath,
       copyOutput: options.copyOutput,
       history: agentResult.responseId
         ? {

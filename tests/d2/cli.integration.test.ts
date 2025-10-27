@@ -64,7 +64,7 @@ describe("d2 CLI integration", () => {
     const historyData = JSON.parse(historyRaw) as Array<{
       last_response_id?: string;
       turns?: Array<{ role?: string; text?: string }>;
-      context?: { cli?: string; file_path?: string };
+      context?: { cli?: string; absolute_path?: string; relative_path?: string; copy?: boolean };
       request_count?: number;
     }>;
     expect(historyData.length).toBe(1);
@@ -142,8 +142,8 @@ describe("d2 CLI integration", () => {
     expect(historyAfterFirst.length).toBe(1);
     const firstEntry = historyAfterFirst[0];
     expect(firstEntry.context?.cli).toBe("d2");
-    expect(firstEntry.context?.file_path).toBe(expectedAbsolutePath);
-    expect(firstEntry.context?.output?.file).toBe(relativePath);
+    expect(firstEntry.context?.absolute_path).toBe(expectedAbsolutePath);
+    expect(firstEntry.context?.relative_path).toBe(relativePath);
     expect(firstEntry.request_count).toBe(1);
 
     const second = await runD2Cli(["-c", "2回目"], env);
@@ -156,8 +156,8 @@ describe("d2 CLI integration", () => {
     const secondEntry = historyAfterSecond[0];
     expect(secondEntry.context?.cli).toBe("d2");
     expect(secondEntry.request_count).toBe(2);
-    expect(secondEntry.context?.file_path).toBe(expectedAbsolutePath);
-    expect(secondEntry.context?.output?.file).toBe(relativePath);
+    expect(secondEntry.context?.absolute_path).toBe(expectedAbsolutePath);
+    expect(secondEntry.context?.relative_path).toBe(relativePath);
     const third = await runD2Cli(["-c", "3回目"], env);
     expect(third.exitCode).toBe(0);
     expect(third.stdout).toContain("[gpt-5-cli-d2]");
@@ -168,8 +168,8 @@ describe("d2 CLI integration", () => {
     const thirdEntry = historyAfterThird[0];
     expect(thirdEntry.context?.cli).toBe("d2");
     expect(thirdEntry.request_count).toBe(3);
-    expect(thirdEntry.context?.file_path).toBe(expectedAbsolutePath);
-    expect(thirdEntry.context?.output?.file).toBe(relativePath);
+    expect(thirdEntry.context?.absolute_path).toBe(expectedAbsolutePath);
+    expect(thirdEntry.context?.relative_path).toBe(relativePath);
     expect(callIndex).toBe(responses.length);
   });
 
@@ -259,8 +259,8 @@ describe("d2 CLI integration", () => {
     expect(historyAfterSummary.length).toBe(1);
     const entry = historyAfterSummary[0];
     expect(entry.context?.cli).toBe("d2");
-    expect(entry.context?.file_path).toBe(expectedAbsolutePath);
-    expect(entry.context?.output?.file).toBe(relativePath);
+    expect(entry.context?.absolute_path).toBe(expectedAbsolutePath);
+    expect(entry.context?.relative_path).toBe(relativePath);
     expect(entry.turns?.length).toBe(1);
     expect(entry.turns?.[0]?.role).toBe("system");
     expect(entry.turns?.[0]?.text).toBe("D2 Summary");

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { determineInput } from "../pipeline/input/cli-input.js";
-import { buildD2ResponseTools, createD2WebSearchTool, parseArgs } from "./d2.js";
+import type { Tool as AgentsSdkTool } from "@openai/agents";
+import path from "node:path";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
+import {
+  buildD2ConversationToolset,
+  createD2WebSearchTool,
+  ensureD2Context,
+  parseArgs,
+} from "./d2.js";
 import type { CliDefaults } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
@@ -39,11 +46,11 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     imagePath: undefined,
     operation: "ask",
     compactIndex: undefined,
-    outputPath: "diagram.d2",
-    outputExplicit: false,
+    responseOutputPath: "diagram.d2",
+    responseOutputExplicit: false,
     copyOutput: false,
     copyExplicit: false,
-    filePath: "diagram.d2",
+    artifactPath: "diagram.d2",
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -62,8 +69,9 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["ダイアグラム"], defaults);
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
-    expect(options.filePath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
-    expect(options.outputPath).toBe(options.filePath);
+    expect(options.artifactPath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
+    expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -83,8 +91,8 @@ describe("d2 parseArgs", () => {
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--output", "diagram.d2", "生成"], defaults);
-    expect(options.filePath).toBe("diagram.d2");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.artifactPath).toBe("diagram.d2");
+    expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
@@ -128,13 +136,13 @@ class StubHistoryStore {
   }
 }
 
-describe("d2 determineInput", () => {
+describe("d2 resolveInputOrExecuteHistoryAction", () => {
   it("履歴番号指定で既存の d2 タスクを保持したまま返す", async () => {
     const defaults = createDefaults();
     const entry: D2HistoryEntry = {
       last_response_id: "resp-d2",
       title: "diagram",
-      context: { cli: "d2", file_path: "/tmp/out.d2" },
+      context: { cli: "d2", absolute_path: "/tmp/out.d2" },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({
@@ -144,7 +152,7 @@ describe("d2 determineInput", () => {
       args: ["続けよう"],
     });
 
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -169,7 +177,7 @@ describe("d2 determineInput", () => {
         helpCalled = true;
       },
     };
-    const result = await determineInput(
+    const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
@@ -206,9 +214,52 @@ describe("d2 web search integration", () => {
     expect(allowedDomains).toEqual(["d2lang.com"]);
   });
 
-  it("Responses API 用ツールから web_search_preview を除外する", () => {
-    const tools = buildD2ResponseTools();
-    const hasPreview = tools?.some((tool) => tool.type === "web_search_preview");
+  it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
+    const toolset = buildD2ConversationToolset({
+      logLabel: "[test-cli-d2]",
+      debug: false,
+    });
+    const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
+    const agentHasWebSearch = toolset.agents.some((tool: AgentsSdkTool) => {
+      return (
+        typeof tool === "object" && tool !== null && "name" in tool && tool.name === "web_search"
+      );
+    });
+    expect(agentHasWebSearch).toBe(true);
   });
+});
+
+describe("ensureD2Context", () => {
+  it("正規化済みオプションを返す", () => {
+    // Step3 で実装
+  });
+
+  it("ファイル検証結果を context に含める", () => {
+    // Step3 で実装
+  });
+});
+it("正規化済みオプションを返す", () => {
+  const input = createOptions({
+    artifactPath: "./diagram.d2",
+    responseOutputPath: "./diagram.d2",
+  });
+  const snapshot = { ...input };
+
+  const result = ensureD2Context(input);
+
+  expect(result.normalizedOptions).not.toBe(input);
+  expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
+  expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
+  expect(input).toEqual(snapshot);
+});
+
+it("ファイル検証結果を context に含める", () => {
+  const input = createOptions({ artifactPath: "./diagram.d2" });
+
+  const result = ensureD2Context(input);
+
+  expect(result.context.relativePath).toBe("diagram.d2");
+  expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
+  expect(result.context.exists).toBe(false);
 });

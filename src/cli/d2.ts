@@ -11,26 +11,28 @@ import {
   D2_FMT_TOOL,
   READ_FILE_TOOL,
   WRITE_FILE_TOOL,
-  buildCliToolList,
+  buildConversationToolset,
+  type ConversationToolset,
+  type BuildAgentsToolListOptions,
 } from "../pipeline/process/tools/index.js";
 import {
   finalizeResult,
   generateDefaultOutputPath,
   buildFileHistoryContext,
+  resolveResultOutput,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
 import { buildRequest, performCompact } from "../pipeline/process/responses.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
-import { determineInput } from "../pipeline/input/cli-input.js";
+import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
-import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
-  filePath: string;
+  artifactPath: string;
 }
 
 /**
@@ -40,6 +42,15 @@ interface D2ContextInfo {
   relativePath: string;
   absolutePath: string;
   exists: boolean;
+}
+
+/**
+ * ensureD2Context の実行結果をまとめた構造体。
+ * context にはファイル情報を、normalizedOptions には正規化後の CLI オプションを保持する。
+ */
+interface D2ContextResolution {
+  context: D2ContextInfo;
+  normalizedOptions: D2CliOptions;
 }
 
 const D2_TOOL_REGISTRATIONS = [
@@ -63,23 +74,43 @@ export function createD2WebSearchTool(): AgentsSdkTool {
   });
 }
 
+interface BuildD2ToolsetParams {
+  logLabel: string;
+  debug: boolean;
+}
+
 /**
- * d2 モードで Responses API へ渡すツール配列を生成する。
+ * d2 モードで使用するツールセットを生成する。
  */
-export function buildD2ResponseTools(): ResponseCreateParamsNonStreaming["tools"] {
-  const tools = buildCliToolList(D2_TOOL_REGISTRATIONS) ?? [];
-  return tools.filter((tool) => tool.type !== "web_search_preview");
+export function buildD2ConversationToolset(params: BuildD2ToolsetParams): ConversationToolset {
+  const agentOptions: BuildAgentsToolListOptions = {
+    logLabel: params.logLabel,
+    createExecutionContext: () => ({
+      cwd: process.cwd(),
+      log: (message: string) => {
+        console.log(`${params.logLabel} ${message}`);
+      },
+    }),
+  };
+
+  if (params.debug) {
+    agentOptions.debugLog = (message: string) => {
+      console.error(`${params.logLabel} debug: ${message}`);
+    };
+  }
+
+  return buildConversationToolset(D2_TOOL_REGISTRATIONS, {
+    cli: { appendWebSearchPreview: false },
+    agents: agentOptions,
+    additionalAgentTools: [createD2WebSearchTool()],
+  });
 }
 
 const d2CliHistoryContextStrictSchema = z.object({
   cli: z.literal("d2"),
-  output: z
-    .object({
-      file: z.string(),
-      copy: z.boolean().optional(),
-    })
-    .optional(),
-  file_path: z.string().optional(),
+  relative_path: z.string().optional(),
+  copy: z.boolean().optional(),
+  absolute_path: z.string().optional(),
 });
 
 const d2CliHistoryContextSchema = d2CliHistoryContextStrictSchema
@@ -134,13 +165,13 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
     showIndex: z.number().optional(),
     imagePath: z.string().optional(),
     debug: z.boolean(),
-    outputPath: z.string().min(1).optional(),
-    outputExplicit: z.boolean(),
+    responseOutputPath: z.string().min(1).optional(),
+    responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.number().optional(),
-    filePath: z.string().min(1),
+    artifactPath: z.string().min(1),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
@@ -178,15 +209,15 @@ const cliOptionsSchema: z.ZodType<D2CliOptions> = z
 export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
   const program = createD2Program(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const resolvedOutputPath =
-    commonOptions.outputPath ??
+  const resolvedResponseOutputPath =
+    commonOptions.responseOutputPath ??
     generateDefaultOutputPath({ mode: "d2", extension: "d2" }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
       taskMode: "d2",
-      outputPath: resolvedOutputPath,
-      filePath: resolvedOutputPath,
+      responseOutputPath: resolvedResponseOutputPath,
+      artifactPath: resolvedResponseOutputPath,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -203,12 +234,12 @@ export function parseArgs(argv: string[], defaults: CliDefaults): D2CliOptions {
  * @param options CLIオプション。
  * @returns d2ファイルの存在情報。
  */
-function ensureD2Context(options: D2CliOptions): D2ContextInfo {
+export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
   if (options.taskMode !== "d2") {
     throw new Error("Invariant violation: ensureD2Context は d2 モード専用です");
   }
   const cwd = process.cwd();
-  const rawPath = options.filePath;
+  const rawPath = options.artifactPath;
   const absolutePath = path.resolve(cwd, rawPath);
   const normalizedRoot = path.resolve(cwd);
   const relative = path.relative(normalizedRoot, absolutePath);
@@ -223,10 +254,16 @@ function ensureD2Context(options: D2CliOptions): D2ContextInfo {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  options.filePath = relativePath;
-  options.outputPath = relativePath;
+  const normalizedOptions: D2CliOptions = {
+    ...options,
+    artifactPath: relativePath,
+    responseOutputPath: relativePath,
+  };
   const exists = fs.existsSync(absolutePath);
-  return { relativePath, absolutePath, exists };
+  return {
+    context: { relativePath, absolutePath, exists },
+    normalizedOptions,
+  };
 }
 
 /**
@@ -309,7 +346,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await determineInput(options, historyStore, defaults, {
+    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
       printHelp: outputHelp,
     });
     if (determine.kind === "exit") {
@@ -318,38 +355,44 @@ async function main(): Promise<void> {
     }
 
     // TODO(pipeline/input): d2 固有の履歴継承やパス初期化を input 層で共通化できないか検討する。
-    const context = computeContext(
+    const context = computeContext({
       options,
       historyStore,
-      determine.inputText,
-      determine.activeEntry,
-      determine.previousResponseId,
-      determine.previousTitle,
-      {
+      inputText: determine.inputText,
+      initialActiveEntry: determine.activeEntry,
+      explicitPrevId: determine.previousResponseId,
+      explicitPrevTitle: determine.previousTitle,
+      config: {
         logLabel: "[gpt-5-cli-d2]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
           const historyContext = activeEntry.context as D2CliHistoryContext | undefined;
 
-          if (!nextOptions.outputExplicit) {
-            const historyFile = historyContext?.file_path ?? historyContext?.output?.file;
+          if (!nextOptions.responseOutputExplicit) {
+            const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
             if (historyFile) {
-              nextOptions.outputPath = historyFile;
-              nextOptions.filePath = historyFile;
+              nextOptions.responseOutputPath = historyFile;
+              nextOptions.artifactPath = historyFile;
             }
           }
-          if (!nextOptions.copyExplicit && typeof historyContext?.output?.copy === "boolean") {
-            nextOptions.copyOutput = historyContext.output.copy;
+          if (!nextOptions.copyExplicit && typeof historyContext?.copy === "boolean") {
+            nextOptions.copyOutput = historyContext.copy;
           }
         },
       },
-    );
+    });
 
-    const d2Context = ensureD2Context(options);
+    const { context: d2Context, normalizedOptions } = ensureD2Context(options);
 
-    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli-d2]");
-    const request = buildRequest({
-      options,
+    const resolvedOptions = normalizedOptions;
+
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]");
+    const toolset = buildD2ConversationToolset({
+      logLabel: "[gpt-5-cli-d2]",
+      debug: resolvedOptions.debug,
+    });
+    const { request, agentTools } = buildRequest({
+      options: resolvedOptions,
       context,
       inputText: determine.inputText,
       systemPrompt,
@@ -357,52 +400,52 @@ async function main(): Promise<void> {
       defaults,
       logLabel: "[gpt-5-cli-d2]",
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
-      tools: buildD2ResponseTools(),
+      toolset,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
-      options,
+      options: resolvedOptions,
       logLabel: "[gpt-5-cli-d2]",
-      toolRegistrations: D2_TOOL_REGISTRATIONS,
-      maxTurns: options.maxIterations,
-      additionalAgentTools: [createD2WebSearchTool()],
+      agentTools,
+      maxTurns: resolvedOptions.maxIterations,
     });
     const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
     }
 
-    const summaryOutputPath =
-      options.outputExplicit && options.outputPath && options.outputPath !== options.filePath
-        ? options.outputPath
-        : undefined;
+    const outputResolution = resolveResultOutput({
+      responseOutputExplicit: resolvedOptions.responseOutputExplicit,
+      responseOutputPath: resolvedOptions.responseOutputPath,
+      artifactPath: resolvedOptions.artifactPath,
+    });
 
     const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
     const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
     const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
       base: { cli: "d2" },
       contextPath: d2Context.absolutePath,
-      defaultFilePath: options.filePath,
+      defaultFilePath: resolvedOptions.artifactPath,
       previousContext,
-      historyOutputFile: summaryOutputPath ?? options.filePath,
-      copyOutput: options.copyOutput,
+      historyArtifactPath: outputResolution.artifactReferencePath,
+      copyOutput: resolvedOptions.copyOutput,
     });
     const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      summaryOutputPath,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.filePath,
+      textOutputPath: outputResolution.textOutputPath ?? undefined,
+      copyOutput: resolvedOptions.copyOutput,
+      copySourceFilePath: resolvedOptions.artifactPath,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
             store: historyStore,
             conversation: context,
             metadata: {
-              model: options.model,
-              effort: options.effort,
-              verbosity: options.verbosity,
+              model: resolvedOptions.model,
+              effort: resolvedOptions.effort,
+              verbosity: resolvedOptions.verbosity,
             },
             previousContextRaw,
             contextData: historyContext,
@@ -412,7 +455,7 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = d2Context.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-d2] output file: ${options.filePath}`);
+      console.log(`[gpt-5-cli-d2] artifact file: ${resolvedOptions.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);

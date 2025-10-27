@@ -32,8 +32,9 @@ describe("parseArgs", () => {
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
     expect(options.dsn).toBe("postgres://user:pass@host/db");
-    expect(options.filePath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
-    expect(options.outputPath).toBe(options.filePath);
+    expect(options.artifactPath).toMatch(/^output[/\\]sql[/\\]sql-\d{8}-\d{6}-[0-9a-f]{4}\.sql$/u);
+    // TODO 履歴保存と成果物保存が一緒になり得るという、混乱する仕様。要修正
+    expect(options.responseOutputPath).toBe(options.artifactPath);
   });
 
   it("--iterations でイテレーション上限を設定できる", () => {
@@ -64,8 +65,8 @@ describe("parseArgs", () => {
       ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
       defaults,
     );
-    expect(options.filePath).toBe("result.sql");
-    expect(options.outputExplicit).toBe(true);
+    expect(options.artifactPath).toBe("result.sql");
+    expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
@@ -96,7 +97,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:abcd",
       maxIterations: 7,
       engine: "postgresql",
-      filePath: "query.sql",
+      artifactPath: "query.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -115,7 +116,7 @@ describe("buildSqlInstructionMessages", () => {
       dsnHash: "sha256:mysql",
       maxIterations: 5,
       engine: "mysql",
-      filePath: "output.sql",
+      artifactPath: "output.sql",
     });
     expect(messages).toHaveLength(1);
     const text = messages[0]?.content?.[0]?.text ?? "";
@@ -164,14 +165,15 @@ describe("buildSqlHistoryContext", () => {
         engine: "postgresql",
       },
       existing,
-      { historyOutputFile: "result.sql", copyOutput: true },
+      { historyArtifactPath: "result.sql", copyOutput: true },
     );
     expect(updated.dsn_hash).toBe("sha256:new");
     expect(updated.connection?.host).toBe("next");
     expect(updated.connection?.database).toBe("analytics");
     expect(updated.dsn).toBe("postgres://next@host/db");
     expect(updated.engine).toBe("postgresql");
-    expect(updated.output).toEqual({ file: "result.sql", copy: true });
+    expect(updated.relative_path).toBe("result.sql");
+    expect(updated.copy).toBe(true);
   });
 });
 
@@ -212,13 +214,15 @@ describe("ensureSqlContext", () => {
     const relativePath = path.join(relativeDir, "query.sql");
     const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
 
-    const context = ensureSqlContext(options);
+    const snapshot = { ...options };
+    const result = ensureSqlContext(options);
 
-    expect(context.relativePath).toBe(relativePath);
-    expect(context.absolutePath).toBe(path.resolve(process.cwd(), relativePath));
-    expect(context.exists).toBe(false);
-    expect(options.filePath).toBe(relativePath);
-    expect(options.outputPath).toBe(relativePath);
+    expect(result.context.relativePath).toBe(relativePath);
+    expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), relativePath));
+    expect(result.context.exists).toBe(false);
+    expect(result.normalizedOptions.artifactPath).toBe(relativePath);
+    expect(result.normalizedOptions.responseOutputPath).toBe(relativePath);
+    expect(options).toEqual(snapshot);
   });
 
   it("既存ファイルがある場合は exists=true を返す", () => {
@@ -232,13 +236,15 @@ describe("ensureSqlContext", () => {
     fs.writeFileSync(absolutePath, "SELECT 1;");
 
     const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
-    const context = ensureSqlContext(options);
+    const snapshot = { ...options };
+    const result = ensureSqlContext(options);
 
-    expect(context.relativePath).toBe(relativePath);
-    expect(context.absolutePath).toBe(absolutePath);
-    expect(context.exists).toBe(true);
-    expect(options.filePath).toBe(relativePath);
-    expect(options.outputPath).toBe(relativePath);
+    expect(result.context.relativePath).toBe(relativePath);
+    expect(result.context.absolutePath).toBe(absolutePath);
+    expect(result.context.exists).toBe(true);
+    expect(result.normalizedOptions.artifactPath).toBe(relativePath);
+    expect(result.normalizedOptions.responseOutputPath).toBe(relativePath);
+    expect(options).toEqual(snapshot);
   });
 
   it("ワークスペース外のパスではエラーを投げる", () => {
@@ -260,5 +266,29 @@ describe("ensureSqlContext", () => {
     expect(() => ensureSqlContext(options)).toThrow(
       `Error: 指定した SQL ファイルパスはディレクトリです: ${relativeDir}`,
     );
+  });
+
+  it("正規化済みオプションを返す", () => {
+    const options = parseArgs(["--dsn", testDsn, "--output", "./result.sql", "SELECT"], defaults);
+    const snapshot = { ...options };
+
+    const result = ensureSqlContext(options);
+
+    expect(result.normalizedOptions).not.toBe(options);
+    expect(result.normalizedOptions.artifactPath).toBe("result.sql");
+    expect(result.normalizedOptions.responseOutputPath).toBe("result.sql");
+    expect(options).toEqual(snapshot);
+  });
+
+  it("入力オプションを変異せず context を構築する", () => {
+    const options = parseArgs(["--dsn", testDsn, "--output", "./result.sql", "SELECT"], defaults);
+
+    const result = ensureSqlContext(options);
+
+    expect(result.context.relativePath).toBe("result.sql");
+    expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "result.sql"));
+    expect(result.context.exists).toBe(false);
+    expect(options.artifactPath).toBe("./result.sql");
+    expect(options.responseOutputPath).toBe("./result.sql");
   });
 });
