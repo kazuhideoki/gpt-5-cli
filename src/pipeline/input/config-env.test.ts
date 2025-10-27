@@ -5,7 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ConfigEnv } from "./config-env.js";
+import { ConfigEnv, configEnvSchema } from "./config-env.js";
 
 const TMP_DIR_PREFIX = "config-env-test";
 
@@ -151,10 +151,43 @@ describe("ConfigEnv", () => {
       }
     }
   });
+
+  it("未知のキーは保持しない", async () => {
+    const baseline = snapshotProcessEnv();
+    await fs.writeFile(path.join(tmpDirPath, ".env"), "UNKNOWN=value\nOPENAI_API_KEY=token\n");
+    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+    expect(env.has("UNKNOWN")).toBe(false);
+    expect(env.get("UNKNOWN")).toBeUndefined();
+    expect(env.get("OPENAI_API_KEY")).toBe("token");
+    expectEnvIncludesBaseline(env, baseline);
+  });
 });
 
 describe("configEnvSchema", () => {
-  it.todo("未知の環境変数キーは strip される");
-  it.todo("既知キーのみで構成されたオブジェクトを返す");
-  it.todo("string オーバーロード経由でも型安全な値が取得できる");
+  it("未知の環境変数キーは strip される", () => {
+    const result = configEnvSchema.parse({
+      OPENAI_API_KEY: "test",
+      UNKNOWN_KEY: "ignored",
+    });
+    expect(result).toEqual({ OPENAI_API_KEY: "test" });
+  });
+
+  it("既知キーのみで構成されたオブジェクトを返す", () => {
+    const parsed = configEnvSchema.parse({
+      OPENAI_MODEL_MAIN: "main",
+      GPT_5_CLI_HISTORY_INDEX_FILE: "/tmp/history.json",
+      SQRUFF_BIN: "sqruff",
+    });
+    expect(parsed).toEqual({
+      OPENAI_MODEL_MAIN: "main",
+      GPT_5_CLI_HISTORY_INDEX_FILE: "/tmp/history.json",
+      SQRUFF_BIN: "sqruff",
+    });
+  });
+
+  it("型レベルで既知キーを扱える", () => {
+    const snapshot = configEnvSchema.parse({ OPENAI_API_KEY: "abc" });
+    const value: string | undefined = snapshot.OPENAI_API_KEY;
+    expect(value).toBe("abc");
+  });
 });
