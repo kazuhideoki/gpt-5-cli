@@ -61,7 +61,13 @@ describe("loadEnvironment", () => {
   });
 
   it(".env が存在しなくても読み込みを継続する", () => {
-    // Step3 で挙動を検証する
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-load-env-"));
+    try {
+      expect(() => loadEnvironment({ baseDir: dir, envSuffix: "ask" })).not.toThrow();
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it(".env の値が設定される", () => {
