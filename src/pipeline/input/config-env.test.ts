@@ -51,7 +51,9 @@ describe("ConfigEnv", () => {
   });
 
   it("baseDir オプションで探索ディレクトリを切り替えられる", async () => {
-    const altDir = await fs.mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", `${TMP_DIR_PREFIX}-alt`));
+    const altDir = await fs.mkdtemp(
+      path.join(process.env.TMPDIR ?? "/tmp", `${TMP_DIR_PREFIX}-alt`),
+    );
     await fs.writeFile(path.join(altDir, ".env"), "ALT=value\n");
     const env = await ConfigEnv.create({ baseDir: altDir });
     expect(env.get("ALT")).toBe("value");
