@@ -5,14 +5,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ConfigEnv, configEnvSchema } from "./config-env.js";
+import { ConfigEnv, CONFIG_ENV_KNOWN_KEYS, configEnvSchema } from "./config-env.js";
 
 const TMP_DIR_PREFIX = "config-env-test";
+const KNOWN_KEY_SET = new Set(CONFIG_ENV_KNOWN_KEYS);
 
 function snapshotProcessEnv(): Map<string, string> {
   const snapshot = new Map<string, string>();
   for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") {
+    if (typeof value === "string" && KNOWN_KEY_SET.has(key)) {
       snapshot.set(key, value);
     }
   }
@@ -52,114 +53,181 @@ describe("ConfigEnv", () => {
   });
 
   it("ベースの .env からキーと値を読み込む", async () => {
-    const baseline = snapshotProcessEnv();
-    const baseEnvPath = path.join(tmpDirPath, ".env");
-    await fs.writeFile(baseEnvPath, "FOO=bar\nEMPTY_VALUE=\n");
-    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
-    expect(env.get("FOO")).toBe("bar");
-    expect(env.get("EMPTY_VALUE")).toBe("");
-    expect(env.has("FOO")).toBe(true);
-    expectEnvIncludesBaseline(env, baseline);
+    const originalMain = process.env.OPENAI_MODEL_MAIN;
+    const originalOutputDir = process.env.GPT_5_CLI_OUTPUT_DIR;
+    delete process.env.OPENAI_MODEL_MAIN;
+    delete process.env.GPT_5_CLI_OUTPUT_DIR;
+    try {
+      const baseline = snapshotProcessEnv();
+      const baseEnvPath = path.join(tmpDirPath, ".env");
+      await fs.writeFile(baseEnvPath, "OPENAI_MODEL_MAIN=gpt-5\nGPT_5_CLI_OUTPUT_DIR=\n");
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+      expect(env.get("OPENAI_MODEL_MAIN")).toBe("gpt-5");
+      expect(env.get("GPT_5_CLI_OUTPUT_DIR")).toBe("");
+      expect(env.has("OPENAI_MODEL_MAIN")).toBe(true);
+      expectEnvIncludesBaseline(env, baseline);
+    } finally {
+      if (originalMain === undefined) {
+        delete process.env.OPENAI_MODEL_MAIN;
+      } else {
+        process.env.OPENAI_MODEL_MAIN = originalMain;
+      }
+      if (originalOutputDir === undefined) {
+        delete process.env.GPT_5_CLI_OUTPUT_DIR;
+      } else {
+        process.env.GPT_5_CLI_OUTPUT_DIR = originalOutputDir;
+      }
+    }
   });
 
   it("suffix が指定され存在する場合は .env.{suffix} の値で上書きする", async () => {
-    const baseline = snapshotProcessEnv();
-    await fs.writeFile(path.join(tmpDirPath, ".env"), "FOO=base\nBAR=baz\n");
-    await fs.writeFile(path.join(tmpDirPath, ".env.ask"), "FOO=override\n");
-    const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "ask" });
-    expect(env.get("FOO")).toBe("override");
-    expect(env.get("BAR")).toBe("baz");
-    expectEnvIncludesBaseline(env, baseline);
+    const originalMain = process.env.OPENAI_MODEL_MAIN;
+    const originalMini = process.env.OPENAI_MODEL_MINI;
+    delete process.env.OPENAI_MODEL_MAIN;
+    delete process.env.OPENAI_MODEL_MINI;
+    try {
+      const baseline = snapshotProcessEnv();
+      await fs.writeFile(
+        path.join(tmpDirPath, ".env"),
+        "OPENAI_MODEL_MAIN=base\nOPENAI_MODEL_MINI=mini\n",
+      );
+      await fs.writeFile(path.join(tmpDirPath, ".env.ask"), "OPENAI_MODEL_MAIN=override\n");
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "ask" });
+      expect(env.get("OPENAI_MODEL_MAIN")).toBe("override");
+      expect(env.get("OPENAI_MODEL_MINI")).toBe("mini");
+      expectEnvIncludesBaseline(env, baseline);
+    } finally {
+      if (originalMain === undefined) {
+        delete process.env.OPENAI_MODEL_MAIN;
+      } else {
+        process.env.OPENAI_MODEL_MAIN = originalMain;
+      }
+      if (originalMini === undefined) {
+        delete process.env.OPENAI_MODEL_MINI;
+      } else {
+        process.env.OPENAI_MODEL_MINI = originalMini;
+      }
+    }
   });
 
   it("suffix が指定されていても .env.{suffix} が存在しない場合はベースの値を維持する", async () => {
-    const baseline = snapshotProcessEnv();
-    await fs.writeFile(path.join(tmpDirPath, ".env"), "BAZ=qux\n");
-    const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "d2" });
-    expect(env.get("BAZ")).toBe("qux");
-    expectEnvIncludesBaseline(env, baseline);
+    const originalEffort = process.env.OPENAI_DEFAULT_EFFORT;
+    delete process.env.OPENAI_DEFAULT_EFFORT;
+    try {
+      const baseline = snapshotProcessEnv();
+      await fs.writeFile(path.join(tmpDirPath, ".env"), "OPENAI_DEFAULT_EFFORT=low\n");
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "d2" });
+      expect(env.get("OPENAI_DEFAULT_EFFORT")).toBe("low");
+      expectEnvIncludesBaseline(env, baseline);
+    } finally {
+      if (originalEffort === undefined) {
+        delete process.env.OPENAI_DEFAULT_EFFORT;
+      } else {
+        process.env.OPENAI_DEFAULT_EFFORT = originalEffort;
+      }
+    }
   });
 
   it("baseDir オプションで探索ディレクトリを切り替えられる", async () => {
-    const baseline = snapshotProcessEnv();
+    const originalOutputDir = process.env.GPT_5_CLI_OUTPUT_DIR;
+    delete process.env.GPT_5_CLI_OUTPUT_DIR;
     const altDir = await fs.mkdtemp(
       path.join(process.env.TMPDIR ?? "/tmp", `${TMP_DIR_PREFIX}-alt`),
     );
-    await fs.writeFile(path.join(altDir, ".env"), "ALT=value\n");
-    const env = await ConfigEnv.create({ baseDir: altDir });
-    expect(env.get("ALT")).toBe("value");
-    expectEnvIncludesBaseline(env, baseline);
-    await fs.rm(altDir, { recursive: true, force: true });
+    try {
+      const baseline = snapshotProcessEnv();
+      await fs.writeFile(path.join(altDir, ".env"), "GPT_5_CLI_OUTPUT_DIR=output\n");
+      const env = await ConfigEnv.create({ baseDir: altDir });
+      expect(env.get("GPT_5_CLI_OUTPUT_DIR")).toBe("output");
+      expectEnvIncludesBaseline(env, baseline);
+    } finally {
+      await fs.rm(altDir, { recursive: true, force: true });
+      if (originalOutputDir === undefined) {
+        delete process.env.GPT_5_CLI_OUTPUT_DIR;
+      } else {
+        process.env.GPT_5_CLI_OUTPUT_DIR = originalOutputDir;
+      }
+    }
   });
 
   it("get/has/entries で保持している値へアクセスできる", async () => {
-    const originalFoo = process.env.FOO;
-    const originalBar = process.env.BAR;
-    delete process.env.FOO;
-    delete process.env.BAR;
+    const originalMain = process.env.OPENAI_MODEL_MAIN;
+    const originalMini = process.env.OPENAI_MODEL_MINI;
+    delete process.env.OPENAI_MODEL_MAIN;
+    delete process.env.OPENAI_MODEL_MINI;
     const baseline = snapshotProcessEnv();
     const baseEnvPath = path.join(tmpDirPath, ".env");
-    await fs.writeFile(baseEnvPath, "FOO=bar\nBAR=baz\n");
+    await fs.writeFile(baseEnvPath, "OPENAI_MODEL_MAIN=gpt-5\nOPENAI_MODEL_MINI=gpt-5-mini\n");
     const env = await ConfigEnv.create({ baseDir: tmpDirPath });
-    expect(env.has("FOO")).toBe(true);
+    expect(env.has("OPENAI_MODEL_MAIN")).toBe(true);
     expect(env.has("UNKNOWN")).toBe(false);
-    expect(env.get("BAR")).toBe("baz");
+    expect(env.get("OPENAI_MODEL_MINI")).toBe("gpt-5-mini");
     const entries = [...env.entries()];
     expect(entries).toEqual(
       expect.arrayContaining([
-        ["FOO", "bar"],
-        ["BAR", "baz"],
+        ["OPENAI_MODEL_MAIN", "gpt-5"],
+        ["OPENAI_MODEL_MINI", "gpt-5-mini"],
       ]),
     );
     expectEnvIncludesBaseline(env, baseline);
-    if (originalFoo === undefined) {
-      delete process.env.FOO;
+    if (originalMain === undefined) {
+      delete process.env.OPENAI_MODEL_MAIN;
     } else {
-      process.env.FOO = originalFoo;
+      process.env.OPENAI_MODEL_MAIN = originalMain;
     }
-    if (originalBar === undefined) {
-      delete process.env.BAR;
+    if (originalMini === undefined) {
+      delete process.env.OPENAI_MODEL_MINI;
     } else {
-      process.env.BAR = originalBar;
+      process.env.OPENAI_MODEL_MINI = originalMini;
     }
   });
 
   it("既存の process.env で指定された値を優先する", async () => {
-    const originalFromProcess = process.env.FROM_PROCESS;
-    const originalOverridden = process.env.OVERRIDDEN;
+    const originalPromptsDir = process.env.GPT_5_CLI_PROMPTS_DIR;
+    const originalModelMain = process.env.OPENAI_MODEL_MAIN;
     try {
-      process.env.FROM_PROCESS = "process-value";
-      process.env.OVERRIDDEN = "process-original";
+      process.env.GPT_5_CLI_PROMPTS_DIR = "/tmp/prompts";
+      process.env.OPENAI_MODEL_MAIN = "process-original";
       await fs.writeFile(
         path.join(tmpDirPath, ".env"),
-        "OVERRIDDEN=file-value\nONLY_FILE=file-only\n",
+        "OPENAI_MODEL_MAIN=file-value\nOPENAI_MODEL_MINI=file-only\n",
       );
       const env = await ConfigEnv.create({ baseDir: tmpDirPath });
-      expect(env.get("FROM_PROCESS")).toBe("process-value");
-      expect(env.get("OVERRIDDEN")).toBe("process-original");
-      expect(env.get("ONLY_FILE")).toBe("file-only");
+      expect(env.get("GPT_5_CLI_PROMPTS_DIR")).toBe("/tmp/prompts");
+      expect(env.get("OPENAI_MODEL_MAIN")).toBe("process-original");
+      expect(env.get("OPENAI_MODEL_MINI")).toBe("file-only");
     } finally {
-      if (originalFromProcess === undefined) {
-        delete process.env.FROM_PROCESS;
+      if (originalPromptsDir === undefined) {
+        delete process.env.GPT_5_CLI_PROMPTS_DIR;
       } else {
-        process.env.FROM_PROCESS = originalFromProcess;
+        process.env.GPT_5_CLI_PROMPTS_DIR = originalPromptsDir;
       }
-      if (originalOverridden === undefined) {
-        delete process.env.OVERRIDDEN;
+      if (originalModelMain === undefined) {
+        delete process.env.OPENAI_MODEL_MAIN;
       } else {
-        process.env.OVERRIDDEN = originalOverridden;
+        process.env.OPENAI_MODEL_MAIN = originalModelMain;
       }
     }
   });
 
   it("未知のキーは保持しない", async () => {
-    const baseline = snapshotProcessEnv();
-    await fs.writeFile(path.join(tmpDirPath, ".env"), "UNKNOWN=value\nOPENAI_API_KEY=token\n");
-    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
-    expect(env.has("UNKNOWN")).toBe(false);
-    expect(env.get("UNKNOWN")).toBeUndefined();
-    expect(env.get("OPENAI_API_KEY")).toBe("token");
-    expectEnvIncludesBaseline(env, baseline);
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const baseline = snapshotProcessEnv();
+      await fs.writeFile(path.join(tmpDirPath, ".env"), "UNKNOWN=value\nOPENAI_API_KEY=token\n");
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+      expect(env.has("UNKNOWN")).toBe(false);
+      expect(env.get("UNKNOWN")).toBeUndefined();
+      expect(env.get("OPENAI_API_KEY")).toBe("token");
+      expectEnvIncludesBaseline(env, baseline);
+    } finally {
+      if (originalApiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = originalApiKey;
+      }
+    }
   });
 });
 

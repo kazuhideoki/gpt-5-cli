@@ -52,6 +52,24 @@ export const CONFIG_ENV_KNOWN_KEYS: readonly ConfigEnvKey[] = Object.keys(
   configEnvSchema.shape,
 ) as ConfigEnvKey[];
 
+const CONFIG_ENV_KEY_SET = new Set<string>(CONFIG_ENV_KNOWN_KEYS);
+
+function isConfigEnvKey(key: string): key is ConfigEnvKey {
+  return CONFIG_ENV_KEY_SET.has(key);
+}
+
+function filterKnownEntries(
+  entries: ReadonlyArray<[key: string, value: string]>,
+): Array<[ConfigEnvKey, string]> {
+  const filtered: Array<[ConfigEnvKey, string]> = [];
+  for (const [key, value] of entries) {
+    if (isConfigEnvKey(key)) {
+      filtered.push([key, value]);
+    }
+  }
+  return filtered;
+}
+
 /** `.env` 群の読み込み挙動を調整する初期化オプション。 */
 export interface ConfigEnvInitOptions {
   /**
@@ -103,9 +121,9 @@ export interface ConfigEnvContract {
  */
 export class ConfigEnv implements ConfigEnvContract {
   /** 設定値を保持する Map。 */
-  private readonly values: Map<string, string>;
+  private readonly values: Map<ConfigEnvKey, string>;
 
-  private constructor(values: Map<string, string>) {
+  private constructor(values: Map<ConfigEnvKey, string>) {
     this.values = values;
   }
 
@@ -117,19 +135,20 @@ export class ConfigEnv implements ConfigEnvContract {
    */
   static async create(options: ConfigEnvInitOptions = {}): Promise<ConfigEnv> {
     const baseDir = options.baseDir ?? ROOT_DIR;
-    const initialValues = new Map<string, string>();
+    const initialValues = new Map<ConfigEnvKey, string>();
     for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === "string") {
+      if (typeof value === "string" && isConfigEnvKey(key)) {
         initialValues.set(key, value);
       }
     }
-    const resolvedValues = new Map(initialValues);
-
+    const resolvedValues = new Map<ConfigEnvKey, string>(initialValues);
+    const baseValueMap = new Map<ConfigEnvKey, string>();
     const baseEnvPath = path.join(baseDir, ".env");
     const baseEntries = await parseEnvFile(baseEnvPath);
-    const baseValueMap = new Map(baseEntries ?? []);
     if (baseEntries !== null) {
-      for (const [key, value] of baseEntries) {
+      const knownBaseEntries = filterKnownEntries(baseEntries);
+      for (const [key, value] of knownBaseEntries) {
+        baseValueMap.set(key, value);
         if (!initialValues.has(key)) {
           resolvedValues.set(key, value);
         }
@@ -141,7 +160,8 @@ export class ConfigEnv implements ConfigEnvContract {
       const overrideEnvPath = path.join(baseDir, `.env.${suffix}`);
       const overrideEntries = await parseEnvFile(overrideEnvPath);
       if (overrideEntries !== null) {
-        for (const [key, value] of overrideEntries) {
+        const knownOverrideEntries = filterKnownEntries(overrideEntries);
+        for (const [key, value] of knownOverrideEntries) {
           if (!initialValues.has(key)) {
             resolvedValues.set(key, value);
             continue;
@@ -154,13 +174,29 @@ export class ConfigEnv implements ConfigEnvContract {
       }
     }
 
-    return new ConfigEnv(resolvedValues);
+    const candidate: Partial<Record<ConfigEnvKey, string>> = {};
+    for (const [key, value] of resolvedValues) {
+      candidate[key] = value;
+    }
+    const normalized = configEnvSchema.parse(candidate);
+    const normalizedValues = new Map<ConfigEnvKey, string>();
+    for (const key of CONFIG_ENV_KNOWN_KEYS) {
+      const value = normalized[key];
+      if (typeof value === "string") {
+        normalizedValues.set(key, value);
+      }
+    }
+
+    return new ConfigEnv(normalizedValues);
   }
 
   get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
   // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
   get(key: string): string | undefined;
   get(key: string): string | undefined {
+    if (!isConfigEnvKey(key)) {
+      return undefined;
+    }
     return this.values.get(key);
   }
 
@@ -168,11 +204,14 @@ export class ConfigEnv implements ConfigEnvContract {
   // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
   has(key: string): boolean;
   has(key: string): boolean {
+    if (!isConfigEnvKey(key)) {
+      return false;
+    }
     return this.values.has(key);
   }
 
   entries(): IterableIterator<readonly [key: ConfigEnvKey, value: string]> {
-    return this.values.entries() as IterableIterator<readonly [ConfigEnvKey, string]>;
+    return this.values.entries();
   }
 }
 
