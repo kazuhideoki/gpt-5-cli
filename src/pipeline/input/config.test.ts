@@ -137,20 +137,20 @@ describe("loadEnvironment", () => {
 
 describe("resolvePromptsDir", () => {
   it("環境変数が設定されていれば展開して返す", () => {
-    const env = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom" });
-    const resolved = resolvePromptsDir(env, "/default/prompts");
+    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom" });
+    const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "prompts/custom")));
   });
 
   it("環境変数が未設定なら既定値を返す", () => {
-    const env = createConfigEnv();
-    const resolved = resolvePromptsDir(env, "/default/prompts");
+    const configEnv = createConfigEnv();
+    const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve("/default/prompts"));
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    const env = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "   " });
-    expect(() => resolvePromptsDir(env, "/default/prompts")).toThrow(
+    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "   " });
+    expect(() => resolvePromptsDir(configEnv, "/default/prompts")).toThrow(
       "GPT_5_CLI_PROMPTS_DIR is set but empty.",
     );
   });
@@ -163,10 +163,10 @@ describe("resolvePromptsDir", () => {
     (os as unknown as { homedir: () => string }).homedir = () => fallbackHome;
 
     delete process.env.HOME;
-    const env = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts" });
+    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts" });
 
     try {
-      const resolved = resolvePromptsDir(env, "/default/prompts");
+      const resolved = resolvePromptsDir(configEnv, "/default/prompts");
       expect(resolved).toBe(path.resolve(path.join(fallbackHome, "prompts")));
     } finally {
       (os as unknown as { homedir: () => string }).homedir = originalHomedir;
@@ -177,17 +177,17 @@ describe("resolvePromptsDir", () => {
 
 describe("loadDefaults", () => {
   it("履歴パスが未設定ならエラーになる", () => {
-    const env = createConfigEnv();
-    expect(() => loadDefaults(env)).toThrow(
+    const configEnv = createConfigEnv();
+    expect(() => loadDefaults(configEnv)).toThrow(
       "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
     );
   });
 
   it("既定値を返す", () => {
-    const env = createConfigEnv({
+    const configEnv = createConfigEnv({
       GPT_5_CLI_HISTORY_INDEX_FILE: "~/history/default.json",
     });
-    const defaults = loadDefaults(env);
+    const defaults = loadDefaults(configEnv);
     expect(defaults.modelMain).toBe("gpt-5");
     expect(defaults.modelMini).toBe("gpt-5-mini");
     expect(defaults.modelNano).toBe("gpt-5-nano");
@@ -201,7 +201,7 @@ describe("loadDefaults", () => {
   });
 
   it("環境変数を反映する", () => {
-    const env = createConfigEnv({
+    const configEnv = createConfigEnv({
       OPENAI_MODEL_MAIN: "main-x",
       OPENAI_MODEL_MINI: "mini-x",
       OPENAI_MODEL_NANO: "nano-x",
@@ -211,7 +211,7 @@ describe("loadDefaults", () => {
       GPT_5_CLI_PROMPTS_DIR: "~/data/prompts",
       GPT_5_CLI_MAX_ITERATIONS: "5",
     });
-    const defaults = loadDefaults(env);
+    const defaults = loadDefaults(configEnv);
     expect(defaults.modelMain).toBe("main-x");
     expect(defaults.modelMini).toBe("mini-x");
     expect(defaults.modelNano).toBe("nano-x");
