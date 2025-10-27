@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
 import { ROOT_DIR } from "../../foundation/paths.js";
+import type { ConfigEnvironment } from "../../types.js";
 
 /** `.env` 群の読み込み挙動を調整する初期化オプション。 */
 export interface ConfigEnvInitOptions {
@@ -25,7 +26,7 @@ export interface ConfigEnvInitOptions {
  * `ConfigEnv` が満たすべき読み取り操作の契約。
  * 実装は `.env` 群から構築した値を利用して各メソッドを提供する。
  */
-export interface ConfigEnvContract {
+export interface ConfigEnvContract extends ConfigEnvironment {
   /**
    * 指定したキーの値を返す。未定義の場合は undefined。
    *

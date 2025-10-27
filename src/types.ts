@@ -21,6 +21,34 @@ export interface CliDefaults {
   maxIterations: number;
 }
 
+/**
+ * `.env` 読み込み後の設定値へ不変アクセスするための契約。
+ */
+export interface ConfigEnvironment {
+  /**
+   * 指定した環境キーに紐づく値を取得する。
+   *
+   * @param key 参照対象の環境変数名。
+   * @returns キーが存在する場合は値、存在しない場合は undefined。
+   */
+  get(key: string): string | undefined;
+
+  /**
+   * 指定した環境キーが保持されているか判定する。
+   *
+   * @param key 存在確認を行う環境変数名。
+   * @returns キーが存在する場合は true、それ以外は false。
+   */
+  has(key: string): boolean;
+
+  /**
+   * 保持している全てのキーと値を列挙する。
+   *
+   * @returns イテレータで表現したキーと値のペア。
+   */
+  entries(): IterableIterator<[key: string, value: string]>;
+}
+
 // 以降は CLI/Session 双方から参照される共通型
 export interface HistoryTurn {
   role: string;
