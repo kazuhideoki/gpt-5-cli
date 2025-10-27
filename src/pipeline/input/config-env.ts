@@ -5,63 +5,52 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
+import { z } from "zod";
 import { ROOT_DIR } from "../../foundation/paths.js";
 
 /**
- * ConfigEnv が認識する環境変数キーを列挙するリスト。
- * 実際にアプリケーション層で参照されるキーのみを対象にする。
+ * ConfigEnv が認識する環境変数のスキーマ。
+ * アプリケーション層で参照されるキーのみを列挙し、未知のキーは除外する。
  */
-export const CONFIG_ENV_KNOWN_KEYS = [
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL_MAIN",
-  "OPENAI_MODEL_MINI",
-  "OPENAI_MODEL_NANO",
-  "OPENAI_DEFAULT_EFFORT",
-  "OPENAI_DEFAULT_VERBOSITY",
-  "GPT_5_CLI_PROMPTS_DIR",
-  "GPT_5_CLI_MAX_ITERATIONS",
-  "GPT_5_CLI_HISTORY_INDEX_FILE",
-  "GPT_5_CLI_OUTPUT_DIR",
-  "SQRUFF_BIN",
-  "NO_COLOR",
-] as const;
+export const configEnvSchema = z
+  .object({
+    /** API キーは必須だが `.env` 未設定のテストを許容するため undefined を通す。 */
+    OPENAI_API_KEY: z.string().optional(),
+    /** モデル指定は任意なので未設定を許容する。 */
+    OPENAI_MODEL_MAIN: z.string().optional(),
+    /** モデル指定は任意なので未設定を許容する。 */
+    OPENAI_MODEL_MINI: z.string().optional(),
+    /** モデル指定は任意なので未設定を許容する。 */
+    OPENAI_MODEL_NANO: z.string().optional(),
+    /** 既定の effort は任意設定のため未設定を許容する。 */
+    OPENAI_DEFAULT_EFFORT: z.string().optional(),
+    /** 既定の verbosity も任意設定のため未設定を許容する。 */
+    OPENAI_DEFAULT_VERBOSITY: z.string().optional(),
+    /** プロンプトディレクトリは任意設定のため未設定を許容する。 */
+    GPT_5_CLI_PROMPTS_DIR: z.string().optional(),
+    /** 反復上限は任意設定のため未設定を許容する。 */
+    GPT_5_CLI_MAX_ITERATIONS: z.string().optional(),
+    /** 履歴パスは `.env` で設定されるがテストで空を許容する。 */
+    GPT_5_CLI_HISTORY_INDEX_FILE: z.string().optional(),
+    /** 出力ディレクトリは任意設定のため未設定を許容する。 */
+    GPT_5_CLI_OUTPUT_DIR: z.string().optional(),
+    /** SQL フォーマッタのバイナリ指定は任意設定のため未設定を許容する。 */
+    SQRUFF_BIN: z.string().optional(),
+    /** NO_COLOR はフラグ用途で任意のため未設定を許容する。 */
+    NO_COLOR: z.string().optional(),
+  })
+  .strip();
 
-/** ConfigEnv が扱う環境変数キーのユニオン型。 */
-export type ConfigEnvKey = (typeof CONFIG_ENV_KNOWN_KEYS)[number];
+/** ConfigEnv が取り扱う環境変数名のユニオン。 */
+export type ConfigEnvKey = keyof z.infer<typeof configEnvSchema>;
 
-/**
- * ConfigEnv で提供する環境変数の値マップ。
- * 未指定が許容されるキーは `undefined` を含める（利用側で存在確認を要求するため）。
- */
-export interface ConfigEnvValueMap {
-  /** API クライアントで必須となる OpenAI の API キー。 */
-  readonly OPENAI_API_KEY: string | undefined;
-  /** メインモデル指定は任意のため未設定を許容する。 */
-  readonly OPENAI_MODEL_MAIN: string | undefined;
-  /** 軽量モデル指定は任意のため未設定を許容する。 */
-  readonly OPENAI_MODEL_MINI: string | undefined;
-  /** ナノモデル指定は任意のため未設定を許容する。 */
-  readonly OPENAI_MODEL_NANO: string | undefined;
-  /** 既定 effort は省略可能なので `undefined` を許容する。 */
-  readonly OPENAI_DEFAULT_EFFORT: string | undefined;
-  /** 既定 verbosity も省略可能なので `undefined` を許容する。 */
-  readonly OPENAI_DEFAULT_VERBOSITY: string | undefined;
-  /** プロンプトディレクトリは外部設定が任意のため未設定を許容する。 */
-  readonly GPT_5_CLI_PROMPTS_DIR: string | undefined;
-  /** 反復上限は環境で省略可能なため未設定を許容する。 */
-  readonly GPT_5_CLI_MAX_ITERATIONS: string | undefined;
-  /** 履歴パスは環境で指定される想定だがテスト環境で未設定があり得るため許容する。 */
-  readonly GPT_5_CLI_HISTORY_INDEX_FILE: string | undefined;
-  /** 出力ディレクトリ指定はオプションのため未設定を許容する。 */
-  readonly GPT_5_CLI_OUTPUT_DIR: string | undefined;
-  /** SQL フォーマッタのバイナリ指定は任意のため未設定を許容する。 */
-  readonly SQRUFF_BIN: string | undefined;
-  /** NO_COLOR はフラグ用途で省略可能なため未設定を許容する。 */
-  readonly NO_COLOR: string | undefined;
-}
+/** ConfigEnv が保持する環境値のスナップショット。 */
+export type ConfigEnvSnapshot = z.infer<typeof configEnvSchema>;
 
-/** ConfigEnv が提供するエントリ配列の型。 */
-export type ConfigEnvEntries = ReadonlyArray<readonly [ConfigEnvKey, string]>;
+/** ConfigEnv が認識するキー一覧。 */
+export const CONFIG_ENV_KNOWN_KEYS: readonly ConfigEnvKey[] = Object.keys(
+  configEnvSchema.shape,
+) as ConfigEnvKey[];
 
 /** `.env` 群の読み込み挙動を調整する初期化オプション。 */
 export interface ConfigEnvInitOptions {
@@ -82,6 +71,8 @@ export interface ConfigEnvInitOptions {
  * 実装は `.env` 群から構築した値を利用して各メソッドを提供する。
  */
 export interface ConfigEnvContract {
+  /** 既知キーを指定した場合は型安全な値を返す。 */
+  get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
   /**
    * 指定したキーの値を返す。未定義の場合は undefined。
    *
@@ -89,6 +80,8 @@ export interface ConfigEnvContract {
    */
   get(key: string): string | undefined;
 
+  /** 既知キーの存在判定を行う。 */
+  has(key: ConfigEnvKey): boolean;
   /**
    * 指定したキーが保持されているかどうかを判定する。
    *
@@ -101,7 +94,7 @@ export interface ConfigEnvContract {
    *
    * @returns イテレータで表現したキーと値のペア。
    */
-  entries(): IterableIterator<[key: string, value: string]>;
+  entries(): IterableIterator<readonly [key: ConfigEnvKey, value: string]>;
 }
 
 /**
@@ -164,16 +157,20 @@ export class ConfigEnv implements ConfigEnvContract {
     return new ConfigEnv(resolvedValues);
   }
 
+  get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
+  get(key: string): string | undefined;
   get(key: string): string | undefined {
     return this.values.get(key);
   }
 
+  has(key: ConfigEnvKey): boolean;
+  has(key: string): boolean;
   has(key: string): boolean {
     return this.values.has(key);
   }
 
-  entries(): IterableIterator<[key: string, value: string]> {
-    return this.values.entries();
+  entries(): IterableIterator<readonly [key: ConfigEnvKey, value: string]> {
+    return this.values.entries() as IterableIterator<readonly [ConfigEnvKey, string]>;
   }
 }
 
