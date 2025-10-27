@@ -152,3 +152,9 @@ describe("ConfigEnv", () => {
     }
   });
 });
+
+describe("configEnvSchema", () => {
+  it.todo("未知の環境変数キーは strip される");
+  it.todo("既知キーのみで構成されたオブジェクトを返す");
+  it.todo("string オーバーロード経由でも型安全な値が取得できる");
+});
