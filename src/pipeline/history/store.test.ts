@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { ConfigEnvironment } from "../../types.js";
 import type { HistoryEntry } from "./store.js";
 import { HistoryStore, resolveHistoryPath } from "./store.js";
 import { printHistoryDetail, printHistoryList } from "./output.js";
@@ -17,6 +18,20 @@ let tempDir: string;
 let historyPath: string;
 let store: HistoryStore<TestContext>;
 const originalHome = process.env.HOME;
+
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  const map = new Map<string, string>();
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === "string") {
+      map.set(key, value);
+    }
+  }
+  return {
+    get: (key: string) => map.get(key),
+    has: (key: string) => map.has(key),
+    entries: () => map.entries(),
+  };
+}
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-"));
@@ -277,26 +292,22 @@ describe("HistoryStore", () => {
 });
 
 describe("resolveHistoryPath", () => {
-  afterEach(() => {
-    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
-  });
-
   it("環境変数が設定されていれば展開して返す", () => {
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history/log.json";
-    const resolved = resolveHistoryPath("/default.json");
+    const configEnv = createConfigEnv({ GPT_5_CLI_HISTORY_INDEX_FILE: "~/history/log.json" });
+    const resolved = resolveHistoryPath(configEnv, "/default.json");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "history/log.json")));
   });
 
   it("環境変数が未設定ならエラーになる", () => {
-    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
-    expect(() => resolveHistoryPath()).toThrow(
+    const configEnv = createConfigEnv();
+    expect(() => resolveHistoryPath(configEnv)).toThrow(
       "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
     );
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "   ";
-    expect(() => resolveHistoryPath("/default.json")).toThrow(
+    const configEnv = createConfigEnv({ GPT_5_CLI_HISTORY_INDEX_FILE: "   " });
+    expect(() => resolveHistoryPath(configEnv, "/default.json")).toThrow(
       "GPT_5_CLI_HISTORY_INDEX_FILE is set but empty.",
     );
   });
@@ -309,10 +320,10 @@ describe("resolveHistoryPath", () => {
     (os as unknown as { homedir: () => string }).homedir = () => fallbackHome;
 
     delete process.env.HOME;
-    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = "~/history.json";
+    const configEnv = createConfigEnv({ GPT_5_CLI_HISTORY_INDEX_FILE: "~/history.json" });
 
     try {
-      const resolved = resolveHistoryPath("/default.json");
+      const resolved = resolveHistoryPath(configEnv, "/default.json");
       expect(resolved).toBe(path.resolve(path.join(fallbackHome, "history.json")));
     } finally {
       (os as unknown as { homedir: () => string }).homedir = originalHomedir;

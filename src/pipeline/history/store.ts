@@ -7,6 +7,7 @@ import path from "node:path";
 import { z } from "zod";
 import { expandHome } from "../../foundation/paths.js";
 import type {
+  ConfigEnvironment,
   EffortLevel,
   HistoryEntry as CoreHistoryEntry,
   HistoryTurn as CoreHistoryTurn,
@@ -78,8 +79,8 @@ export type HistoryEntry<TContext = unknown> = CoreHistoryEntry<TContext>;
  * @param defaultPath 既定パス。
  * @returns 解析済みの絶対パス。
  */
-export function resolveHistoryPath(defaultPath?: string): string {
-  const configured = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+export function resolveHistoryPath(configEnv: ConfigEnvironment, defaultPath?: string): string {
+  const configured = configEnv.get("GPT_5_CLI_HISTORY_INDEX_FILE");
   if (typeof configured === "string") {
     const trimmed = configured.trim();
     if (trimmed.length === 0) {
@@ -87,8 +88,7 @@ export function resolveHistoryPath(defaultPath?: string): string {
     }
     const expanded = expandHome(trimmed);
     return path.resolve(expanded);
-  }
-  if (typeof defaultPath === "string") {
+  } else if (typeof defaultPath === "string") {
     const trimmed = defaultPath.trim();
     if (trimmed.length === 0) {
       throw new Error("Default history path is empty.");

@@ -199,7 +199,7 @@ async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
 
-    const bootstrap = bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
+    const bootstrap = await bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli]",
       parseArgs,

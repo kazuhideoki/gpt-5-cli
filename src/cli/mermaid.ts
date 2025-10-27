@@ -291,7 +291,7 @@ function buildMermaidInstructionMessages(mermaidContext: MermaidContextInfo): Op
 async function main(): Promise<void> {
   try {
     const argv = process.argv.slice(2);
-    const bootstrap = bootstrapCli<MermaidCliOptions, MermaidCliHistoryStoreContext>({
+    const bootstrap = await bootstrapCli<MermaidCliOptions, MermaidCliHistoryStoreContext>({
       argv,
       logLabel: "[gpt-5-cli-mermaid]",
       parseArgs,

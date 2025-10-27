@@ -6,9 +6,21 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigEnv, CONFIG_ENV_KNOWN_KEYS, configEnvSchema } from "./config-env.js";
+import type { ConfigEnvKey } from "./config-env.js";
 
 const TMP_DIR_PREFIX = "config-env-test";
 const KNOWN_KEY_SET = new Set(CONFIG_ENV_KNOWN_KEYS);
+const ISOLATED_ENV_KEYS: readonly ConfigEnvKey[] = [
+  "SQRUFF_BIN",
+  "GPT_5_CLI_MAX_ITERATIONS",
+  "GPT_5_CLI_HISTORY_INDEX_FILE",
+  "OPENAI_DEFAULT_EFFORT",
+  "OPENAI_DEFAULT_VERBOSITY",
+  "GPT_5_CLI_OUTPUT_DIR",
+  "OPENAI_MODEL_MAIN",
+  "OPENAI_MODEL_MINI",
+  "GPT_5_CLI_PROMPTS_DIR",
+];
 
 function snapshotProcessEnv(): Map<string, string> {
   const snapshot = new Map<string, string>();
@@ -37,12 +49,25 @@ function expectEnvMatchesBaseline(env: ConfigEnv, baseline: Map<string, string>)
 
 describe("ConfigEnv", () => {
   let tmpDirPath: string;
+  let envBackup: Map<ConfigEnvKey, string | undefined>;
 
   beforeEach(async () => {
+    envBackup = new Map();
+    for (const key of ISOLATED_ENV_KEYS) {
+      envBackup.set(key, process.env[key]);
+      delete process.env[key];
+    }
     tmpDirPath = await fs.mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", TMP_DIR_PREFIX));
   });
 
   afterEach(async () => {
+    for (const [key, value] of envBackup) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     await fs.rm(tmpDirPath, { recursive: true, force: true });
   });
 

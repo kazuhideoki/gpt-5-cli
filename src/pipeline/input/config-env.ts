@@ -7,6 +7,7 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { ROOT_DIR } from "../../foundation/paths.js";
+import type { ConfigEnvironment } from "../../types.js";
 
 /**
  * ConfigEnv が認識する環境変数のスキーマ。
@@ -88,7 +89,7 @@ export interface ConfigEnvInitOptions {
  * `ConfigEnv` が満たすべき読み取り操作の契約。
  * 実装は `.env` 群から構築した値を利用して各メソッドを提供する。
  */
-export interface ConfigEnvContract {
+export interface ConfigEnvContract extends ConfigEnvironment {
   /** 既知キーを指定した場合は型安全な値を返す。 */
   get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
   /**
