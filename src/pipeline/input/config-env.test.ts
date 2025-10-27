@@ -10,6 +10,17 @@ import type { ConfigEnvKey } from "./config-env.js";
 
 const TMP_DIR_PREFIX = "config-env-test";
 const KNOWN_KEY_SET = new Set(CONFIG_ENV_KNOWN_KEYS);
+const ISOLATED_ENV_KEYS: readonly ConfigEnvKey[] = [
+  "SQRUFF_BIN",
+  "GPT_5_CLI_MAX_ITERATIONS",
+  "GPT_5_CLI_HISTORY_INDEX_FILE",
+  "OPENAI_DEFAULT_EFFORT",
+  "OPENAI_DEFAULT_VERBOSITY",
+  "GPT_5_CLI_OUTPUT_DIR",
+  "OPENAI_MODEL_MAIN",
+  "OPENAI_MODEL_MINI",
+  "GPT_5_CLI_PROMPTS_DIR",
+];
 
 function snapshotProcessEnv(): Map<string, string> {
   const snapshot = new Map<string, string>();
@@ -36,36 +47,27 @@ function expectEnvMatchesBaseline(env: ConfigEnv, baseline: Map<string, string>)
   expectEnvIncludesBaseline(env, baseline);
 }
 
-async function withClearedEnvVars<T>(
-  keys: readonly ConfigEnvKey[],
-  task: () => Promise<T>,
-): Promise<T> {
-  const backup = new Map<ConfigEnvKey, string | undefined>();
-  for (const key of keys) {
-    backup.set(key, process.env[key]);
-    delete process.env[key];
-  }
-  try {
-    return await task();
-  } finally {
-    for (const [key, value] of backup) {
-      if (value === undefined) {
-        delete process.env[key];
-        continue;
-      }
-      process.env[key] = value;
-    }
-  }
-}
-
 describe("ConfigEnv", () => {
   let tmpDirPath: string;
+  let envBackup: Map<ConfigEnvKey, string | undefined>;
 
   beforeEach(async () => {
+    envBackup = new Map();
+    for (const key of ISOLATED_ENV_KEYS) {
+      envBackup.set(key, process.env[key]);
+      delete process.env[key];
+    }
     tmpDirPath = await fs.mkdtemp(path.join(process.env.TMPDIR ?? "/tmp", TMP_DIR_PREFIX));
   });
 
   afterEach(async () => {
+    for (const [key, value] of envBackup) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
     await fs.rm(tmpDirPath, { recursive: true, force: true });
   });
 
@@ -76,37 +78,30 @@ describe("ConfigEnv", () => {
   });
 
   it("ベースの .env からキーと値を読み込む", async () => {
-    await withClearedEnvVars(["SQRUFF_BIN", "GPT_5_CLI_MAX_ITERATIONS"], async () => {
-      const baseline = snapshotProcessEnv();
-      const baseEnvPath = path.join(tmpDirPath, ".env");
-      await fs.writeFile(baseEnvPath, "SQRUFF_BIN=sqruff\nGPT_5_CLI_MAX_ITERATIONS=5\n");
-      const env = await ConfigEnv.create({ baseDir: tmpDirPath });
-      expect(env.get("SQRUFF_BIN")).toBe("sqruff");
-      expect(env.get("GPT_5_CLI_MAX_ITERATIONS")).toBe("5");
-      expect(env.has("SQRUFF_BIN")).toBe(true);
-      expectEnvIncludesBaseline(env, baseline);
-    });
+    const baseline = snapshotProcessEnv();
+    const baseEnvPath = path.join(tmpDirPath, ".env");
+    await fs.writeFile(baseEnvPath, "SQRUFF_BIN=sqruff\nGPT_5_CLI_MAX_ITERATIONS=5\n");
+    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+    expect(env.get("SQRUFF_BIN")).toBe("sqruff");
+    expect(env.get("GPT_5_CLI_MAX_ITERATIONS")).toBe("5");
+    expect(env.has("SQRUFF_BIN")).toBe(true);
+    expectEnvIncludesBaseline(env, baseline);
   });
 
   it("suffix が指定され存在する場合は .env.{suffix} の値で上書きする", async () => {
-    await withClearedEnvVars(
-      ["GPT_5_CLI_HISTORY_INDEX_FILE", "OPENAI_DEFAULT_EFFORT"],
-      async () => {
-        const baseline = snapshotProcessEnv();
-        await fs.writeFile(
-          path.join(tmpDirPath, ".env"),
-          "GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json\nOPENAI_DEFAULT_EFFORT=low\n",
-        );
-        await fs.writeFile(
-          path.join(tmpDirPath, ".env.ask"),
-          "GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history-ask.json\n",
-        );
-        const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "ask" });
-        expect(env.get("GPT_5_CLI_HISTORY_INDEX_FILE")).toBe("/tmp/history-ask.json");
-        expect(env.get("OPENAI_DEFAULT_EFFORT")).toBe("low");
-        expectEnvIncludesBaseline(env, baseline);
-      },
+    const baseline = snapshotProcessEnv();
+    await fs.writeFile(
+      path.join(tmpDirPath, ".env"),
+      "GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history.json\nOPENAI_DEFAULT_EFFORT=low\n",
     );
+    await fs.writeFile(
+      path.join(tmpDirPath, ".env.ask"),
+      "GPT_5_CLI_HISTORY_INDEX_FILE=/tmp/history-ask.json\n",
+    );
+    const env = await ConfigEnv.create({ baseDir: tmpDirPath, envSuffix: "ask" });
+    expect(env.get("GPT_5_CLI_HISTORY_INDEX_FILE")).toBe("/tmp/history-ask.json");
+    expect(env.get("OPENAI_DEFAULT_EFFORT")).toBe("low");
+    expectEnvIncludesBaseline(env, baseline);
   });
 
   it("suffix が指定されていても .env.{suffix} が存在しない場合はベースの値を維持する", async () => {
@@ -122,13 +117,11 @@ describe("ConfigEnv", () => {
       path.join(process.env.TMPDIR ?? "/tmp", `${TMP_DIR_PREFIX}-alt`),
     );
     try {
-      await withClearedEnvVars(["OPENAI_DEFAULT_VERBOSITY"], async () => {
-        const baseline = snapshotProcessEnv();
-        await fs.writeFile(path.join(altDir, ".env"), "OPENAI_DEFAULT_VERBOSITY=medium\n");
-        const env = await ConfigEnv.create({ baseDir: altDir });
-        expect(env.get("OPENAI_DEFAULT_VERBOSITY")).toBe("medium");
-        expectEnvIncludesBaseline(env, baseline);
-      });
+      const baseline = snapshotProcessEnv();
+      await fs.writeFile(path.join(altDir, ".env"), "OPENAI_DEFAULT_VERBOSITY=medium\n");
+      const env = await ConfigEnv.create({ baseDir: altDir });
+      expect(env.get("OPENAI_DEFAULT_VERBOSITY")).toBe("medium");
+      expectEnvIncludesBaseline(env, baseline);
     } finally {
       await fs.rm(altDir, { recursive: true, force: true });
     }
