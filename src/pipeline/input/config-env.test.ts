@@ -72,4 +72,6 @@ describe("ConfigEnv", () => {
       ["BAR", "baz"],
     ]);
   });
+
+  it("既存の process.env で指定された値を優先する");
 });
