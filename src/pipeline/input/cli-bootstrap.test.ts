@@ -120,4 +120,8 @@ describe("bootstrapCli", () => {
     expect(result.status).toBe("help");
     expect("historyStore" in result).toBe(false);
   });
+
+  it("ConfigEnv の内容で defaults を構築する (仕様記述)", () => {
+    // TODO: 実装フェーズで追加する。
+  });
 });

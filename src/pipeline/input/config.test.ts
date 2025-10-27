@@ -157,6 +157,10 @@ describe("resolvePromptsDir", () => {
       process.env.HOME = tempDir!;
     }
   });
+
+  it("ConfigEnv を利用してパスを解決する (仕様記述)", () => {
+    // TODO: 実装フェーズで内容を追加する。
+  });
 });
 
 describe("loadDefaults", () => {
@@ -201,5 +205,9 @@ describe("loadDefaults", () => {
     );
     expect(defaults.promptsDir).toBe(path.resolve(path.join(process.env.HOME!, "data/prompts")));
     expect(defaults.maxIterations).toBe(5);
+  });
+
+  it("ConfigEnv を引数に受け取って既定値を構築する (仕様記述)", () => {
+    // TODO: 実装フェーズで内容を追加する。
   });
 });
