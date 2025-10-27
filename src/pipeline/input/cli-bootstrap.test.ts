@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { CliDefaults, CliOptions } from "../../types.js";
 
 interface TempResources {
+  historyPath: string;
   historyCleanup: () => void;
   promptsDir: string;
 }
@@ -49,19 +50,21 @@ function createOptions(defaults: CliDefaults, overrides: Partial<CliOptions> = {
 let originalHistoryEnv: string | undefined;
 let originalPromptsEnv: string | undefined;
 let resources: TempResources;
+let additionalCleanupDirs: string[];
 
 beforeEach(() => {
   originalHistoryEnv = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
   originalPromptsEnv = process.env.GPT_5_CLI_PROMPTS_DIR;
 
+  delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
+  delete process.env.GPT_5_CLI_PROMPTS_DIR;
+
   const { historyPath, cleanup } = createTempHistoryPath();
   const promptsDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt5-cli-prompts-"));
   fs.writeFileSync(path.join(promptsDir, "ask.md"), "test system prompt", "utf8");
 
-  process.env.GPT_5_CLI_HISTORY_INDEX_FILE = historyPath;
-  process.env.GPT_5_CLI_PROMPTS_DIR = promptsDir;
-
-  resources = { historyCleanup: cleanup, promptsDir };
+  resources = { historyPath, historyCleanup: cleanup, promptsDir };
+  additionalCleanupDirs = [];
 });
 
 afterEach(() => {
@@ -79,10 +82,16 @@ afterEach(() => {
 
   resources.historyCleanup();
   fs.rmSync(resources.promptsDir, { recursive: true, force: true });
+  for (const dir of additionalCleanupDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("bootstrapCli", () => {
   it("履歴ストアとプロンプトを準備して返す", async () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
+    process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
+
     const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
       expect(argv).toEqual(["質問"]);
       return createOptions(defaults, { args: ["質問"] });
@@ -105,6 +114,9 @@ describe("bootstrapCli", () => {
   });
 
   it("ヘルプ要求時はヘルプ状態で終了する", async () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
+    process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
+
     const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
       expect(argv).toEqual(["--help"]);
       return createOptions(defaults, { helpRequested: true });
@@ -125,13 +137,10 @@ describe("bootstrapCli", () => {
     const envRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-config-env-"));
     const promptsDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-prompts-env-"));
     const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-env-"));
+    additionalCleanupDirs.push(envRoot, promptsDir, historyDir);
+
     const historyPath = path.join(historyDir, "history-index.json");
     fs.writeFileSync(path.join(promptsDir, "ask.md"), "prompt from env", "utf8");
-
-    const previousHistoryEnv = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
-    const previousPromptsEnv = process.env.GPT_5_CLI_PROMPTS_DIR;
-    delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
-    delete process.env.GPT_5_CLI_PROMPTS_DIR;
 
     fs.writeFileSync(
       path.join(envRoot, ".env"),
@@ -153,38 +162,22 @@ describe("bootstrapCli", () => {
       return createOptions(defaults, { args: ["--mode"] });
     };
 
-    try {
-      const result = await bootstrapCli({
-        argv: ["--mode"],
-        logLabel: "[test-cli]",
-        parseArgs,
-        historyContextSchema: z.object({}),
-        envFileSuffix: "ask",
-        configEnvOptions: { baseDir: envRoot },
-      });
+    const result = await bootstrapCli({
+      argv: ["--mode"],
+      logLabel: "[test-cli]",
+      parseArgs,
+      historyContextSchema: z.object({}),
+      envFileSuffix: "ask",
+      configEnvOptions: { baseDir: envRoot },
+    });
 
-      expect(result.status).toBe("ready");
-      if (result.status !== "ready") {
-        throw new Error("unreachable");
-      }
-      expect(result.defaults.historyIndexPath).toBe(path.resolve(historyPath));
-      expect(result.defaults.promptsDir).toBe(path.resolve(promptsDir));
-      expect(result.configEnv.get("GPT_5_CLI_PROMPTS_DIR")).toBe(promptsDir);
-      expect(result.options.args).toEqual(["--mode"]);
-    } finally {
-      if (previousHistoryEnv === undefined) {
-        delete process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
-      } else {
-        process.env.GPT_5_CLI_HISTORY_INDEX_FILE = previousHistoryEnv;
-      }
-      if (previousPromptsEnv === undefined) {
-        delete process.env.GPT_5_CLI_PROMPTS_DIR;
-      } else {
-        process.env.GPT_5_CLI_PROMPTS_DIR = previousPromptsEnv;
-      }
-      fs.rmSync(envRoot, { recursive: true, force: true });
-      fs.rmSync(promptsDir, { recursive: true, force: true });
-      fs.rmSync(historyDir, { recursive: true, force: true });
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") {
+      throw new Error("unreachable");
     }
+    expect(result.defaults.historyIndexPath).toBe(path.resolve(historyPath));
+    expect(result.defaults.promptsDir).toBe(path.resolve(promptsDir));
+    expect(result.configEnv.get("GPT_5_CLI_PROMPTS_DIR")).toBe(promptsDir);
+    expect(result.options.args).toEqual(["--mode"]);
   });
 });
