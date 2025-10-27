@@ -89,6 +89,7 @@ export async function finalizeResult<TContext>(
     textOutputPath || copyOutput
       ? ({
           params: {
+            configEnv,
             ...(textOutputPath ? { filePath: textOutputPath } : {}),
             ...(copyOutput
               ? {

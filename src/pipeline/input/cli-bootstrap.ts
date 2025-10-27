@@ -19,7 +19,7 @@ interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {
   /**ログ出力に用いる CLI 名。識別しやすくするため必須。*/
   logLabel: string;
   /**引数解析関数。既定値を考慮しつつ CLI 固有のオプション型へ変換する。*/
-  parseArgs: (argv: string[], defaults: CliDefaults) => TOptions;
+  parseArgs: (argv: string[], defaults: CliDefaults, configEnv: ConfigEnvironment) => TOptions;
   /**履歴ストア文脈の検証スキーマ。実行時整合性を保証するため必須。*/
   historyContextSchema: z.ZodType<THistoryContext>;
   /**特定履歴のみを対象にしたい CLI で利用するフィルタ。全履歴を扱う場合は不要なためオプショナル。*/
@@ -93,7 +93,7 @@ export async function bootstrapCli<TOptions extends CliOptions, THistoryContext 
   const defaults = loadDefaults(configEnv);
   console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
 
-  const options = params.parseArgs(params.argv, defaults);
+  const options = params.parseArgs(params.argv, defaults, configEnv);
   const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
   const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
   if (systemPrompt) {

@@ -1046,7 +1046,8 @@ async function performMysqlDryRun(dsn: string, query: string): Promise<{ plan: u
  * @returns 整形済み SQL テキスト。
  */
 async function formatSqlWithSqruff(query: string, cwd: string): Promise<string> {
-  const bin = (process.env.SQRUFF_BIN ?? "sqruff").trim() || "sqruff";
+  const env = requireSqlEnvironment();
+  const bin = env.sqruffBin;
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gpt-5-sql-fmt-"));
   const inputFile = path.join(tempDir, "input.sql");
   await fs.writeFile(inputFile, query, "utf8");

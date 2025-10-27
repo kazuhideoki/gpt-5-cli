@@ -12,7 +12,7 @@ import {
   inferSqlEngineFromDsn,
   parseArgs,
 } from "./sql.js";
-import type { CliDefaults } from "../types.js";
+import type { CliDefaults, ConfigEnvironment } from "../types.js";
 
 const defaults: CliDefaults = {
   modelMain: "gpt-5",
@@ -25,9 +25,26 @@ const defaults: CliDefaults = {
   maxIterations: 10,
 };
 
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
+
 describe("parseArgs", () => {
   it("既定値で SQL モードとして解析する", () => {
-    const options = parseArgs(["--dsn", "postgres://user:pass@host/db", "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", "postgres://user:pass@host/db", "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
     expect(options.taskMode).toBe("sql");
     expect(options.args).toEqual(["SELECT"]);
     expect(options.maxIterations).toBe(defaults.maxIterations);
@@ -41,6 +58,7 @@ describe("parseArgs", () => {
     const options = parseArgs(
       ["--dsn", "postgres://user:pass@host/db", "--iterations", "5", "query"],
       defaults,
+      createConfigEnv(),
     );
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
@@ -48,7 +66,11 @@ describe("parseArgs", () => {
 
   it("--iterations へ不正な値を渡すとエラー", () => {
     expect(() =>
-      parseArgs(["--dsn", "postgres://user:pass@host/db", "--iterations", "0", "prompt"], defaults),
+      parseArgs(
+        ["--dsn", "postgres://user:pass@host/db", "--iterations", "0", "prompt"],
+        defaults,
+        createConfigEnv(),
+      ),
     ).toThrow("Error: --iterations の値は 1 以上で指定してください");
   });
 
@@ -56,6 +78,7 @@ describe("parseArgs", () => {
     const options = parseArgs(
       ["--dsn", "postgres://user:pass@host/db", "--debug", "SELECT"],
       defaults,
+      createConfigEnv(),
     );
     expect(options.debug).toBe(true);
   });
@@ -64,6 +87,7 @@ describe("parseArgs", () => {
     const options = parseArgs(
       ["--dsn", "postgres://user:pass@host/db", "--output", "result.sql", "SELECT"],
       defaults,
+      createConfigEnv(),
     );
     expect(options.artifactPath).toBe("result.sql");
     expect(options.responseOutputExplicit).toBe(true);
@@ -73,18 +97,19 @@ describe("parseArgs", () => {
     const options = parseArgs(
       ["--dsn", "postgres://user:pass@host/db", "--copy", "SELECT"],
       defaults,
+      createConfigEnv(),
     );
     expect(options.copyOutput).toBe(true);
     expect(options.copyExplicit).toBe(true);
   });
 
   it("--dsn を省略すると未設定のまま返す", () => {
-    const options = parseArgs(["SELECT"], defaults);
+    const options = parseArgs(["SELECT"], defaults, createConfigEnv());
     expect(options.dsn).toBeUndefined();
   });
 
   it("--help は --dsn なしで取得できる", () => {
-    const options = parseArgs(["--help"], defaults);
+    const options = parseArgs(["--help"], defaults, createConfigEnv());
     expect(options.helpRequested).toBe(true);
     expect(options.dsn).toBeUndefined();
   });
@@ -212,7 +237,11 @@ describe("ensureSqlContext", () => {
     tempEntries.push(absoluteDir);
 
     const relativePath = path.join(relativeDir, "query.sql");
-    const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", relativePath, "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
 
     const snapshot = { ...options };
     const result = ensureSqlContext(options);
@@ -235,7 +264,11 @@ describe("ensureSqlContext", () => {
     const absolutePath = path.resolve(process.cwd(), relativePath);
     fs.writeFileSync(absolutePath, "SELECT 1;");
 
-    const options = parseArgs(["--dsn", testDsn, "--output", relativePath, "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", relativePath, "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
     const snapshot = { ...options };
     const result = ensureSqlContext(options);
 
@@ -249,7 +282,11 @@ describe("ensureSqlContext", () => {
 
   it("ワークスペース外のパスではエラーを投げる", () => {
     const outsidePath = path.resolve(process.cwd(), "..", `outside-${randomUUID()}.sql`);
-    const options = parseArgs(["--dsn", testDsn, "--output", outsidePath, "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", outsidePath, "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
 
     expect(() => ensureSqlContext(options)).toThrow(
       `Error: SQL出力の保存先はカレントディレクトリ配下に指定してください: ${outsidePath}`,
@@ -262,14 +299,22 @@ describe("ensureSqlContext", () => {
     fs.mkdirSync(absoluteDir, { recursive: true });
     tempEntries.push(absoluteDir);
 
-    const options = parseArgs(["--dsn", testDsn, "--output", relativeDir, "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", relativeDir, "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
     expect(() => ensureSqlContext(options)).toThrow(
       `Error: 指定した SQL ファイルパスはディレクトリです: ${relativeDir}`,
     );
   });
 
   it("正規化済みオプションを返す", () => {
-    const options = parseArgs(["--dsn", testDsn, "--output", "./result.sql", "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", "./result.sql", "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
     const snapshot = { ...options };
 
     const result = ensureSqlContext(options);
@@ -281,7 +326,11 @@ describe("ensureSqlContext", () => {
   });
 
   it("入力オプションを変異せず context を構築する", () => {
-    const options = parseArgs(["--dsn", testDsn, "--output", "./result.sql", "SELECT"], defaults);
+    const options = parseArgs(
+      ["--dsn", testDsn, "--output", "./result.sql", "SELECT"],
+      defaults,
+      createConfigEnv(),
+    );
 
     const result = ensureSqlContext(options);
 

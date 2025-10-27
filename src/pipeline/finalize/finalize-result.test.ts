@@ -2,7 +2,7 @@
  * @file finalizeResult の振る舞いを検証するユニットテスト。
  */
 import { describe, expect, it, mock } from "bun:test";
-import type { ConversationContext } from "../../types.js";
+import type { ConfigEnvironment, ConversationContext } from "../../types.js";
 import type { HistoryStore } from "../history/store.js";
 import { finalizeResult } from "./finalize-result.js";
 
@@ -26,6 +26,19 @@ const baseConversation: ConversationContext = {
   resumeBaseMessages: [],
 };
 
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
+
 describe("finalizeResult", () => {
   it("履歴コンテキストを構築し upsertConversation を呼び出す", async () => {
     const upsertConversation = mock(() => undefined);
@@ -44,6 +57,7 @@ describe("finalizeResult", () => {
       userText: "user-input",
       textOutputPath: undefined,
       copyOutput: false,
+      configEnv: createConfigEnv(),
       history: {
         responseId: "resp-1",
         store: historyStore,
@@ -83,6 +97,7 @@ describe("finalizeResult", () => {
       userText: "describe diagram",
       textOutputPath: undefined,
       copyOutput: false,
+      configEnv: createConfigEnv(),
       history: {
         responseId: "resp-2",
         store: historyStore,
@@ -108,6 +123,7 @@ describe("finalizeResult", () => {
       content: "noop",
       userText: "noop",
       copyOutput: false,
+      configEnv: createConfigEnv(),
       history: {
         responseId: undefined,
         store: historyStore,

@@ -15,8 +15,7 @@ interface CreateOpenAIClientOptions {
  * @param options 明示APIキー（省略時は環境変数）
  */
 export function createOpenAIClient(options: CreateOpenAIClientOptions): OpenAI {
-  const apiKey =
-    typeof options.apiKey === "string" ? options.apiKey : resolveOpenAIApiKey(options.configEnv);
+  const apiKey = resolveOpenAIApiKey(options);
   return new OpenAI({ apiKey });
 }
 
@@ -26,8 +25,13 @@ export function createOpenAIClient(options: CreateOpenAIClientOptions): OpenAI {
  *
  * @throws `OPENAI_API_KEY not found` を含むエラー（テスト互換のため）。
  */
-function resolveOpenAIApiKey(_configEnv: ConfigEnvironment): string {
-  const raw = process.env.OPENAI_API_KEY;
+function resolveOpenAIApiKey(options: CreateOpenAIClientOptions): string {
+  if (typeof options.apiKey === "string" && options.apiKey.trim().length > 0) {
+    return options.apiKey.trim();
+  }
+  const configValue = options.configEnv.get("OPENAI_API_KEY");
+  const rawFromConfig = typeof configValue === "string" ? configValue.trim() : "";
+  const raw = rawFromConfig.length > 0 ? rawFromConfig : process.env.OPENAI_API_KEY;
   if (typeof raw !== "string" || raw.trim().length === 0) {
     throw new Error("OPENAI_API_KEY not found. Please set it in .env or .env.{ask|d2|sql}");
   }

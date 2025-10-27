@@ -33,7 +33,7 @@ import {
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.js";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment, OpenAIInputMessage } from "../types.js";
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
@@ -41,6 +41,18 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 const LOG_LABEL = "[gpt-5-cli-sql]";
 
 export type SqlEngine = "postgresql" | "mysql";
+
+function resolveSqruffBin(configEnv: ConfigEnvironment): string {
+  const fromConfig = configEnv.get("SQRUFF_BIN");
+  if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
+    return fromConfig.trim();
+  }
+  const fromEnv = process.env.SQRUFF_BIN;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+  return "sqruff";
+}
 
 /** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
@@ -247,7 +259,11 @@ const cliOptionsSchema: z.ZodType<SqlCliOptions> = z
  * @param defaults 環境から取得した既定値。
  * @returns SQL モード用 CLI オプション。
  */
-export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions {
+export function parseArgs(
+  argv: string[],
+  defaults: CliDefaults,
+  configEnv: ConfigEnvironment,
+): SqlCliOptions {
   const program = createSqlProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   const programOptions = program.opts<{ dsn?: string }>();
@@ -261,7 +277,7 @@ export function parseArgs(argv: string[], defaults: CliDefaults): SqlCliOptions 
   }
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "sql", extension: "sql" }).relativePath;
+    generateDefaultOutputPath({ mode: "sql", extension: "sql", configEnv }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
@@ -582,8 +598,8 @@ async function main(): Promise<void> {
       return;
     }
 
-    const { defaults, options, historyStore, systemPrompt } = bootstrap;
-    const client = createOpenAIClient();
+    const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    const client = createOpenAIClient({ configEnv });
 
     setSqlEnvironment(undefined);
 
@@ -639,12 +655,13 @@ async function main(): Promise<void> {
       | undefined;
     const effectiveDsn = resolveSqlDsn(options.dsn, contextActiveEntry, determineActiveEntry);
     const sqlEnv = createSqlSnapshot(effectiveDsn);
+    const sqruffBin = resolveSqruffBin(configEnv);
     const resolvedOptionsWithDsn: SqlCliOptions = {
       ...resolvedOptions,
       dsn: sqlEnv.dsn,
       engine: sqlEnv.engine,
     };
-    setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine });
+    setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine, sqruffBin });
     const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL);
     const toolset = buildSqlConversationToolset({
       logLabel: LOG_LABEL,
@@ -714,6 +731,7 @@ async function main(): Promise<void> {
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptionsWithDsn.copyOutput,
       copySourceFilePath: resolvedOptionsWithDsn.artifactPath,
+      configEnv,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

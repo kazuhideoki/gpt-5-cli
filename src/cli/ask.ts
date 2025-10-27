@@ -3,7 +3,7 @@
 import type { Tool as AgentsSdkTool } from "@openai/agents";
 import { webSearchTool } from "@openai/agents-openai";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import { finalizeResult } from "../pipeline/finalize/index.js";
 import {
@@ -175,7 +175,11 @@ const cliOptionsSchema: z.ZodType<CliOptions> = z
  * @param defaults 環境から取得した既定値。
  * @returns CLI全体で使用するオプション集合。
  */
-export function parseArgs(argv: string[], defaults: CliDefaults): CliOptions {
+export function parseArgs(
+  argv: string[],
+  defaults: CliDefaults,
+  _configEnv: ConfigEnvironment,
+): CliOptions {
   const program = createAskProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   try {
@@ -212,9 +216,9 @@ async function main(): Promise<void> {
       return;
     }
 
-    const { defaults, options, historyStore, systemPrompt } = bootstrap;
+    const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
 
-    const client = createOpenAIClient();
+    const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client, "[gpt-5-cli]");
@@ -304,6 +308,7 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       textOutputPath,
       copyOutput: options.copyOutput,
+      configEnv,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,
