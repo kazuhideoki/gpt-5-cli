@@ -82,13 +82,13 @@ afterEach(() => {
 });
 
 describe("bootstrapCli", () => {
-  it("履歴ストアとプロンプトを準備して返す", () => {
+  it("履歴ストアとプロンプトを準備して返す", async () => {
     const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
       expect(argv).toEqual(["質問"]);
       return createOptions(defaults, { args: ["質問"] });
     };
 
-    const result = bootstrapCli({
+    const result = await bootstrapCli({
       argv: ["質問"],
       logLabel: "[test-cli]",
       parseArgs,
@@ -104,13 +104,13 @@ describe("bootstrapCli", () => {
     expect(result.options.args).toEqual(["質問"]);
   });
 
-  it("ヘルプ要求時はヘルプ状態で終了する", () => {
+  it("ヘルプ要求時はヘルプ状態で終了する", async () => {
     const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
       expect(argv).toEqual(["--help"]);
       return createOptions(defaults, { helpRequested: true });
     };
 
-    const result = bootstrapCli({
+    const result = await bootstrapCli({
       argv: ["--help"],
       logLabel: "[test-cli]",
       parseArgs,
@@ -121,7 +121,55 @@ describe("bootstrapCli", () => {
     expect("historyStore" in result).toBe(false);
   });
 
-  it("ConfigEnv の内容で defaults を構築する (仕様記述)", () => {
-    // TODO: 実装フェーズで追加する。
+  it("ConfigEnv の内容で defaults を構築する", async () => {
+    const envRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-config-env-"));
+    const promptsDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-prompts-env-"));
+    const historyDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt-cli-history-env-"));
+    const historyPath = path.join(historyDir, "history-index.json");
+    fs.writeFileSync(path.join(promptsDir, "ask.md"), "prompt from env", "utf8");
+
+    fs.writeFileSync(
+      path.join(envRoot, ".env"),
+      [
+        `GPT_5_CLI_HISTORY_INDEX_FILE=${historyPath}`,
+        `GPT_5_CLI_PROMPTS_DIR=${promptsDir}`,
+        "GPT_5_CLI_MAX_ITERATIONS=7",
+        "OPENAI_DEFAULT_EFFORT=medium",
+        "OPENAI_DEFAULT_VERBOSITY=high",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
+      expect(argv).toEqual(["--mode"]);
+      expect(defaults.maxIterations).toBe(7);
+      expect(defaults.effort).toBe("medium");
+      expect(defaults.verbosity).toBe("high");
+      return createOptions(defaults, { args: ["--mode"] });
+    };
+
+    try {
+      const result = await bootstrapCli({
+        argv: ["--mode"],
+        logLabel: "[test-cli]",
+        parseArgs,
+        historyContextSchema: z.object({}),
+        envFileSuffix: "ask",
+        configEnvOptions: { baseDir: envRoot },
+      });
+
+      expect(result.status).toBe("ready");
+      if (result.status !== "ready") {
+        throw new Error("unreachable");
+      }
+      expect(result.defaults.historyIndexPath).toBe(path.resolve(historyPath));
+      expect(result.defaults.promptsDir).toBe(path.resolve(promptsDir));
+      expect(result.configEnv.get("GPT_5_CLI_PROMPTS_DIR")).toBe(promptsDir);
+      expect(result.options.args).toEqual(["--mode"]);
+    } finally {
+      fs.rmSync(envRoot, { recursive: true, force: true });
+      fs.rmSync(promptsDir, { recursive: true, force: true });
+      fs.rmSync(historyDir, { recursive: true, force: true });
+    }
   });
 });
