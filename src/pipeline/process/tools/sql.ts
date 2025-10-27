@@ -16,6 +16,8 @@ type SqlEngineKind = "postgresql" | "mysql";
 export interface SqlEnvironment {
   dsn: string;
   engine: SqlEngineKind;
+  /** sqruff バイナリへの解決結果。 */
+  sqruffBin: string;
 }
 
 let activeSqlEnvironment: SqlEnvironment | undefined;

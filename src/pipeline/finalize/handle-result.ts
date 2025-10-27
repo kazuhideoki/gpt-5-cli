@@ -25,6 +25,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     const deliverResult = await deliveryHandler({
       ...params,
       content: params.content ?? args.content,
+      configEnv: args.configEnv,
     });
     if (deliverResult.file) {
       filePath = deliverResult.file.absolutePath;

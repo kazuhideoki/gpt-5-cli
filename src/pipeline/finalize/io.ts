@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { expandHome } from "../../foundation/paths.js";
+import type { ConfigEnvironment } from "../../types.js";
 
 export type CopySource =
   | {
@@ -25,6 +26,11 @@ export interface DefaultOutputPathParams {
   extension: string;
   /** 生成の基準となるカレントディレクトリ。既定は `process.cwd()`。 */
   cwd?: string;
+  /**
+   * `.env` 群を取り込んだ環境スナップショット。
+   * finalize 層では ConfigEnv が渡される想定。
+   */
+  configEnv: ConfigEnvironment;
 }
 
 export interface DefaultOutputPathResult {
@@ -47,6 +53,11 @@ export interface DeliverOutputParams {
   copy?: boolean;
   /** コピー対象を本文以外へ変更する場合の情報。 */
   copySource?: CopySource;
+  /**
+   * finalize 層で参照する環境スナップショット。
+   * ConfigEnv から供給される値を使用する。
+   */
+  configEnv: ConfigEnvironment;
 }
 
 /**

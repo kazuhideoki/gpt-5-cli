@@ -1,6 +1,7 @@
 /**
  * @file finalize 層が公開する契約型。結果処理まわりの入力・出力を定義する。
  */
+import type { ConfigEnvironment } from "../../types.js";
 import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.js";
 
 /**
@@ -54,6 +55,10 @@ export interface FinalizeRequest {
    * 結果本文。標準出力およびファイル出力の既定値として扱う。
    */
   content: string;
+  /**
+   * finalize 層で環境値を参照するための ConfigEnv。
+   */
+  configEnv: ConfigEnvironment;
   /**
    * stdout へ書き出すテキストを明示的に指定したい場合に利用する。
    */
