@@ -295,10 +295,29 @@ describe("generateDefaultOutputPath", () => {
   });
 
   test("ConfigEnv の出力設定を優先して利用する", () => {
-    // TODO: 実装時に ConfigEnv の値のみでディレクトリが決まることを検証する
+    const configEnv = createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: "env-config/output" });
+    delete process.env[DEFAULT_OUTPUT_DIR_ENV];
+    const { relativePath, absolutePath } = generateDefaultOutputPath({
+      mode: "ask",
+      extension: "txt",
+      cwd: tempDir,
+      configEnv,
+    });
+
+    expect(relativePath.startsWith(`env-config${path.sep}output${path.sep}`)).toBe(true);
+    expect(absolutePath.startsWith(path.join(tempDir, "env-config", "output"))).toBe(true);
   });
 
   test("ConfigEnv の出力設定がワークスペース外なら検証で失敗する", () => {
-    // TODO: 実装時に ConfigEnv の値がワークスペース外を指すとエラーになることを検証する
+    const configEnv = createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: path.join("..", "outside") });
+    delete process.env[DEFAULT_OUTPUT_DIR_ENV];
+    expect(() =>
+      generateDefaultOutputPath({
+        mode: "sql",
+        extension: "sql",
+        cwd: tempDir,
+        configEnv,
+      }),
+    ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
   });
 });

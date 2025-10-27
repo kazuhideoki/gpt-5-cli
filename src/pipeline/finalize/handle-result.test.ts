@@ -83,6 +83,17 @@ describe("handleResult", () => {
   });
 
   it("ConfigEnv を deliverOutput へ引き渡す", async () => {
-    // TODO: 実装時に handler へ ConfigEnv が渡されることを検証する
+    const configEnv = createConfigEnv({ SAMPLE_KEY: "value" });
+    const delivery = mock(async () => ({ file: undefined }));
+
+    await handleResult({
+      content: "pass-through",
+      configEnv,
+      output: { handler: delivery, params: {} },
+    });
+
+    expect(delivery).toHaveBeenCalledTimes(1);
+    const [args] = delivery.mock.calls;
+    expect(args?.[0]?.configEnv).toBe(configEnv);
   });
 });

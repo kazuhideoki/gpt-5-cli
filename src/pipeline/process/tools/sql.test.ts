@@ -46,8 +46,4 @@ describe("SQL tools", () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain("prepare failed");
   });
-
-  it("ConfigEnv の sqruff バイナリ設定を利用する", () => {
-    // TODO: 実装時に ConfigEnv から SQRUFF_BIN が適用されることを検証する
-  });
 });

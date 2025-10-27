@@ -50,6 +50,11 @@ describe("createOpenAIClient", () => {
   });
 
   it("ConfigEnv の API キーを優先して参照する", () => {
-    // TODO: 実装時に ConfigEnv から API キーを解決することを検証する
+    delete process.env.OPENAI_API_KEY;
+    const configEnv = createConfigEnv({ OPENAI_API_KEY: "config-key" });
+
+    const client = createOpenAIClient({ configEnv });
+
+    expect(client).toBeInstanceOf(OpenAI);
   });
 });
