@@ -8,16 +8,16 @@ import { finalizeResult } from "./finalize-result.js";
 
 type D2HistoryContext = {
   cli: "d2";
-  absolute_path?: string;
-  relative_path?: string;
-  copy?: boolean;
+  absolute_path: string | undefined;
+  relative_path: string | undefined;
+  copy: boolean | undefined;
 };
 
 type MermaidHistoryContext = {
   cli: "mermaid";
-  absolute_path?: string;
-  relative_path?: string;
-  copy?: boolean;
+  absolute_path: string | undefined;
+  relative_path: string | undefined;
+  copy: boolean | undefined;
 };
 
 const baseConversation: ConversationContext = {
@@ -40,6 +40,8 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
 }
 
 describe("finalizeResult", () => {
+  it("undefined を含む finalizeResult 呼び出しを定義する");
+
   it("履歴コンテキストを構築し upsertConversation を呼び出す", async () => {
     const upsertConversation = mock(() => undefined);
     const historyStore = {
@@ -50,6 +52,7 @@ describe("finalizeResult", () => {
       cli: "d2",
       absolute_path: "/absolute/path.d2",
       relative_path: "diagram.d2",
+      copy: undefined,
     };
 
     const outcome = await finalizeResult<D2HistoryContext>({
@@ -81,6 +84,8 @@ describe("finalizeResult", () => {
     const previousContext: MermaidHistoryContext = {
       cli: "mermaid",
       absolute_path: "/from/history.mmd",
+      relative_path: undefined,
+      copy: undefined,
     };
     const upsertConversation = mock(() => undefined);
     const historyStore = {
@@ -90,6 +95,8 @@ describe("finalizeResult", () => {
     const contextData: MermaidHistoryContext = {
       cli: "mermaid",
       absolute_path: previousContext.absolute_path,
+      relative_path: undefined,
+      copy: undefined,
     };
 
     await finalizeResult<MermaidHistoryContext>({
@@ -130,7 +137,7 @@ describe("finalizeResult", () => {
         conversation: baseConversation,
         metadata: { model: "noop", effort: "low", verbosity: "low" },
         previousContextRaw: undefined,
-        contextData: { cli: "d2" },
+        contextData: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       },
     });
 

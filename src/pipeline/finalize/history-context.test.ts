@@ -9,9 +9,11 @@ interface D2HistoryContext extends FileHistoryContext {
 }
 
 describe("buildFileHistoryContext", () => {
+  it("undefined を明示的に扱うケースを定義する");
+
   it("contextPath を absolute_path に反映する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       contextPath: "/absolute/d2.d2",
       defaultFilePath: "relative.d2",
       copyOutput: false,
@@ -26,7 +28,7 @@ describe("buildFileHistoryContext", () => {
 
   it("contextPath が無い場合に defaultFilePath を relative_path として利用する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       defaultFilePath: "relative.d2",
       copyOutput: false,
     });
@@ -36,7 +38,7 @@ describe("buildFileHistoryContext", () => {
 
   it("copyOutput が true のとき copy フラグを設定する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       historyArtifactPath: "result.d2",
       copyOutput: true,
     });
@@ -56,7 +58,7 @@ describe("buildFileHistoryContext", () => {
     };
 
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       copyOutput: false,
       previousContext: previous,
     });
