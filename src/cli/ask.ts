@@ -226,9 +226,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
-      printHelp: outputHelp,
-    });
+    const determine = await resolveInputOrExecuteHistoryAction(
+      options,
+      historyStore,
+      defaults,
+      {
+        printHelp: outputHelp,
+      },
+      configEnv,
+    );
     if (determine.kind === "exit") {
       process.exit(determine.code);
       return;
@@ -260,7 +266,7 @@ async function main(): Promise<void> {
       },
     });
 
-    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]");
+    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]", configEnv);
     const toolset = buildAskConversationToolset({
       logLabel: "[gpt-5-cli]",
       debug: options.debug,
@@ -274,6 +280,7 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli]",
+      configEnv,
       toolset,
     });
     const agentResult = await runAgentConversation({

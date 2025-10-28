@@ -21,6 +21,7 @@ const ISOLATED_ENV_KEYS: readonly ConfigEnvKey[] = [
   "OPENAI_MODEL_MINI",
   "GPT_5_CLI_PROMPTS_DIR",
 ];
+const ENV_RESET_KEYS: readonly ConfigEnvKey[] = [...ISOLATED_ENV_KEYS, "HOME"];
 
 function snapshotProcessEnv(): Map<string, string> {
   const snapshot = new Map<string, string>();
@@ -53,7 +54,7 @@ describe("ConfigEnv", () => {
 
   beforeEach(async () => {
     envBackup = new Map();
-    for (const key of ISOLATED_ENV_KEYS) {
+    for (const key of ENV_RESET_KEYS) {
       envBackup.set(key, process.env[key]);
       delete process.env[key];
     }
@@ -181,6 +182,20 @@ describe("ConfigEnv", () => {
     expect(env.get("UNKNOWN")).toBeUndefined();
     expect(env.get("SQRUFF_BIN")).toBe("sqruff");
     expectEnvIncludesBaseline(env, baseline);
+  });
+
+  it("process.env.HOME の値を ConfigEnv が保持する", async () => {
+    const fakeHome = path.join(tmpDirPath, "home-from-process");
+    process.env.HOME = fakeHome;
+    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+    expect(env.get("HOME")).toBe(fakeHome);
+  });
+
+  it(".env に記載された HOME を ConfigEnv が読み込む", async () => {
+    delete process.env.HOME;
+    await fs.writeFile(path.join(tmpDirPath, ".env"), "HOME=/tmp/config-env-home\n");
+    const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+    expect(env.get("HOME")).toBe("/tmp/config-env-home");
   });
 });
 

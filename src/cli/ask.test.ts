@@ -252,6 +252,7 @@ describe("buildRequest", () => {
     const defaults = createDefaults();
     const options = createOptions();
     const context = createContext();
+    const configEnv = createConfigEnv();
     const { request } = buildRequest({
       options,
       context,
@@ -259,6 +260,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      configEnv,
       toolset: buildAskConversationToolset({
         logLabel: "[test-cli]",
         debug: false,
@@ -284,6 +286,7 @@ describe("buildRequest", () => {
         },
       ],
     });
+    const configEnv = createConfigEnv();
     const { request } = buildRequest({
       options,
       context,
@@ -291,6 +294,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults,
       logLabel: "[test-cli]",
+      configEnv,
       toolset: buildAskConversationToolset({
         logLabel: "[test-cli]",
         debug: false,
@@ -311,11 +315,13 @@ describe("resolveInputOrExecuteHistoryAction", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ deleteIndex: 2 });
+    const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
       noopDeps,
+      configEnv,
     );
     expect(store.deletedIndex).toBe(2);
     expect(result.kind).toBe("exit");
@@ -328,10 +334,11 @@ describe("resolveInputOrExecuteHistoryAction", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ showIndex: 5 });
+    const configEnv = createConfigEnv({ NO_COLOR: "1" });
     const printDetail = (historyStore: HistoryStoreLike, index: number, noColor: boolean) => {
       expect(historyStore).toBe(store);
       expect(index).toBe(5);
-      expect(noColor).toBe(Boolean(process.env.NO_COLOR));
+      expect(noColor).toBe(true);
     };
     const result = await resolveInputOrExecuteHistoryAction(
       options,
@@ -341,6 +348,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
         ...noopDeps,
         printHistoryDetail: printDetail,
       },
+      configEnv,
     );
     expect(result.kind).toBe("exit");
   });
@@ -349,6 +357,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
     const defaults = createDefaults();
     const store = new StubHistoryStore();
     const options = createOptions({ resumeListOnly: true });
+    const configEnv = createConfigEnv();
     const printList = (historyStore: HistoryStoreLike) => {
       expect(historyStore).toBe(store);
     };
@@ -360,6 +369,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
         ...noopDeps,
         printHistoryList: printList,
       },
+      configEnv,
     );
     expect(result.kind).toBe("exit");
   });
@@ -377,11 +387,13 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       hasExplicitHistory: true,
       args: ["次に進めよう"],
     });
+    const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
       noopDeps,
+      configEnv,
     );
     expect(store.selectedIndex).toBe(1);
     expect(result.kind).toBe("input");
@@ -402,11 +414,13 @@ describe("resolveInputOrExecuteHistoryAction", () => {
         helpCalled = true;
       },
     };
+    const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
       deps,
+      configEnv,
     );
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {

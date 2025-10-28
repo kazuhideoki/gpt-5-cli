@@ -88,7 +88,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir });
       expect(configEnv.get(targetEnv)).toBe("medium");
-      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("medium");
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -101,7 +101,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
       expect(configEnv.get(targetEnv)).toBe("high");
-      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -115,7 +115,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
       expect(configEnv.get(targetEnv)).toBe("high");
-      expect(process.env[targetEnv]).toBe("high");
+      expect(process.env[targetEnv]).toBe("medium");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
       delete process.env[targetEnv];
@@ -140,19 +140,25 @@ describe("loadEnvironment", () => {
 
 describe("resolvePromptsDir", () => {
   it("環境変数が設定されていれば展開して返す", () => {
-    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom" });
+    const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
+      GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom",
+    });
     const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "prompts/custom")));
   });
 
   it("環境変数が未設定なら既定値を返す", () => {
-    const configEnv = createConfigEnv();
+    const configEnv = createConfigEnv({ HOME: process.env.HOME! });
     const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve("/default/prompts"));
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "   " });
+    const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
+      GPT_5_CLI_PROMPTS_DIR: "   ",
+    });
     expect(() => resolvePromptsDir(configEnv, "/default/prompts")).toThrow(
       "GPT_5_CLI_PROMPTS_DIR is set but empty.",
     );
@@ -180,7 +186,7 @@ describe("resolvePromptsDir", () => {
 
 describe("loadDefaults", () => {
   it("履歴パスが未設定ならエラーになる", () => {
-    const configEnv = createConfigEnv();
+    const configEnv = createConfigEnv({ HOME: process.env.HOME! });
     expect(() => loadDefaults(configEnv)).toThrow(
       "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
     );
@@ -188,6 +194,7 @@ describe("loadDefaults", () => {
 
   it("既定値を返す", () => {
     const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
       GPT_5_CLI_HISTORY_INDEX_FILE: "~/history/default.json",
     });
     const defaults = loadDefaults(configEnv);
@@ -205,6 +212,7 @@ describe("loadDefaults", () => {
 
   it("環境変数を反映する", () => {
     const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
       OPENAI_MODEL_MAIN: "main-x",
       OPENAI_MODEL_MINI: "mini-x",
       OPENAI_MODEL_NANO: "nano-x",

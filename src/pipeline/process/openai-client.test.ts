@@ -52,12 +52,10 @@ describe("createOpenAIClient", () => {
     expect(client).toBeInstanceOf(OpenAI);
   });
 
-  it("ConfigEnv にキーが無い場合は process.env から取得する", () => {
-    process.env.OPENAI_API_KEY = "fallback-key";
+  it("ConfigEnv にキーが無い場合は例外となる", () => {
+    process.env.OPENAI_API_KEY = "env-key";
     const configEnv = createConfigEnv();
 
-    const client = createOpenAIClient({ configEnv });
-
-    expect(client).toBeInstanceOf(OpenAI);
+    expect(() => createOpenAIClient({ configEnv })).toThrow("OPENAI_API_KEY not found");
   });
 });

@@ -1,6 +1,6 @@
 // log-format.ts: パイプライン層で利用するログ整形ユーティリティ。
 // NOTE: 将来的に共通ロギング基盤へ移行する際は foundation/logging (仮) へ再配置する。
-import type { EffortLevel } from "../../types.js";
+import type { ConfigEnvironment, EffortLevel } from "../../types.js";
 
 type Level = EffortLevel;
 
@@ -10,9 +10,11 @@ interface LogStyle {
   reset: string;
 }
 
-function resolveLogStyle(): LogStyle {
+function resolveLogStyle(configEnv: ConfigEnvironment): LogStyle {
   // TTY(端末)で実行されている場合のみカラーを有効化する
-  const supportsColor = Boolean(process.stderr.isTTY) && !process.env.NO_COLOR;
+  const noColorRaw = configEnv.get("NO_COLOR");
+  const disableColor = typeof noColorRaw === "string" && noColorRaw.trim().length > 0;
+  const supportsColor = Boolean(process.stderr.isTTY) && !disableColor;
   if (!supportsColor) {
     return { mediumPrefix: "", highPrefix: "", reset: "" };
   }
@@ -27,8 +29,12 @@ function resolveLogStyle(): LogStyle {
 /**
  * 指定したレベルに応じて値を強調表示する。
  */
-export function decorateLevelValue(value: string, level: Level): string {
-  const style = resolveLogStyle();
+export function decorateLevelValue(
+  value: string,
+  level: Level,
+  configEnv: ConfigEnvironment,
+): string {
+  const style = resolveLogStyle(configEnv);
   if (level === "medium") {
     return `${style.mediumPrefix}+${value}+${style.reset}`;
   }
@@ -80,15 +86,20 @@ export function formatModelValue(
   modelMain: string,
   modelMini: string,
   modelNano: string,
+  configEnv: ConfigEnvironment,
 ): string {
-  return decorateLevelValue(value, levelForModelValue(value, modelMain, modelMini, modelNano));
+  return decorateLevelValue(
+    value,
+    levelForModelValue(value, modelMain, modelMini, modelNano),
+    configEnv,
+  );
 }
 
 /**
  * スケール値（effort/verbosity）を装飾して整形する。
  */
-export function formatScaleValue(value: string): string {
-  return decorateLevelValue(value, levelForScaleValue(value));
+export function formatScaleValue(value: string, configEnv: ConfigEnvironment): string {
+  return decorateLevelValue(value, levelForScaleValue(value), configEnv);
 }
 
 // TODO: foundation/logging (仮称) の整備後、resolveLogStyle などの端末依存処理を移設する。

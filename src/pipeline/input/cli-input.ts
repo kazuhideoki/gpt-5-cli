@@ -2,7 +2,7 @@
 // NOTE(pipeline/input): 各 CLI 固有の入力前処理は現状 CLI 側に残しており、共通化できる箇所には TODO を付与予定。
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { CliDefaults, CliOptions } from "../../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { printHistoryDetail, printHistoryList } from "../history/output.js";
 
@@ -59,9 +59,13 @@ export async function resolveInputOrExecuteHistoryAction<
   historyStore: HistoryStore<THistoryTask>,
   defaults: CliDefaults,
   deps: ResolveInputOrExecuteHistoryActionDependencies<TOptions, THistoryTask>,
+  configEnv: ConfigEnvironment,
 ): Promise<ResolveInputOrExecuteHistoryActionOutcome<THistoryTask>> {
   const renderHistoryList = deps.printHistoryList ?? printHistoryList;
   const renderHistoryDetail = deps.printHistoryDetail ?? printHistoryDetail;
+
+  const noColorFlag = configEnv.get("NO_COLOR");
+  const noColorFromEnv = typeof noColorFlag === "string" && noColorFlag.trim().length > 0;
 
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
@@ -70,7 +74,7 @@ export async function resolveInputOrExecuteHistoryAction<
   }
 
   if (typeof options.showIndex === "number") {
-    renderHistoryDetail(historyStore, options.showIndex, Boolean(process.env.NO_COLOR));
+    renderHistoryDetail(historyStore, options.showIndex, noColorFromEnv);
     return { kind: "exit", code: 0 };
   }
 

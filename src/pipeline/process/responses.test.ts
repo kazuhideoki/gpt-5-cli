@@ -4,6 +4,7 @@ import type OpenAI from "openai";
 import type {
   CliDefaults,
   CliOptions,
+  ConfigEnvironment,
   ConversationContext,
   OpenAIInputMessage,
 } from "../../types.js";
@@ -116,6 +117,7 @@ describe("buildRequest", () => {
       systemPrompt: "system message",
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
+      configEnv: createConfigEnv(),
       toolset,
     });
 
@@ -172,6 +174,7 @@ describe("buildRequest", () => {
       logLabel: "[test-cli]",
       additionalSystemMessages: additional,
       imageDataUrl: "data:image/png;base64,AAA",
+      configEnv: createConfigEnv(),
       toolset,
     });
 
@@ -214,6 +217,7 @@ describe("buildRequest", () => {
       inputText: "tool check",
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
+      configEnv: createConfigEnv(),
       toolset,
     });
 
@@ -304,3 +308,15 @@ describe("performCompact", () => {
     expect(logs.some((line) => line.includes("compact"))).toBe(true);
   });
 });
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}

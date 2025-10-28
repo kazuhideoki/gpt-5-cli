@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import type { ConfigEnvironment } from "../../types.js";
 import {
   decorateLevelValue,
   formatModelValue,
@@ -10,6 +11,19 @@ import {
 const originalNoColor = process.env.NO_COLOR;
 const hadOriginalStderrIsTTY = Object.hasOwn(process.stderr, "isTTY");
 const originalStderrIsTTY = process.stderr.isTTY;
+
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
 
 function restoreNoColor(): void {
   if (originalNoColor === undefined) {
@@ -73,15 +87,17 @@ describe("decorateLevelValue", () => {
   it("スタイルがあれば medium/high の文字列を装飾する", () => {
     delete process.env.NO_COLOR;
     process.stderr.isTTY = true;
-    expect(decorateLevelValue("value", "low")).toBe("value");
-    expect(decorateLevelValue("value", "medium")).toBe("\u001b[33m+value+\u001b[0m");
-    expect(decorateLevelValue("value", "high")).toBe("\u001b[1;31m!value!\u001b[0m");
+    const configEnv = createConfigEnv();
+    expect(decorateLevelValue("value", "low", configEnv)).toBe("value");
+    expect(decorateLevelValue("value", "medium", configEnv)).toBe("\u001b[33m+value+\u001b[0m");
+    expect(decorateLevelValue("value", "high", configEnv)).toBe("\u001b[1;31m!value!\u001b[0m");
   });
 
   it("NO_COLOR 環境でも強調記号は残る", () => {
     process.env.NO_COLOR = "1";
     process.stderr.isTTY = true;
-    expect(decorateLevelValue("value", "high")).toBe("!value!");
+    const configEnv = createConfigEnv({ NO_COLOR: "1" });
+    expect(decorateLevelValue("value", "high", configEnv)).toBe("!value!");
   });
 });
 
@@ -93,22 +109,37 @@ describe("formatModelValue / formatScaleValue", () => {
   it("モデル値をスタイル付きで表示する", () => {
     delete process.env.NO_COLOR;
     process.stderr.isTTY = true;
-    expect(formatModelValue(mini, main, mini, nano)).toBe("\u001b[33m+gpt-5-mini+\u001b[0m");
-    expect(formatModelValue(main, main, mini, nano)).toBe("\u001b[1;31m!gpt-5!\u001b[0m");
+    const configEnv = createConfigEnv();
+    expect(formatModelValue(mini, main, mini, nano, configEnv)).toBe(
+      "\u001b[33m+gpt-5-mini+\u001b[0m",
+    );
+    expect(formatModelValue(main, main, mini, nano, configEnv)).toBe(
+      "\u001b[1;31m!gpt-5!\u001b[0m",
+    );
   });
 
   it("尺度値をスタイル付きで表示する", () => {
     delete process.env.NO_COLOR;
     process.stderr.isTTY = true;
-    expect(formatScaleValue("medium")).toBe("\u001b[33m+medium+\u001b[0m");
-    expect(formatScaleValue("high")).toBe("\u001b[1;31m!high!\u001b[0m");
-    expect(formatScaleValue("low")).toBe("low");
+    const configEnv = createConfigEnv();
+    expect(formatScaleValue("medium", configEnv)).toBe("\u001b[33m+medium+\u001b[0m");
+    expect(formatScaleValue("high", configEnv)).toBe("\u001b[1;31m!high!\u001b[0m");
+    expect(formatScaleValue("low", configEnv)).toBe("low");
   });
 
   it("NO_COLOR 環境でも記号は維持される", () => {
     process.env.NO_COLOR = "1";
     process.stderr.isTTY = true;
-    expect(formatModelValue(main, main, mini, nano)).toBe("!gpt-5!");
-    expect(formatScaleValue("medium")).toBe("+medium+");
+    const configEnv = createConfigEnv({ NO_COLOR: "1" });
+    expect(formatModelValue(main, main, mini, nano, configEnv)).toBe("!gpt-5!");
+    expect(formatScaleValue("medium", configEnv)).toBe("+medium+");
+  });
+
+  it("ConfigEnv による NO_COLOR 設定を参照する", () => {
+    delete process.env.NO_COLOR;
+    process.stderr.isTTY = true;
+    const configEnv = createConfigEnv({ NO_COLOR: "1" });
+
+    expect(decorateLevelValue("value", "high", configEnv)).toBe("!value!");
   });
 });

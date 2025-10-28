@@ -29,6 +29,34 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
   };
 }
 
+type CleanupTask = () => Promise<void> | void;
+
+let originalHomeEnv: string | undefined;
+let cleanupTasks: CleanupTask[] = [];
+
+function registerCleanup(task: CleanupTask): void {
+  cleanupTasks.push(task);
+}
+
+beforeEach(() => {
+  originalHomeEnv = process.env.HOME;
+  cleanupTasks = [];
+});
+
+afterEach(async () => {
+  while (cleanupTasks.length > 0) {
+    const task = cleanupTasks.pop();
+    if (task) {
+      await task();
+    }
+  }
+  if (originalHomeEnv === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHomeEnv;
+  }
+});
+
 mock.module("node:child_process", () => ({
   spawn: () => {
     const child = new EventEmitter() as MockChildProcess;
@@ -104,87 +132,96 @@ describe("deliverOutput", () => {
   });
 
   test("filePath に HOME 展開を含むパスを指定できる", async () => {
-    const originalHome = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-home-"));
+    registerCleanup(async () => {
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    });
     const workspace = path.join(fakeHome, "workspace");
     await fs.mkdir(workspace, { recursive: true });
     process.env.HOME = fakeHome;
-    try {
-      const targetPath = "~/workspace/result.txt";
-      await deliverOutput({
-        content: "home expansion",
-        cwd: workspace,
-        filePath: targetPath,
-        configEnv: createConfigEnv({ HOME: fakeHome }),
-      });
-      const expectedPath = path.join(fakeHome, "workspace", "result.txt");
-      const written = await fs.readFile(expectedPath, "utf8");
-      expect(written).toBe("home expansion");
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
-      await fs.rm(fakeHome, { recursive: true, force: true });
-    }
+
+    const targetPath = "~/workspace/result.txt";
+    await deliverOutput({
+      content: "home expansion",
+      cwd: workspace,
+      filePath: targetPath,
+      configEnv: createConfigEnv({ HOME: fakeHome }),
+    });
+    const expectedPath = path.join(fakeHome, "workspace", "result.txt");
+    const written = await fs.readFile(expectedPath, "utf8");
+    expect(written).toBe("home expansion");
   });
 
   test("HOME が未設定でもユーザーディレクトリにフォールバックする", async () => {
-    const originalHomeEnv = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-fallback-home-"));
+    registerCleanup(async () => {
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    });
     const workspace = path.join(fakeHome, "workspace");
     await fs.mkdir(workspace, { recursive: true });
 
     const originalHomedir = os.homedir;
+    registerCleanup(() => {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+    });
     (os as unknown as { homedir: () => string }).homedir = () => fakeHome;
     delete process.env.HOME;
 
-    try {
-      await deliverOutput({
-        content: "fallback expansion",
-        cwd: workspace,
-        filePath: "~/workspace/output.txt",
-        configEnv: createConfigEnv(),
-      });
+    await deliverOutput({
+      content: "fallback expansion",
+      cwd: workspace,
+      filePath: "~/workspace/output.txt",
+      configEnv: createConfigEnv(),
+    });
 
-      const expectedPath = path.join(fakeHome, "workspace", "output.txt");
-      const written = await fs.readFile(expectedPath, "utf8");
-      expect(written).toBe("fallback expansion");
-    } finally {
-      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
-      if (originalHomeEnv === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHomeEnv;
-      }
-      await fs.rm(fakeHome, { recursive: true, force: true });
-    }
+    const expectedPath = path.join(fakeHome, "workspace", "output.txt");
+    const written = await fs.readFile(expectedPath, "utf8");
+    expect(written).toBe("fallback expansion");
   });
 
   test("ワークスペース外へ出る HOME 展開はエラーになる", async () => {
-    const originalHome = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-home-"));
-    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-workspace-"));
-    process.env.HOME = fakeHome;
-    try {
-      await expect(
-        deliverOutput({
-          content: "should fail",
-          cwd: workspace,
-          filePath: "~/outside.txt",
-          configEnv: createConfigEnv({ HOME: fakeHome }),
-        }),
-      ).rejects.toThrow(/ワークスペース配下/);
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
+    registerCleanup(async () => {
       await fs.rm(fakeHome, { recursive: true, force: true });
+    });
+    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-workspace-"));
+    registerCleanup(async () => {
       await fs.rm(workspace, { recursive: true, force: true });
-    }
+    });
+    process.env.HOME = fakeHome;
+
+    await expect(
+      deliverOutput({
+        content: "should fail",
+        cwd: workspace,
+        filePath: "~/outside.txt",
+        configEnv: createConfigEnv({ HOME: fakeHome }),
+      }),
+    ).rejects.toThrow(/ワークスペース配下/);
+  });
+
+  test("ConfigEnv のみで HOME を解決する", async () => {
+    const globalHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-global-home-"));
+    registerCleanup(async () => {
+      await fs.rm(globalHome, { recursive: true, force: true });
+    });
+    const configHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-config-home-"));
+    registerCleanup(async () => {
+      await fs.rm(configHome, { recursive: true, force: true });
+    });
+    const workspace = path.join(configHome, "workspace");
+    await fs.mkdir(workspace, { recursive: true });
+    process.env.HOME = globalHome;
+
+    await deliverOutput({
+      content: "config home content",
+      cwd: workspace,
+      filePath: "~/workspace/result.txt",
+      configEnv: createConfigEnv({ HOME: configHome }),
+    });
+    const expected = path.join(configHome, "workspace", "result.txt");
+    const written = await fs.readFile(expected, "utf8");
+    expect(written).toBe("config home content");
   });
 });
 
@@ -230,56 +267,48 @@ describe("generateDefaultOutputPath", () => {
   });
 
   test("チルダ始まりのディレクトリを展開する", async () => {
-    const originalHome = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "gpt5-home-"));
+    registerCleanup(async () => {
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    });
     process.env.HOME = fakeHome;
     const workspace = await fs.mkdtemp(path.join(fakeHome, "workspace-"));
-    try {
-      const relativeFromHome = path.relative(fakeHome, workspace);
-      process.env[DEFAULT_OUTPUT_DIR_ENV] = `~/${relativeFromHome}/artifacts`;
-      const { relativePath, absolutePath } = generateDefaultOutputPath({
-        mode: "mermaid",
-        extension: "mmd",
-        cwd: workspace,
-        configEnv: createConfigEnv({
-          [DEFAULT_OUTPUT_DIR_ENV]: `~/${relativeFromHome}/artifacts`,
-          HOME: fakeHome,
-        }),
-      });
-      expect(relativePath.startsWith(`artifacts${path.sep}`)).toBe(true);
-      expect(absolutePath.startsWith(path.join(workspace, "artifacts"))).toBe(true);
-    } finally {
+    registerCleanup(async () => {
       await fs.rm(workspace, { recursive: true, force: true });
-      process.env.HOME = originalHome;
-      await fs.rm(fakeHome, { recursive: true, force: true });
-    }
+    });
+    const relativeFromHome = path.relative(fakeHome, workspace);
+    process.env[DEFAULT_OUTPUT_DIR_ENV] = `~/${relativeFromHome}/artifacts`;
+    const { relativePath, absolutePath } = generateDefaultOutputPath({
+      mode: "mermaid",
+      extension: "mmd",
+      cwd: workspace,
+      configEnv: createConfigEnv({
+        [DEFAULT_OUTPUT_DIR_ENV]: `~/${relativeFromHome}/artifacts`,
+        HOME: fakeHome,
+      }),
+    });
+    expect(relativePath.startsWith(`artifacts${path.sep}`)).toBe(true);
+    expect(absolutePath.startsWith(path.join(workspace, "artifacts"))).toBe(true);
   });
 
   test("チルダ単体のディレクトリも展開する", async () => {
-    const originalHome = process.env.HOME;
     const fakeHome = await fs.mkdtemp(path.join(os.tmpdir(), "gpt5-home-"));
+    registerCleanup(async () => {
+      await fs.rm(fakeHome, { recursive: true, force: true });
+    });
     process.env.HOME = fakeHome;
     process.env[DEFAULT_OUTPUT_DIR_ENV] = "~";
-    try {
-      const { relativePath, absolutePath } = generateDefaultOutputPath({
-        mode: "ask",
-        extension: "txt",
-        cwd: fakeHome,
-        configEnv: createConfigEnv({
-          [DEFAULT_OUTPUT_DIR_ENV]: "~",
-          HOME: fakeHome,
-        }),
-      });
-      expect(relativePath.startsWith(`output${path.sep}ask${path.sep}`)).toBe(false);
-      expect(absolutePath.startsWith(fakeHome)).toBe(true);
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
-      await fs.rm(fakeHome, { recursive: true, force: true });
-    }
+    const { relativePath, absolutePath } = generateDefaultOutputPath({
+      mode: "ask",
+      extension: "txt",
+      cwd: fakeHome,
+      configEnv: createConfigEnv({
+        [DEFAULT_OUTPUT_DIR_ENV]: "~",
+        HOME: fakeHome,
+      }),
+    });
+    expect(relativePath.startsWith(`output${path.sep}ask${path.sep}`)).toBe(false);
+    expect(absolutePath.startsWith(fakeHome)).toBe(true);
   });
 
   test("ワークスペース外を指す環境変数はエラーにする", () => {
@@ -319,5 +348,19 @@ describe("generateDefaultOutputPath", () => {
         configEnv,
       }),
     ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
+  });
+
+  test("ConfigEnv が未設定でも process.env に依存しない", () => {
+    process.env[DEFAULT_OUTPUT_DIR_ENV] = "env-only/output";
+    const configEnv = createConfigEnv();
+
+    const { absolutePath } = generateDefaultOutputPath({
+      mode: "mermaid",
+      extension: "mmd",
+      cwd: tempDir,
+      configEnv,
+    });
+
+    expect(absolutePath.startsWith(path.join(tempDir, "output", "mermaid"))).toBe(true);
   });
 });
