@@ -5,9 +5,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import dotenv from "dotenv";
-import { z } from "zod";
 import { ROOT_DIR } from "../../foundation/paths.js";
 import type { ConfigEnvironment } from "../../types.js";
+import { z } from "zod";
 
 /**
  * ConfigEnv が認識する環境変数のスキーマ。
@@ -55,7 +55,10 @@ export const CONFIG_ENV_KNOWN_KEYS: readonly ConfigEnvKey[] = Object.keys(
 
 const CONFIG_ENV_KEY_SET = new Set<string>(CONFIG_ENV_KNOWN_KEYS);
 
-function isConfigEnvKey(key: string): key is ConfigEnvKey {
+/**
+ * 文字列が ConfigEnv で認識されるキーかどうかを判定する。
+ */
+export function isConfigEnvKey(key: string): key is ConfigEnvKey {
   return CONFIG_ENV_KEY_SET.has(key);
 }
 
@@ -92,21 +95,9 @@ export interface ConfigEnvInitOptions {
 export interface ConfigEnvContract extends ConfigEnvironment {
   /** 既知キーを指定した場合は型安全な値を返す。 */
   get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
-  /**
-   * 指定したキーの値を返す。未定義の場合は undefined。
-   *
-   * @param key 参照する環境変数名。
-   */
-  get(key: string): string | undefined;
 
   /** 既知キーの存在判定を行う。 */
   has(key: ConfigEnvKey): boolean;
-  /**
-   * 指定したキーが保持されているかどうかを判定する。
-   *
-   * @param key 存在確認を行う環境変数名。
-   */
-  has(key: string): boolean;
 
   /**
    * 保持している全てのキーと値の組を列挙する。
@@ -191,23 +182,11 @@ export class ConfigEnv implements ConfigEnvContract {
     return new ConfigEnv(normalizedValues);
   }
 
-  get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
-  // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
-  get(key: string): string | undefined;
-  get(key: string): string | undefined {
-    if (!isConfigEnvKey(key)) {
-      return undefined;
-    }
-    return this.values.get(key);
+  get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey] {
+    return this.values.get(key) as ConfigEnvSnapshot[TKey];
   }
 
-  has(key: ConfigEnvKey): boolean;
-  // TODO(config-env): string オーバーロードは既存呼び出し互換のため残しているが段階的に削除する。
-  has(key: string): boolean;
-  has(key: string): boolean {
-    if (!isConfigEnvKey(key)) {
-      return false;
-    }
+  has(key: ConfigEnvKey): boolean {
     return this.values.has(key);
   }
 
