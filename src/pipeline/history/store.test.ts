@@ -26,6 +26,12 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
       map.set(key, value);
     }
   }
+  if (!map.has("HOME")) {
+    const homeEnv = process.env.HOME;
+    if (typeof homeEnv === "string") {
+      map.set("HOME", homeEnv);
+    }
+  }
   return {
     get: (key: string) => map.get(key),
     has: (key: string) => map.has(key),

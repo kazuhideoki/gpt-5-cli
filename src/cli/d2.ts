@@ -350,9 +350,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
-      printHelp: outputHelp,
-    });
+    const determine = await resolveInputOrExecuteHistoryAction(
+      options,
+      historyStore,
+      defaults,
+      {
+        printHelp: outputHelp,
+      },
+      configEnv,
+    );
     if (determine.kind === "exit") {
       process.exit(determine.code);
       return;
@@ -390,7 +396,7 @@ async function main(): Promise<void> {
 
     const resolvedOptions = normalizedOptions;
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]");
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]", configEnv);
     const toolset = buildD2ConversationToolset({
       logLabel: "[gpt-5-cli-d2]",
       debug: resolvedOptions.debug,
@@ -403,6 +409,7 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-d2]",
+      configEnv,
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
       toolset,
     });

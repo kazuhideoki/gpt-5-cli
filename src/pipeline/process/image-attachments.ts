@@ -1,13 +1,24 @@
 // image-attachments.ts: CLI から渡された画像パスを検証し Responses API 向けデータ URL を生成する。
 // NOTE(pipeline/process): 入力検証寄りだが、現状はモデル呼び出し準備の一環として process 層に配置。
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import type { ConfigEnvironment } from "../../types.js";
 
-function resolveImagePath(raw: string): string {
-  const home = process.env.HOME;
-  if (!home || home.trim().length === 0) {
+function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
+  const configured = configEnv.get("HOME");
+  if (typeof configured === "string" && configured.trim().length > 0) {
+    return path.resolve(configured.trim());
+  }
+  const fallback = os.homedir();
+  if (!fallback || fallback.trim().length === 0) {
     throw new Error("HOME environment variable must be set to use image attachments.");
   }
+  return path.resolve(fallback);
+}
+
+function resolveImagePath(raw: string, configEnv: ConfigEnvironment): string {
+  const home = resolveHomeDirectory(configEnv);
   if (path.isAbsolute(raw)) {
     if (!raw.startsWith(home)) {
       throw new Error(`Error: -i で指定できるフルパスは ${home || "$HOME"} 配下のみです: ${raw}`);
@@ -58,11 +69,12 @@ function detectImageMime(filePath: string): string {
 export function prepareImageData(
   imagePath: string | undefined,
   logLabel: string,
+  configEnv: ConfigEnvironment,
 ): string | undefined {
   if (!imagePath) {
     return undefined;
   }
-  const resolved = resolveImagePath(imagePath);
+  const resolved = resolveImagePath(imagePath, configEnv);
   const mime = detectImageMime(resolved);
   const data = fs.readFileSync(resolved);
   const base64 = data.toString("base64");

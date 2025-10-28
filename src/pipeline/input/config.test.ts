@@ -34,6 +34,12 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
       map.set(key, value);
     }
   }
+  if (!map.has("HOME")) {
+    const homeEnv = process.env.HOME;
+    if (typeof homeEnv === "string") {
+      map.set("HOME", homeEnv);
+    }
+  }
   return {
     get: (key: string) => map.get(key),
     has: (key: string) => map.has(key),
@@ -88,7 +94,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env"), "OPENAI_DEFAULT_EFFORT=medium\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir });
       expect(configEnv.get(targetEnv)).toBe("medium");
-      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("medium");
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -101,7 +107,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
       expect(configEnv.get(targetEnv)).toBe("high");
-      expect(process.env.OPENAI_DEFAULT_EFFORT).toBe("high");
+      expect(process.env.OPENAI_DEFAULT_EFFORT).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -115,7 +121,7 @@ describe("loadEnvironment", () => {
       fs.writeFileSync(path.join(dir, ".env.ask"), "OPENAI_DEFAULT_EFFORT=high\n", "utf8");
       const configEnv = await loadEnvironment({ baseDir: dir, envSuffix: "ask" });
       expect(configEnv.get(targetEnv)).toBe("high");
-      expect(process.env[targetEnv]).toBe("high");
+      expect(process.env[targetEnv]).toBe("medium");
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
       delete process.env[targetEnv];

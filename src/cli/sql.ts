@@ -47,10 +47,6 @@ function resolveSqruffBin(configEnv: ConfigEnvironment): string {
   if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
     return fromConfig.trim();
   }
-  const fromEnv = process.env.SQRUFF_BIN;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
-    return fromEnv.trim();
-  }
   return "sqruff";
 }
 
@@ -608,9 +604,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
-      printHelp: outputHelp,
-    });
+    const determine = await resolveInputOrExecuteHistoryAction(
+      options,
+      historyStore,
+      defaults,
+      {
+        printHelp: outputHelp,
+      },
+      configEnv,
+    );
     if (determine.kind === "exit") {
       process.exit(determine.code);
       return;
@@ -662,7 +664,7 @@ async function main(): Promise<void> {
       engine: sqlEnv.engine,
     };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine, sqruffBin });
-    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL);
+    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL, configEnv);
     const toolset = buildSqlConversationToolset({
       logLabel: LOG_LABEL,
       debug: resolvedOptionsWithDsn.debug,
@@ -676,6 +678,7 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: LOG_LABEL,
+      configEnv,
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
         dsnHash: sqlEnv.hash,

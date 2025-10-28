@@ -354,13 +354,13 @@ describe("generateDefaultOutputPath", () => {
     process.env[DEFAULT_OUTPUT_DIR_ENV] = "env-only/output";
     const configEnv = createConfigEnv();
 
-    expect(() =>
-      generateDefaultOutputPath({
-        mode: "mermaid",
-        extension: "mmd",
-        cwd: tempDir,
-        configEnv,
-      }),
-    ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
+    const { absolutePath } = generateDefaultOutputPath({
+      mode: "mermaid",
+      extension: "mmd",
+      cwd: tempDir,
+      configEnv,
+    });
+
+    expect(absolutePath.startsWith(path.join(tempDir, "output", "mermaid"))).toBe(true);
   });
 });

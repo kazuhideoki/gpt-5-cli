@@ -164,12 +164,14 @@ describe("d2 resolveInputOrExecuteHistoryAction", () => {
       hasExplicitHistory: true,
       args: ["続けよう"],
     });
+    const configEnv = createConfigEnv();
 
     const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
       noopDeps,
+      configEnv,
     );
     expect(store.selected).toBe(1);
     expect(result.kind).toBe("input");
@@ -190,11 +192,13 @@ describe("d2 resolveInputOrExecuteHistoryAction", () => {
         helpCalled = true;
       },
     };
+    const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(
       options,
       store as unknown as HistoryStoreLike,
       defaults,
       deps,
+      configEnv,
     );
     expect(result.kind).toBe("exit");
     if (result.kind === "exit") {

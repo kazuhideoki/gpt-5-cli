@@ -23,10 +23,12 @@ function createConfigEnv(values: Record<string, string | undefined>): ConfigEnvi
 
 let originalHome: string | undefined;
 let cleanupDirs: string[];
+let cleanupTasks: Array<() => void | Promise<void>>;
 
 beforeEach(() => {
   originalHome = process.env.HOME;
   cleanupDirs = [];
+  cleanupTasks = [];
 });
 
 afterEach(() => {
@@ -40,6 +42,12 @@ afterEach(() => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }
+  while (cleanupTasks.length > 0) {
+    const task = cleanupTasks.pop();
+    if (task) {
+      task();
+    }
+  }
 });
 
 describe("expandHome", () => {
@@ -49,25 +57,25 @@ describe("expandHome", () => {
     cleanupDirs.push(configHome);
     process.env.HOME = processHome;
     const env = createConfigEnv({ HOME: configHome });
-    const expandWithConfig = expandHome as unknown as (
-      target: string,
-      configEnv: ConfigEnvironment,
-    ) => string;
-
-    const result = expandWithConfig("~/documents/file.txt", env);
+    const result = expandHome("~/documents/file.txt", env);
     expect(result).toBe(path.join(configHome, "documents", "file.txt"));
   });
 
-  it("ConfigEnv に HOME が無い場合はエラーにする", () => {
+  it("ConfigEnv に HOME が無い場合は OS のホームディレクトリを利用する", () => {
+    const fallbackHome = fs.mkdtempSync(path.join(os.tmpdir(), "fallback-home-"));
+    cleanupDirs.push(fallbackHome);
+    const originalHomedir = os.homedir;
+    registerCleanup(() => {
+      (os as unknown as { homedir: () => string }).homedir = originalHomedir;
+    });
+    (os as unknown as { homedir: () => string }).homedir = () => fallbackHome;
     process.env.HOME = path.join(path.sep, "process-home");
-    const env = createConfigEnv({});
-    const expandWithConfig = expandHome as unknown as (
-      target: string,
-      configEnv: ConfigEnvironment,
-    ) => string;
 
-    expect(() => expandWithConfig("~/data.txt", env)).toThrow(
-      "HOME environment variable is required when using '~' paths.",
-    );
+    const env = createConfigEnv({});
+    const result = expandHome("~/data.txt", env);
+    expect(result).toBe(path.join(fallbackHome, "data.txt"));
   });
 });
+function registerCleanup(task: () => void | Promise<void>): void {
+  cleanupTasks.push(task);
+}

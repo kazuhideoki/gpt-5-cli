@@ -13,6 +13,7 @@ import type { ConversationToolset } from "./tools/index.js";
 import type {
   CliDefaults,
   CliOptions,
+  ConfigEnvironment,
   ConversationContext,
   OpenAIInputMessage,
 } from "../../types.js";
@@ -35,6 +36,8 @@ interface BuildRequestParams {
   defaults?: CliDefaults;
   /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
+  /** カラー設定などログ整形に利用する環境スナップショット。 */
+  configEnv: ConfigEnvironment;
   /** モード固有の追加システムメッセージ群。 */
   additionalSystemMessages?: OpenAIInputMessage[];
   /** CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。 */
@@ -64,15 +67,17 @@ export function buildRequest({
   logLabel,
   additionalSystemMessages,
   toolset,
+  configEnv,
 }: BuildRequestParams): BuildRequestArtifacts {
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
     defaults?.modelMini ?? "",
     defaults?.modelNano ?? "",
+    configEnv,
   );
-  const effortLog = formatScaleValue(options.effort);
-  const verbosityLog = formatScaleValue(options.verbosity);
+  const effortLog = formatScaleValue(options.effort, configEnv);
+  const verbosityLog = formatScaleValue(options.verbosity, configEnv);
 
   console.log(
     `${logLabel} model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,

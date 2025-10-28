@@ -29,9 +29,6 @@ export async function loadEnvironment(
 ): Promise<ConfigEnvContract> {
   const baseDir = options.baseDir ?? ROOT_DIR;
   const configEnv = await ConfigEnv.create({ ...options, baseDir });
-  for (const [key, value] of configEnv.entries()) {
-    process.env[key] = value;
-  }
   return configEnv;
 }
 
@@ -48,10 +45,10 @@ export function resolvePromptsDir(configEnv: ConfigEnvironment, defaultPath: str
     if (trimmed.length === 0) {
       throw new Error("GPT_5_CLI_PROMPTS_DIR is set but empty.");
     }
-    const expanded = expandHome(trimmed);
+    const expanded = expandHome(trimmed, configEnv);
     return path.resolve(expanded);
   }
-  const expanded = expandHome(defaultPath);
+  const expanded = expandHome(defaultPath, configEnv);
   return path.resolve(expanded);
 }
 

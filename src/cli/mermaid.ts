@@ -316,9 +316,15 @@ async function main(): Promise<void> {
       return;
     }
 
-    const determine = await resolveInputOrExecuteHistoryAction(options, historyStore, defaults, {
-      printHelp: outputHelp,
-    });
+    const determine = await resolveInputOrExecuteHistoryAction(
+      options,
+      historyStore,
+      defaults,
+      {
+        printHelp: outputHelp,
+      },
+      configEnv,
+    );
     if (determine.kind === "exit") {
       process.exit(determine.code);
       return;
@@ -355,7 +361,11 @@ async function main(): Promise<void> {
     const { context: mermaidContext, normalizedOptions } = ensureMermaidContext(options);
     const resolvedOptions = normalizedOptions;
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-mermaid]");
+    const imageDataUrl = prepareImageData(
+      resolvedOptions.imagePath,
+      "[gpt-5-cli-mermaid]",
+      configEnv,
+    );
     const toolset = buildMermaidConversationToolset({
       logLabel: "[gpt-5-cli-mermaid]",
       debug: resolvedOptions.debug,
@@ -368,6 +378,7 @@ async function main(): Promise<void> {
       imageDataUrl,
       defaults,
       logLabel: "[gpt-5-cli-mermaid]",
+      configEnv,
       additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
       toolset,
     });

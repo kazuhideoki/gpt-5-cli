@@ -127,7 +127,7 @@ export function printHistoryDetail<TContext>(
     return;
   }
 
-  const useColor = !noColor && Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+  const useColor = !noColor && Boolean(process.stdout.isTTY);
   const colors = {
     user: useColor ? "\u001b[36m" : "",
     assistant: useColor ? "\u001b[34m" : "",

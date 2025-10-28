@@ -81,10 +81,6 @@ function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
   if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
     return path.resolve(fromConfig.trim());
   }
-  const fromEnv = process.env.HOME;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
-    return path.resolve(fromEnv.trim());
-  }
   const fallback = os.homedir();
   if (!fallback || fallback.trim().length === 0) {
     throw new Error("HOME environment variable is required when using '~' paths.");
@@ -109,7 +105,7 @@ function ensureWorkspacePath(rawPath: string, cwd: string, configEnv: ConfigEnvi
   const trimmed = rawPath.trim();
   const expanded = trimmed.startsWith("~")
     ? expandHomeWithConfig(trimmed, configEnv)
-    : expandHome(trimmed);
+    : expandHome(trimmed, configEnv);
   const resolved = path.isAbsolute(expanded)
     ? path.resolve(expanded)
     : path.resolve(root, expanded);
@@ -136,12 +132,12 @@ function resolveBaseDirectory(mode: string, cwd: string, configEnv: ConfigEnviro
   const envDirRaw =
     typeof configValue === "string" && configValue.trim().length > 0
       ? configValue.trim()
-      : process.env[DEFAULT_OUTPUT_DIR_ENV]?.trim();
+      : undefined;
   const normalizedRoot = path.resolve(cwd);
   if (envDirRaw && envDirRaw.length > 0) {
     const expanded = envDirRaw.startsWith("~")
       ? expandHomeWithConfig(envDirRaw, configEnv)
-      : expandHome(envDirRaw);
+      : expandHome(envDirRaw, configEnv);
     const candidate = path.resolve(normalizedRoot, expanded);
     const relative = path.relative(normalizedRoot, candidate);
     const isInsideWorkspace =

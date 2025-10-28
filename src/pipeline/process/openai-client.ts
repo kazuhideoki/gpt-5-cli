@@ -31,9 +31,8 @@ function resolveOpenAIApiKey(options: CreateOpenAIClientOptions): string {
   }
   const configValue = options.configEnv.get("OPENAI_API_KEY");
   const rawFromConfig = typeof configValue === "string" ? configValue.trim() : "";
-  const raw = rawFromConfig.length > 0 ? rawFromConfig : process.env.OPENAI_API_KEY;
-  if (typeof raw !== "string" || raw.trim().length === 0) {
+  if (rawFromConfig.length === 0) {
     throw new Error("OPENAI_API_KEY not found. Please set it in .env or .env.{ask|d2|sql}");
   }
-  return raw.trim();
+  return rawFromConfig;
 }

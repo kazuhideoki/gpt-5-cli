@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import type { CliDefaults, CliOptions } from "../../types.js";
-import type { DetermineInputDependencies } from "./cli-input.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
+import type { ResolveInputOrExecuteHistoryActionDependencies } from "./cli-input.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 
 const promptAnswers: string[] = [];
@@ -72,8 +72,8 @@ function createHistoryStore(overrides: Partial<HistoryStoreMethods> = {}): Histo
 }
 
 function createDeps(
-  overrides: Partial<DetermineInputDependencies<CliOptions, unknown>> = {},
-): DetermineInputDependencies<CliOptions, unknown> {
+  overrides: Partial<ResolveInputOrExecuteHistoryActionDependencies<CliOptions, unknown>> = {},
+): ResolveInputOrExecuteHistoryActionDependencies<CliOptions, unknown> {
   return {
     printHelp:
       overrides.printHelp ??
@@ -82,6 +82,19 @@ function createDeps(
       }),
     printHistoryList: overrides.printHistoryList,
     printHistoryDetail: overrides.printHistoryDetail,
+  };
+}
+
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
   };
 }
 
@@ -121,6 +134,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
         historyStore,
         defaults,
         deps,
+        createConfigEnv(),
       );
       expect(result).toEqual({ kind: "exit", code: 0 });
       expect(deleteByNumber).toHaveBeenCalledTimes(1);
@@ -131,8 +145,6 @@ describe("resolveInputOrExecuteHistoryAction", () => {
   });
 
   it("showIndexが指定されたとき履歴を表示して終了する", async () => {
-    const originalNoColor = process.env.NO_COLOR;
-    process.env.NO_COLOR = "1";
     const showDetail = mock((storeArg: HistoryStore<unknown>, index: number, noColor: boolean) => {
       expect(storeArg).toBe(historyStore);
       expect(index).toBe(3);
@@ -141,22 +153,15 @@ describe("resolveInputOrExecuteHistoryAction", () => {
     const historyStore = createHistoryStore();
     const deps = createDeps({ printHistoryDetail: showDetail });
 
-    try {
-      const result = await resolveInputOrExecuteHistoryAction(
-        createOptions({ showIndex: 3 }),
-        historyStore,
-        defaults,
-        deps,
-      );
-      expect(result).toEqual({ kind: "exit", code: 0 });
-      expect(showDetail).toHaveBeenCalledTimes(1);
-    } finally {
-      if (originalNoColor === undefined) {
-        delete process.env.NO_COLOR;
-      } else {
-        process.env.NO_COLOR = originalNoColor;
-      }
-    }
+    const result = await resolveInputOrExecuteHistoryAction(
+      createOptions({ showIndex: 3 }),
+      historyStore,
+      defaults,
+      deps,
+      createConfigEnv({ NO_COLOR: "1" }),
+    );
+    expect(result).toEqual({ kind: "exit", code: 0 });
+    expect(showDetail).toHaveBeenCalledTimes(1);
   });
 
   it("resumeListOnlyが設定されていると履歴一覧を出力して終了する", async () => {
@@ -171,6 +176,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       historyStore,
       defaults,
       deps,
+      createConfigEnv(),
     );
 
     expect(result).toEqual({ kind: "exit", code: 0 });
@@ -194,6 +200,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       historyStore,
       defaults,
       deps,
+      createConfigEnv(),
     );
 
     expect(result.kind).toBe("input");
@@ -221,6 +228,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       historyStore,
       defaults,
       deps,
+      createConfigEnv(),
     );
 
     expect(promptQuestions).toEqual(["プロンプト > "]);
@@ -249,6 +257,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
         historyStore,
         defaults,
         deps,
+        createConfigEnv(),
       ),
     ).rejects.toThrow("プロンプトが空です。");
     expect(promptCloseCount).toBe(1);
@@ -267,6 +276,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       historyStore,
       defaults,
       deps,
+      createConfigEnv(),
     );
 
     expect(result).toEqual({ kind: "exit", code: 1 });
@@ -282,6 +292,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
       historyStore,
       defaults,
       deps,
+      createConfigEnv(),
     );
 
     expect(result).toEqual({ kind: "input", inputText: "bun test" });
