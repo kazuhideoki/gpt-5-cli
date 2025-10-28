@@ -135,6 +135,10 @@ describe("buildRequest", () => {
     expect(agentTools).toEqual(toolset.agents);
   });
 
+  it("systemPrompt が undefined のときに system メッセージを追加しない", () => {
+    throw new Error("TODO: implement");
+  });
+
   it("継続会話では previous_response_id と追加の system メッセージを含める", () => {
     const options = createOptions({ continueConversation: true });
     const context = createContext({

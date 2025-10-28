@@ -78,6 +78,10 @@ describe("runAgentConversation", () => {
     expect(requestBody.input.at(-1)?.content?.[0]?.text).toBe("Create a diagram");
   });
 
+  it("maxTurns を undefined にしても実行できる", () => {
+    throw new Error("TODO: implement");
+  });
+
   it("ユーザー入力が存在しない場合にエラーを送出する", async () => {
     const client = new FakeOpenAI();
     const request: ResponseCreateParamsNonStreaming = {
