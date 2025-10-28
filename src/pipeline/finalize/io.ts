@@ -77,7 +77,7 @@ export interface DeliverOutputResult {
 }
 
 function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
-  const fromConfig = configEnv.get("HOME");
+  const fromConfig = configEnv.get("HOME" as any);
   if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
     return path.resolve(fromConfig.trim());
   }
