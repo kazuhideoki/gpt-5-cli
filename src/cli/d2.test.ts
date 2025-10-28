@@ -8,7 +8,7 @@ import {
   ensureD2Context,
   parseArgs,
 } from "./d2.js";
-import type { CliDefaults } from "../types.js";
+import type { CliDefaults, ConfigEnvironment } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { D2CliHistoryContext } from "./d2.js";
@@ -63,10 +63,23 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
   };
 }
 
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
+
 describe("d2 parseArgs", () => {
   it("既定で d2 モードとして解析する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["ダイアグラム"], defaults);
+    const options = parseArgs(["ダイアグラム"], defaults, createConfigEnv());
     expect(options.taskMode).toBe("d2");
     expect(options.args).toEqual(["ダイアグラム"]);
     expect(options.artifactPath).toMatch(/^output[/\\]d2[/\\]d2-\d{8}-\d{6}-[0-9a-f]{4}\.d2$/u);
@@ -76,35 +89,35 @@ describe("d2 parseArgs", () => {
 
   it("--iterations でイテレーション上限を設定できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--iterations", "5", "図"], defaults);
+    const options = parseArgs(["--iterations", "5", "図"], defaults, createConfigEnv());
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
   it("--iterations へ不正な値を渡すとエラーになる", () => {
     const defaults = createDefaults();
-    expect(() => parseArgs(["--iterations", "0", "図"], defaults)).toThrow(
+    expect(() => parseArgs(["--iterations", "0", "図"], defaults, createConfigEnv())).toThrow(
       "Error: --iterations の値は 1 以上で指定してください",
     );
   });
 
   it("--output で出力パスを指定できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--output", "diagram.d2", "生成"], defaults);
+    const options = parseArgs(["--output", "diagram.d2", "生成"], defaults, createConfigEnv());
     expect(options.artifactPath).toBe("diagram.d2");
     expect(options.responseOutputExplicit).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--copy", "生成"], defaults);
+    const options = parseArgs(["--copy", "生成"], defaults, createConfigEnv());
     expect(options.copyOutput).toBe(true);
     expect(options.copyExplicit).toBe(true);
   });
 
   it("--debug でデバッグログを有効化する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--debug", "図"], defaults);
+    const options = parseArgs(["--debug", "図"], defaults, createConfigEnv());
     expect(options.debug).toBe(true);
   });
 });

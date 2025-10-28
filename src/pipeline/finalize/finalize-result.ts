@@ -2,7 +2,12 @@
  * @file finalizeResult は CLI 各モードの終了処理を共通化する。
  * 呼び出し側で構築した履歴コンテキストを受け取り、出力・履歴更新をまとめて実行する。
  */
-import type { ConversationContext, EffortLevel, VerbosityLevel } from "../../types.js";
+import type {
+  ConfigEnvironment,
+  ConversationContext,
+  EffortLevel,
+  VerbosityLevel,
+} from "../../types.js";
 import type { HistoryStore } from "../history/store.js";
 import { handleResult } from "./handle-result.js";
 import type {
@@ -49,6 +54,8 @@ export interface FinalizeResultParams<TContext> {
   content: string;
   /** 今回のユーザー入力。 */
   userText: string;
+  /** finalize 層が利用する ConfigEnv。 */
+  configEnv: ConfigEnvironment;
   /** 標準出力へそのまま流したい補足テキスト。 */
   stdout?: string;
   /** ファイル保存先の相対または絶対パス。 */
@@ -67,13 +74,22 @@ export interface FinalizeResultParams<TContext> {
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const { content, stdout, textOutputPath, copyOutput, copySourceFilePath, history, userText } =
-    params;
+  const {
+    content,
+    stdout,
+    textOutputPath,
+    copyOutput,
+    copySourceFilePath,
+    history,
+    userText,
+    configEnv,
+  } = params;
 
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
     textOutputPath || copyOutput
       ? ({
           params: {
+            configEnv,
             ...(textOutputPath ? { filePath: textOutputPath } : {}),
             ...(copyOutput
               ? {
@@ -119,6 +135,7 @@ export async function finalizeResult<TContext>(
   return handleResult({
     content,
     stdout,
+    configEnv,
     output: finalizeOutputInstruction,
     history: finalizeHistoryEffect,
   });

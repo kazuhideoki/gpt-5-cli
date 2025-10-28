@@ -8,7 +8,7 @@ import {
   createAskWebSearchTool,
   parseArgs,
 } from "./ask.js";
-import type { CliDefaults, CliOptions, ConversationContext } from "../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment, ConversationContext } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { AskCliHistoryContext } from "./ask.js";
 
@@ -54,6 +54,19 @@ function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
   };
 }
 
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
+
 class StubHistoryStore {
   deletedIndex: number | null = null;
   shownIndex: number | null = null;
@@ -87,7 +100,7 @@ class StubHistoryStore {
 describe("parseArgs", () => {
   it("短縮フラグを束ねた記法を解釈できる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["-m1e2v0", "テスト"], defaults);
+    const options = parseArgs(["-m1e2v0", "テスト"], defaults, createConfigEnv());
     expect(options.model).toBe(defaults.modelMini);
     expect(options.effort).toBe("high");
     expect(options.verbosity).toBe("low");
@@ -99,7 +112,7 @@ describe("parseArgs", () => {
 
   it("-r2 フラグで履歴継続が有効になる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["-r2", "続き"], defaults);
+    const options = parseArgs(["-r2", "続き"], defaults, createConfigEnv());
     expect(options.resumeIndex).toBe(2);
     expect(options.continueConversation).toBe(true);
     expect(options.hasExplicitHistory).toBe(true);
@@ -107,42 +120,44 @@ describe("parseArgs", () => {
 
   it("-r 単体なら履歴一覧のみ表示する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["-r"], defaults);
+    const options = parseArgs(["-r"], defaults, createConfigEnv());
     expect(options.resumeListOnly).toBe(true);
     expect(options.resumeIndex).toBeUndefined();
   });
 
   it("--compact で要約モードになる", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--compact", "3"], defaults);
+    const options = parseArgs(["--compact", "3"], defaults, createConfigEnv());
     expect(options.operation).toBe("compact");
     expect(options.compactIndex).toBe(3);
   });
 
   it("--debug でデバッグログを有効化する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--debug", "確認"], defaults);
+    const options = parseArgs(["--debug", "確認"], defaults, createConfigEnv());
     expect(options.debug).toBe(true);
   });
 
   it("--copy でコピー出力を有効化する", () => {
     const defaults = createDefaults();
-    const options = parseArgs(["--copy", "テスト"], defaults);
+    const options = parseArgs(["--copy", "テスト"], defaults, createConfigEnv());
     expect(options.copyOutput).toBe(true);
     expect(options.copyExplicit).toBe(true);
   });
 
   it("d2関連フラグは parseArgs で拒否される", () => {
     const defaults = createDefaults();
-    expect(() => parseArgs(["-D", "ダイアグラム"], defaults)).toThrow("error: unknown option '-D'");
-    expect(() => parseArgs(["--d2-file", "out.d2", "テスト"], defaults)).toThrow(
+    expect(() => parseArgs(["-D", "ダイアグラム"], defaults, createConfigEnv())).toThrow(
+      "error: unknown option '-D'",
+    );
+    expect(() => parseArgs(["--d2-file", "out.d2", "テスト"], defaults, createConfigEnv())).toThrow(
       "error: unknown option '--d2-file'",
     );
   });
 
   it("-m の値が欠けていればエラーになる", () => {
     const defaults = createDefaults();
-    expect(() => parseArgs(["-m"], defaults)).toThrow(
+    expect(() => parseArgs(["-m"], defaults, createConfigEnv())).toThrow(
       "Invalid option: -m には 0/1/2 を続けてください（例: -m1）",
     );
   });

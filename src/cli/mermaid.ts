@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { CliDefaults, CliOptions, OpenAIInputMessage } from "../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment, OpenAIInputMessage } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
 import {
   MERMAID_CHECK_TOOL,
@@ -183,12 +183,16 @@ const cliOptionsSchema: z.ZodType<MermaidCliOptions> = z
  * @param defaults 環境から取得した既定値。
  * @returns CLI全体で使用するオプション集合。
  */
-export function parseArgs(argv: string[], defaults: CliDefaults): MermaidCliOptions {
+export function parseArgs(
+  argv: string[],
+  defaults: CliDefaults,
+  configEnv: ConfigEnvironment,
+): MermaidCliOptions {
   const program = createMermaidProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "mermaid", extension: "mmd" }).relativePath;
+    generateDefaultOutputPath({ mode: "mermaid", extension: "mmd", configEnv }).relativePath;
   try {
     return cliOptionsSchema.parse({
       ...commonOptions,
@@ -304,8 +308,8 @@ async function main(): Promise<void> {
       return;
     }
 
-    const { defaults, options, historyStore, systemPrompt } = bootstrap;
-    const client = createOpenAIClient();
+    const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
       await performCompact(options, defaults, historyStore, client, "[gpt-5-cli-mermaid]");
@@ -406,6 +410,7 @@ async function main(): Promise<void> {
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptions.copyOutput,
       copySourceFilePath: resolvedOptions.artifactPath,
+      configEnv,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

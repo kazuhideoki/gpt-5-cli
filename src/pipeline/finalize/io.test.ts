@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
+import type { ConfigEnvironment } from "../../types.js";
 import { DEFAULT_OUTPUT_DIR_ENV, deliverOutput, generateDefaultOutputPath } from "./io.js";
 
 interface MockStdin extends EventEmitter {
@@ -14,6 +15,19 @@ interface MockChildProcess extends EventEmitter {
 }
 
 const copyInvocations: string[] = [];
+
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
 
 mock.module("node:child_process", () => ({
   spawn: () => {
@@ -49,6 +63,7 @@ describe("deliverOutput", () => {
       content: "summary text",
       copy: true,
       cwd: tmpDir,
+      configEnv: createConfigEnv(),
     });
     expect(copyInvocations).toEqual(["summary text"]);
   });
@@ -65,6 +80,7 @@ describe("deliverOutput", () => {
         type: "file",
         filePath: "diagram.d2",
       },
+      configEnv: createConfigEnv(),
     });
 
     expect(copyInvocations).toEqual(["diagram body"]);
@@ -80,6 +96,7 @@ describe("deliverOutput", () => {
           type: "file",
           filePath: "missing.d2",
         },
+        configEnv: createConfigEnv(),
       }),
     ).rejects.toThrow("Error: --copy の対象ファイルが存在しません: missing.d2");
 
@@ -98,6 +115,7 @@ describe("deliverOutput", () => {
         content: "home expansion",
         cwd: workspace,
         filePath: targetPath,
+        configEnv: createConfigEnv({ HOME: fakeHome }),
       });
       const expectedPath = path.join(fakeHome, "workspace", "result.txt");
       const written = await fs.readFile(expectedPath, "utf8");
@@ -127,6 +145,7 @@ describe("deliverOutput", () => {
         content: "fallback expansion",
         cwd: workspace,
         filePath: "~/workspace/output.txt",
+        configEnv: createConfigEnv(),
       });
 
       const expectedPath = path.join(fakeHome, "workspace", "output.txt");
@@ -154,6 +173,7 @@ describe("deliverOutput", () => {
           content: "should fail",
           cwd: workspace,
           filePath: "~/outside.txt",
+          configEnv: createConfigEnv({ HOME: fakeHome }),
         }),
       ).rejects.toThrow(/ワークスペース配下/);
     } finally {
@@ -191,6 +211,7 @@ describe("generateDefaultOutputPath", () => {
       mode: "d2",
       extension: "d2",
       cwd: tempDir,
+      configEnv: createConfigEnv(),
     });
     expect(relativePath.startsWith(`output${path.sep}d2${path.sep}`)).toBe(true);
     expect(absolutePath.startsWith(path.join(tempDir, "output", "d2"))).toBe(true);
@@ -202,6 +223,7 @@ describe("generateDefaultOutputPath", () => {
       mode: "sql",
       extension: "sql",
       cwd: tempDir,
+      configEnv: createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: "custom/dir" }),
     });
     expect(relativePath.startsWith(`custom${path.sep}dir${path.sep}`)).toBe(true);
     expect(absolutePath.startsWith(path.join(tempDir, "custom", "dir"))).toBe(true);
@@ -219,6 +241,10 @@ describe("generateDefaultOutputPath", () => {
         mode: "mermaid",
         extension: "mmd",
         cwd: workspace,
+        configEnv: createConfigEnv({
+          [DEFAULT_OUTPUT_DIR_ENV]: `~/${relativeFromHome}/artifacts`,
+          HOME: fakeHome,
+        }),
       });
       expect(relativePath.startsWith(`artifacts${path.sep}`)).toBe(true);
       expect(absolutePath.startsWith(path.join(workspace, "artifacts"))).toBe(true);
@@ -239,6 +265,10 @@ describe("generateDefaultOutputPath", () => {
         mode: "ask",
         extension: "txt",
         cwd: fakeHome,
+        configEnv: createConfigEnv({
+          [DEFAULT_OUTPUT_DIR_ENV]: "~",
+          HOME: fakeHome,
+        }),
       });
       expect(relativePath.startsWith(`output${path.sep}ask${path.sep}`)).toBe(false);
       expect(absolutePath.startsWith(fakeHome)).toBe(true);
@@ -255,7 +285,39 @@ describe("generateDefaultOutputPath", () => {
   test("ワークスペース外を指す環境変数はエラーにする", () => {
     process.env[DEFAULT_OUTPUT_DIR_ENV] = path.join("..", "outside");
     expect(() =>
-      generateDefaultOutputPath({ mode: "mermaid", extension: "mmd", cwd: tempDir }),
+      generateDefaultOutputPath({
+        mode: "mermaid",
+        extension: "mmd",
+        cwd: tempDir,
+        configEnv: createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: path.join("..", "outside") }),
+      }),
+    ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
+  });
+
+  test("ConfigEnv の出力設定を優先して利用する", () => {
+    const configEnv = createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: "env-config/output" });
+    delete process.env[DEFAULT_OUTPUT_DIR_ENV];
+    const { relativePath, absolutePath } = generateDefaultOutputPath({
+      mode: "ask",
+      extension: "txt",
+      cwd: tempDir,
+      configEnv,
+    });
+
+    expect(relativePath.startsWith(`env-config${path.sep}output${path.sep}`)).toBe(true);
+    expect(absolutePath.startsWith(path.join(tempDir, "env-config", "output"))).toBe(true);
+  });
+
+  test("ConfigEnv の出力設定がワークスペース外なら検証で失敗する", () => {
+    const configEnv = createConfigEnv({ [DEFAULT_OUTPUT_DIR_ENV]: path.join("..", "outside") });
+    delete process.env[DEFAULT_OUTPUT_DIR_ENV];
+    expect(() =>
+      generateDefaultOutputPath({
+        mode: "sql",
+        extension: "sql",
+        cwd: tempDir,
+        configEnv,
+      }),
     ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
   });
 });

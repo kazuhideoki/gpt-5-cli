@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { bootstrapCli } from "./cli-bootstrap.js";
 import { z } from "zod";
-import type { CliDefaults, CliOptions } from "../../types.js";
+import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
 
 interface TempResources {
   historyPath: string;
@@ -92,7 +92,11 @@ describe("bootstrapCli", () => {
     process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
     process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
 
-    const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
+    const parseArgs = (
+      argv: string[],
+      defaults: CliDefaults,
+      _configEnv: ConfigEnvironment,
+    ): CliOptions => {
       expect(argv).toEqual(["質問"]);
       return createOptions(defaults, { args: ["質問"] });
     };
@@ -117,7 +121,11 @@ describe("bootstrapCli", () => {
     process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
     process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
 
-    const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
+    const parseArgs = (
+      argv: string[],
+      defaults: CliDefaults,
+      _configEnv: ConfigEnvironment,
+    ): CliOptions => {
       expect(argv).toEqual(["--help"]);
       return createOptions(defaults, { helpRequested: true });
     };
@@ -154,7 +162,11 @@ describe("bootstrapCli", () => {
       "utf8",
     );
 
-    const parseArgs = (argv: string[], defaults: CliDefaults): CliOptions => {
+    const parseArgs = (
+      argv: string[],
+      defaults: CliDefaults,
+      _configEnv: ConfigEnvironment,
+    ): CliOptions => {
       expect(argv).toEqual(["--mode"]);
       expect(defaults.maxIterations).toBe(7);
       expect(defaults.effort).toBe("medium");

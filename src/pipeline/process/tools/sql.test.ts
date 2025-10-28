@@ -29,7 +29,11 @@ describe("SQL tools", () => {
   });
 
   it("SQL ドライランで PREPARE エラーを捕捉する", async () => {
-    setSqlEnvironment({ dsn: "postgres://example.invalid/db", engine: "postgresql" });
+    setSqlEnvironment({
+      dsn: "postgres://example.invalid/db",
+      engine: "postgresql",
+      sqruffBin: "sqruff",
+    });
 
     Client.prototype.connect = async () => {};
     Client.prototype.query = async () => {

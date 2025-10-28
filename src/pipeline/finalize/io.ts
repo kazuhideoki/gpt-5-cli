@@ -6,7 +6,9 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import os from "node:os";
 import { expandHome } from "../../foundation/paths.js";
+import type { ConfigEnvironment } from "../../types.js";
 
 export type CopySource =
   | {
@@ -25,6 +27,11 @@ export interface DefaultOutputPathParams {
   extension: string;
   /** 生成の基準となるカレントディレクトリ。既定は `process.cwd()`。 */
   cwd?: string;
+  /**
+   * `.env` 群を取り込んだ環境スナップショット。
+   * finalize 層では ConfigEnv が渡される想定。
+   */
+  configEnv: ConfigEnvironment;
 }
 
 export interface DefaultOutputPathResult {
@@ -47,6 +54,11 @@ export interface DeliverOutputParams {
   copy?: boolean;
   /** コピー対象を本文以外へ変更する場合の情報。 */
   copySource?: CopySource;
+  /**
+   * finalize 層で参照する環境スナップショット。
+   * ConfigEnv から供給される値を使用する。
+   */
+  configEnv: ConfigEnvironment;
 }
 
 /**
@@ -64,12 +76,40 @@ export interface DeliverOutputResult {
   copied?: boolean;
 }
 
-function ensureWorkspacePath(rawPath: string, cwd: string): string {
+function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
+  const fromConfig = configEnv.get("HOME");
+  if (typeof fromConfig === "string" && fromConfig.trim().length > 0) {
+    return path.resolve(fromConfig.trim());
+  }
+  const fromEnv = process.env.HOME;
+  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
+    return path.resolve(fromEnv.trim());
+  }
+  const fallback = os.homedir();
+  if (!fallback || fallback.trim().length === 0) {
+    throw new Error("HOME environment variable is required when using '~' paths.");
+  }
+  return path.resolve(fallback);
+}
+
+function expandHomeWithConfig(rawPath: string, configEnv: ConfigEnvironment): string {
+  if (!rawPath.startsWith("~")) {
+    return rawPath;
+  }
+  const home = resolveHomeDirectory(configEnv);
+  const remainder = rawPath.slice(1);
+  return path.join(home, remainder);
+}
+
+function ensureWorkspacePath(rawPath: string, cwd: string, configEnv: ConfigEnvironment): string {
   if (!rawPath || rawPath.trim().length === 0) {
     throw new Error("Error: --output には空でないパスを指定してください");
   }
   const root = path.resolve(cwd);
-  const expanded = expandHome(rawPath.trim());
+  const trimmed = rawPath.trim();
+  const expanded = trimmed.startsWith("~")
+    ? expandHomeWithConfig(trimmed, configEnv)
+    : expandHome(trimmed);
   const resolved = path.isAbsolute(expanded)
     ? path.resolve(expanded)
     : path.resolve(root, expanded);
@@ -91,11 +131,17 @@ function formatTimestamp(date: Date): string {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
 }
 
-function resolveBaseDirectory(mode: string, cwd: string): string {
-  const envDirRaw = process.env[DEFAULT_OUTPUT_DIR_ENV]?.trim();
+function resolveBaseDirectory(mode: string, cwd: string, configEnv: ConfigEnvironment): string {
+  const configValue = configEnv.get(DEFAULT_OUTPUT_DIR_ENV);
+  const envDirRaw =
+    typeof configValue === "string" && configValue.trim().length > 0
+      ? configValue.trim()
+      : process.env[DEFAULT_OUTPUT_DIR_ENV]?.trim();
   const normalizedRoot = path.resolve(cwd);
   if (envDirRaw && envDirRaw.length > 0) {
-    const expanded = expandHome(envDirRaw);
+    const expanded = envDirRaw.startsWith("~")
+      ? expandHomeWithConfig(envDirRaw, configEnv)
+      : expandHome(envDirRaw);
     const candidate = path.resolve(normalizedRoot, expanded);
     const relative = path.relative(normalizedRoot, candidate);
     const isInsideWorkspace =
@@ -117,7 +163,7 @@ export function generateDefaultOutputPath(
   params: DefaultOutputPathParams,
 ): DefaultOutputPathResult {
   const cwd = params.cwd ? path.resolve(params.cwd) : process.cwd();
-  const baseDir = resolveBaseDirectory(params.mode, cwd);
+  const baseDir = resolveBaseDirectory(params.mode, cwd, params.configEnv);
   const timestamp = formatTimestamp(new Date());
   const randomSuffix = crypto.randomBytes(2).toString("hex");
   const fileName = `${params.mode}-${timestamp}-${randomSuffix}.${params.extension}`;
@@ -167,7 +213,7 @@ export async function deliverOutput(params: DeliverOutputParams): Promise<Delive
   const result: DeliverOutputResult = {};
 
   if (params.filePath) {
-    const resolved = ensureWorkspacePath(params.filePath, cwd);
+    const resolved = ensureWorkspacePath(params.filePath, cwd, params.configEnv);
     const bytesWritten = await writeToFile(resolved, params.content);
     result.file = {
       absolutePath: resolved,
@@ -184,7 +230,7 @@ export async function deliverOutput(params: DeliverOutputParams): Promise<Delive
     if (copySource.type === "content") {
       copyContent = copySource.value;
     } else {
-      const resolvedCopyPath = ensureWorkspacePath(copySource.filePath, cwd);
+      const resolvedCopyPath = ensureWorkspacePath(copySource.filePath, cwd, params.configEnv);
       try {
         copyContent = await fs.readFile(resolvedCopyPath, { encoding: "utf8" });
       } catch (error) {
