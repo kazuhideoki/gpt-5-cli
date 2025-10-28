@@ -29,17 +29,17 @@ interface BuildRequestParams {
   /** ユーザーが今回送信するプロンプト文字列。 */
   inputText: string;
   /** 初回会話でのみ付与されるシステムプロンプト（CLI 側で任意設定）。 */
-  systemPrompt?: string;
+  systemPrompt: string | undefined;
   /** CLI が許可した画像添付の Data URL。未指定時はテキストのみ。 */
-  imageDataUrl?: string;
+  imageDataUrl: string | undefined;
   /** 既定モデルや推論スケールのログ出力に使用する環境値。 */
-  defaults?: CliDefaults;
+  defaults: CliDefaults | undefined;
   /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
   /** カラー設定などログ整形に利用する環境スナップショット。 */
   configEnv: ConfigEnvironment;
   /** モード固有の追加システムメッセージ群。 */
-  additionalSystemMessages?: OpenAIInputMessage[];
+  additionalSystemMessages: OpenAIInputMessage[] | undefined;
   /** CLI 固有のツールセット。Responses API 用と Agents SDK 用をまとめて受け取る。 */
   toolset: ConversationToolset;
 }
@@ -116,7 +116,7 @@ export function buildRequest({
 
   inputMessages.push({ role: "user", content: userContent });
 
-  const textConfig: ResponseTextConfig & { verbosity?: CliOptions["verbosity"] } = {
+  const textConfig: ResponseTextConfig & { verbosity: CliOptions["verbosity"] | undefined } = {
     verbosity: options.verbosity,
   };
   const inputForRequest = inputMessages as ResponseCreateParamsNonStreaming["input"];
@@ -213,7 +213,9 @@ export async function performCompact<THistoryTask = unknown>(
   const header = "以下はこれまでの会話ログです。全てのメッセージを読んで要約に反映してください。";
   const userPrompt = `${header}\n---\n${conversationText}\n---\n\n出力条件:\n- 内容をシンプルに要約する\n- 箇条書きでも短い段落でもよい`;
 
-  const compactTextConfig: ResponseTextConfig & { verbosity?: CliOptions["verbosity"] } = {
+  const compactTextConfig: ResponseTextConfig & {
+    verbosity: CliOptions["verbosity"] | undefined;
+  } = {
     verbosity: "medium",
   };
   const request: ResponseCreateParamsNonStreaming = {

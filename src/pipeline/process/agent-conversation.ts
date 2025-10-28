@@ -24,7 +24,7 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
   /** Agents SDK で利用するツール配列。 */
   agentTools: AgentsSdkTool[];
   /** エージェント実行の最大ターン数。 */
-  maxTurns?: number;
+  maxTurns: number | undefined;
 }
 
 /**
@@ -34,7 +34,7 @@ interface AgentConversationResult {
   /** 最終的に得られたアシスタントのテキスト。 */
   assistantText: string;
   /** 最後に取得した Responses API のレスポンス ID。 */
-  responseId?: string;
+  responseId: string | undefined;
 }
 
 /**
@@ -86,7 +86,7 @@ export async function runAgentConversation<TOptions extends CliOptions>(
 
   if (!responseText || responseText.length === 0) {
     const latestProviderData = result.rawResponses.at(-1)?.providerData as
-      | { output_text?: string | string[] }
+      | { output_text: string | string[] | undefined }
       | undefined;
     const fallbackText = latestProviderData?.output_text;
     if (typeof fallbackText === "string" && fallbackText.length > 0) {
@@ -207,7 +207,10 @@ function convertUserContent(parts: OpenAIInputMessage["content"]): AgentInputIte
       continue;
     }
     if (part.type === "input_image") {
-      const imagePart = part as unknown as { image?: unknown; image_url?: unknown };
+      const imagePart = part as unknown as {
+        image: unknown | undefined;
+        image_url: unknown | undefined;
+      };
       const imageValue =
         (typeof imagePart.image === "string" ? imagePart.image : undefined) ??
         (typeof imagePart.image_url === "string" ? imagePart.image_url : undefined);
@@ -218,8 +221,8 @@ function convertUserContent(parts: OpenAIInputMessage["content"]): AgentInputIte
     }
     if (part.type === "input_file") {
       const raw = part as unknown as {
-        file?: unknown;
-        file_id?: unknown;
+        file: unknown | undefined;
+        file_id: unknown | undefined;
       };
       const fileValue =
         typeof raw.file === "string"
@@ -247,7 +250,7 @@ function convertUserContent(parts: OpenAIInputMessage["content"]): AgentInputIte
 function buildModelSettings(request: ResponseCreateParamsNonStreaming): ModelSettings | undefined {
   const settings: ModelSettings = {};
   const reasoning = request.reasoning as
-    | { effort?: string | null; summary?: string | null }
+    | { effort: string | null | undefined; summary: string | null | undefined }
     | undefined;
   if (reasoning) {
     const effortCandidates = ["minimal", "low", "medium", "high"] as const;
@@ -271,7 +274,7 @@ function buildModelSettings(request: ResponseCreateParamsNonStreaming): ModelSet
     }
   }
 
-  const textConfig = request.text as { verbosity?: string } | undefined;
+  const textConfig = request.text as { verbosity: string | undefined } | undefined;
   if (textConfig && typeof textConfig.verbosity === "string") {
     const verbosityCandidates = ["low", "medium", "high"] as const;
     if (verbosityCandidates.includes(textConfig.verbosity as any)) {
