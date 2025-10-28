@@ -87,8 +87,7 @@ export interface HistoryEntry<TContext = unknown> {
 
 /**
  * CLI モード間で共有される解析済みフラグ値を表す。
- * いずれのフラグも CLI 入力に応じて任意で指定されるため、存在しない場合は
- * undefined で表現する必要があるプロパティのみ optional としている。
+ * すべてのプロパティを必須化し、値が存在しない場合は undefined を明示的に保持する。
  */
 export interface CommonCliOptions {
   model: string;
@@ -98,17 +97,17 @@ export interface CommonCliOptions {
   debug: boolean;
   maxIterations: number;
   maxIterationsExplicit: boolean;
-  responseOutputPath?: string;
+  responseOutputPath: string | undefined;
   responseOutputExplicit: boolean;
   copyOutput: boolean;
   copyExplicit: boolean;
-  resumeIndex?: number;
+  resumeIndex: number | undefined;
   resumeListOnly: boolean;
-  deleteIndex?: number;
-  showIndex?: number;
-  imagePath?: string;
+  deleteIndex: number | undefined;
+  showIndex: number | undefined;
+  imagePath: string | undefined;
   operation: "ask" | "compact";
-  compactIndex?: number;
+  compactIndex: number | undefined;
   args: string[];
   modelExplicit: boolean;
   effortExplicit: boolean;
