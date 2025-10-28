@@ -1,8 +1,10 @@
 /**
  * paths.ts の環境変数依存挙動を TDD で定義するテストスケルトン。
  */
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { expandHome } from "./paths.js";
 import type { ConfigEnvironment } from "../types.js";
 
@@ -19,49 +21,53 @@ function createConfigEnv(values: Record<string, string | undefined>): ConfigEnvi
   };
 }
 
+let originalHome: string | undefined;
+let cleanupDirs: string[];
+
+beforeEach(() => {
+  originalHome = process.env.HOME;
+  cleanupDirs = [];
+});
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+  for (const dir of cleanupDirs) {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 describe("expandHome", () => {
   it("ConfigEnv の HOME を優先して展開する", () => {
-    const originalHome = process.env.HOME;
     const processHome = path.join(path.sep, "env-home");
-    const configHome = path.join(path.sep, "config-home");
-    try {
-      process.env.HOME = processHome;
-      const env = createConfigEnv({ HOME: configHome });
-      const expandWithConfig = expandHome as unknown as (
-        target: string,
-        configEnv: ConfigEnvironment,
-      ) => string;
+    const configHome = fs.mkdtempSync(path.join(os.tmpdir(), "config-home-"));
+    cleanupDirs.push(configHome);
+    process.env.HOME = processHome;
+    const env = createConfigEnv({ HOME: configHome });
+    const expandWithConfig = expandHome as unknown as (
+      target: string,
+      configEnv: ConfigEnvironment,
+    ) => string;
 
-      const result = expandWithConfig("~/documents/file.txt", env);
-      expect(result).toBe(path.join(configHome, "documents", "file.txt"));
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
-    }
+    const result = expandWithConfig("~/documents/file.txt", env);
+    expect(result).toBe(path.join(configHome, "documents", "file.txt"));
   });
 
   it("ConfigEnv に HOME が無い場合はエラーにする", () => {
-    const originalHome = process.env.HOME;
-    try {
-      process.env.HOME = path.join(path.sep, "process-home");
-      const env = createConfigEnv({});
-      const expandWithConfig = expandHome as unknown as (
-        target: string,
-        configEnv: ConfigEnvironment,
-      ) => string;
+    process.env.HOME = path.join(path.sep, "process-home");
+    const env = createConfigEnv({});
+    const expandWithConfig = expandHome as unknown as (
+      target: string,
+      configEnv: ConfigEnvironment,
+    ) => string;
 
-      expect(() => expandWithConfig("~/data.txt", env)).toThrow(
-        "HOME environment variable is required when using '~' paths.",
-      );
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
-    }
+    expect(() => expandWithConfig("~/data.txt", env)).toThrow(
+      "HOME environment variable is required when using '~' paths.",
+    );
   });
 });
