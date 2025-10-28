@@ -39,6 +39,8 @@ export const configEnvSchema = z
     SQRUFF_BIN: z.string().optional(),
     /** NO_COLOR はフラグ用途で任意のため未設定を許容する。 */
     NO_COLOR: z.string().optional(),
+    /** OS が提供する HOME は環境依存で未設定の場合があるため optional。 */
+    HOME: z.string().optional(),
   })
   .strip();
 
