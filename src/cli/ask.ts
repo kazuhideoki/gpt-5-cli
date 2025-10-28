@@ -281,6 +281,7 @@ async function main(): Promise<void> {
       defaults,
       logLabel: "[gpt-5-cli]",
       configEnv,
+      additionalSystemMessages: undefined,
       toolset,
     });
     const agentResult = await runAgentConversation({

@@ -78,8 +78,19 @@ describe("runAgentConversation", () => {
     expect(requestBody.input.at(-1)?.content?.[0]?.text).toBe("Create a diagram");
   });
 
-  it("maxTurns を undefined にしても実行できる", () => {
-    throw new Error("TODO: implement");
+  it("maxTurns を undefined にしても実行できる", async () => {
+    const client = new FakeOpenAI();
+    const result = await runAgentConversation({
+      client: client as unknown as OpenAI,
+      request: BASE_REQUEST,
+      options: BASE_OPTIONS,
+      logLabel: "[agent-test]",
+      agentTools: [] as AgentsSdkTool[],
+      maxTurns: undefined,
+    });
+
+    expect(result.assistantText).toBe("Agent result");
+    expect(result.responseId).toBe("resp_test");
   });
 
   it("ユーザー入力が存在しない場合にエラーを送出する", async () => {
@@ -101,6 +112,7 @@ describe("runAgentConversation", () => {
         options: BASE_OPTIONS,
         logLabel: "[agent-test]",
         agentTools: [] as AgentsSdkTool[],
+        maxTurns: undefined,
       }),
     ).rejects.toThrow("Error: No user input found for agent execution");
   });
