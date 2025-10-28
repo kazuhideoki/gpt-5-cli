@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { CliDefaults } from "../../types.js";
+import type { CliDefaults, CommonCliOptions } from "../../types.js";
 import { buildCommonCommand, parseCommonOptions } from "./common-cli.js";
 
 function createDefaults(): CliDefaults {
@@ -144,7 +144,42 @@ describe("parseCommonOptions", () => {
     expect(options.maxIterationsExplicit).toBe(true);
   });
 
-  it.todo("CommonCliOptions の全プロパティを欠かさず返す");
+  it("CommonCliOptions の全プロパティを欠かさず返す", () => {
+    const defaults = createDefaults();
+    const command = buildCommand({ defaults });
+    const { options } = parseCommonOptions([], defaults, command);
+
+    const expectedKeys: (keyof CommonCliOptions)[] = [
+      "model",
+      "effort",
+      "verbosity",
+      "continueConversation",
+      "debug",
+      "maxIterations",
+      "maxIterationsExplicit",
+      "responseOutputPath",
+      "responseOutputExplicit",
+      "copyOutput",
+      "copyExplicit",
+      "resumeIndex",
+      "resumeListOnly",
+      "deleteIndex",
+      "showIndex",
+      "imagePath",
+      "operation",
+      "compactIndex",
+      "args",
+      "modelExplicit",
+      "effortExplicit",
+      "verbosityExplicit",
+      "hasExplicitHistory",
+      "helpRequested",
+    ];
+
+    for (const key of expectedKeys) {
+      expect(Object.hasOwn(options, key)).toBe(true);
+    }
+  });
 });
 
 describe("expandLegacyShortFlags integration", () => {

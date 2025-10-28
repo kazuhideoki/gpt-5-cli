@@ -122,27 +122,27 @@ function outputHelp(defaults: CliDefaults, _options: CliOptions): void {
 }
 
 /** CLI全体のオプションを統合的に検証するスキーマ。 */
-const cliOptionsSchema: z.ZodType<CliOptions> = z
+const cliOptionsSchema = z
   .object({
     model: z.string(),
     effort: z.enum(["low", "medium", "high"]),
     verbosity: z.enum(["low", "medium", "high"]),
     continueConversation: z.boolean(),
     taskMode: z.literal("ask"),
-    resumeIndex: z.number().optional(),
+    resumeIndex: z.union([z.number(), z.undefined()]),
     resumeListOnly: z.boolean(),
-    deleteIndex: z.number().optional(),
-    showIndex: z.number().optional(),
-    imagePath: z.string().optional(),
+    deleteIndex: z.union([z.number(), z.undefined()]),
+    showIndex: z.union([z.number(), z.undefined()]),
+    imagePath: z.union([z.string(), z.undefined()]),
     debug: z.boolean(),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
-    responseOutputPath: z.string().min(1).optional(),
+    responseOutputPath: z.union([z.string().min(1), z.undefined()]),
     responseOutputExplicit: z.boolean(),
     copyOutput: z.boolean(),
     copyExplicit: z.boolean(),
     operation: z.union([z.literal("ask"), z.literal("compact")]),
-    compactIndex: z.number().optional(),
+    compactIndex: z.union([z.number(), z.undefined()]),
     args: z.array(z.string()),
     modelExplicit: z.boolean(),
     effortExplicit: z.boolean(),
@@ -183,10 +183,11 @@ export function parseArgs(
   const program = createAskProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   try {
-    return cliOptionsSchema.parse({
+    const optionsInput = {
       ...commonOptions,
       taskMode: "ask",
-    });
+    } satisfies Record<keyof CliOptions, unknown>;
+    return cliOptionsSchema.parse(optionsInput) as CliOptions;
   } catch (error) {
     if (error instanceof z.ZodError) {
       const firstIssue = error.issues[0];
