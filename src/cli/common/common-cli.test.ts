@@ -143,6 +143,8 @@ describe("parseCommonOptions", () => {
     expect(options.maxIterations).toBe(5);
     expect(options.maxIterationsExplicit).toBe(true);
   });
+
+  it.todo("CommonCliOptions の全プロパティを欠かさず返す");
 });
 
 describe("expandLegacyShortFlags integration", () => {
