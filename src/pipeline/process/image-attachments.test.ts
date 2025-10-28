@@ -68,4 +68,6 @@ describe("prepareImageData", () => {
       "Error: -i で指定できるフルパスは",
     );
   });
+
+  it.todo("ConfigEnv の HOME を使用できる");
 });

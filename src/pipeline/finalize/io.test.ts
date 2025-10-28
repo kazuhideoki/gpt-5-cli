@@ -186,6 +186,8 @@ describe("deliverOutput", () => {
       await fs.rm(workspace, { recursive: true, force: true });
     }
   });
+
+  test.todo("ConfigEnv のみで HOME を解決する");
 });
 
 describe("generateDefaultOutputPath", () => {

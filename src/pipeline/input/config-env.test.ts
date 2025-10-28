@@ -182,6 +182,10 @@ describe("ConfigEnv", () => {
     expect(env.get("SQRUFF_BIN")).toBe("sqruff");
     expectEnvIncludesBaseline(env, baseline);
   });
+
+  it.todo("process.env.HOME の値を ConfigEnv が保持する");
+
+  it.todo(".env に記載された HOME を ConfigEnv が読み込む");
 });
 
 describe("configEnvSchema", () => {

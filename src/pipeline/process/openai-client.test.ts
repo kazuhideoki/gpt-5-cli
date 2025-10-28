@@ -57,4 +57,6 @@ describe("createOpenAIClient", () => {
 
     expect(client).toBeInstanceOf(OpenAI);
   });
+
+  it.todo("process.env に依存せず ConfigEnv を唯一の情報源とする");
 });

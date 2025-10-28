@@ -111,4 +111,6 @@ describe("formatModelValue / formatScaleValue", () => {
     expect(formatModelValue(main, main, mini, nano)).toBe("!gpt-5!");
     expect(formatScaleValue("medium")).toBe("+medium+");
   });
+
+  it.todo("ConfigEnv による NO_COLOR 設定を参照する");
 });
