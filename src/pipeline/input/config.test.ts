@@ -34,12 +34,6 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
       map.set(key, value);
     }
   }
-  if (!map.has("HOME")) {
-    const homeEnv = process.env.HOME;
-    if (typeof homeEnv === "string") {
-      map.set("HOME", homeEnv);
-    }
-  }
   return {
     get: (key: string) => map.get(key),
     has: (key: string) => map.has(key),
@@ -146,19 +140,25 @@ describe("loadEnvironment", () => {
 
 describe("resolvePromptsDir", () => {
   it("環境変数が設定されていれば展開して返す", () => {
-    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom" });
+    const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
+      GPT_5_CLI_PROMPTS_DIR: "~/prompts/custom",
+    });
     const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve(path.join(process.env.HOME!, "prompts/custom")));
   });
 
   it("環境変数が未設定なら既定値を返す", () => {
-    const configEnv = createConfigEnv();
+    const configEnv = createConfigEnv({ HOME: process.env.HOME! });
     const resolved = resolvePromptsDir(configEnv, "/default/prompts");
     expect(resolved).toBe(path.resolve("/default/prompts"));
   });
 
   it("空文字列を設定するとエラーになる", () => {
-    const configEnv = createConfigEnv({ GPT_5_CLI_PROMPTS_DIR: "   " });
+    const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
+      GPT_5_CLI_PROMPTS_DIR: "   ",
+    });
     expect(() => resolvePromptsDir(configEnv, "/default/prompts")).toThrow(
       "GPT_5_CLI_PROMPTS_DIR is set but empty.",
     );
@@ -186,7 +186,7 @@ describe("resolvePromptsDir", () => {
 
 describe("loadDefaults", () => {
   it("履歴パスが未設定ならエラーになる", () => {
-    const configEnv = createConfigEnv();
+    const configEnv = createConfigEnv({ HOME: process.env.HOME! });
     expect(() => loadDefaults(configEnv)).toThrow(
       "GPT_5_CLI_HISTORY_INDEX_FILE must be configured via environment files.",
     );
@@ -194,6 +194,7 @@ describe("loadDefaults", () => {
 
   it("既定値を返す", () => {
     const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
       GPT_5_CLI_HISTORY_INDEX_FILE: "~/history/default.json",
     });
     const defaults = loadDefaults(configEnv);
@@ -211,6 +212,7 @@ describe("loadDefaults", () => {
 
   it("環境変数を反映する", () => {
     const configEnv = createConfigEnv({
+      HOME: process.env.HOME!,
       OPENAI_MODEL_MAIN: "main-x",
       OPENAI_MODEL_MINI: "mini-x",
       OPENAI_MODEL_NANO: "nano-x",
