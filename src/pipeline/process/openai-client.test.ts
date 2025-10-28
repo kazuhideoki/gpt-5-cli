@@ -53,6 +53,11 @@ describe("createOpenAIClient", () => {
   });
 
   it("ConfigEnv にキーが無い場合は process.env から取得する", () => {
-    // 実装は次フェーズで追加
+    process.env.OPENAI_API_KEY = "fallback-key";
+    const configEnv = createConfigEnv();
+
+    const client = createOpenAIClient({ configEnv });
+
+    expect(client).toBeInstanceOf(OpenAI);
   });
 });
