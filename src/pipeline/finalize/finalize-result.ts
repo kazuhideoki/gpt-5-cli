@@ -30,10 +30,11 @@ interface FinalizeResultMetadata {
 
 /**
  * finalizeResult が履歴更新を行うためのオプション。
+ * 省略可能な値は `undefined` を用いて表現する。
  */
 export interface FinalizeResultHistoryOptions<TContext> {
   /** 更新対象となるレスポンス ID。 */
-  responseId?: string;
+  responseId: string | undefined;
   /** 履歴エントリを操作するストア。 */
   store: HistoryStore<TContext>;
   /** 現在の会話コンテキスト。 */
@@ -41,13 +42,14 @@ export interface FinalizeResultHistoryOptions<TContext> {
   /** 履歴保存時に引き継ぐモデル関連メタデータ。 */
   metadata: FinalizeResultMetadata;
   /** 直前の履歴コンテキスト。 */
-  previousContextRaw?: TContext;
+  previousContextRaw: TContext | undefined;
   /** 保存する履歴コンテキスト本体。 */
   contextData: TContext;
 }
 
 /**
  * finalizeResult へ渡す CLI 固有の終了処理パラメータ。
+ * 任意入力は `undefined` を指定して不使用を示す。
  */
 export interface FinalizeResultParams<TContext> {
   /** 応答テキスト本体。 */
@@ -57,15 +59,15 @@ export interface FinalizeResultParams<TContext> {
   /** finalize 層が利用する ConfigEnv。 */
   configEnv: ConfigEnvironment;
   /** 標準出力へそのまま流したい補足テキスト。 */
-  stdout?: string;
+  stdout: string | undefined;
   /** ファイル保存先の相対または絶対パス。 */
-  textOutputPath?: string;
+  textOutputPath: string | undefined;
   /** クリップボードへコピーするかどうか。 */
   copyOutput: boolean;
   /** コピー元をファイルへ切り替える場合のパス。 */
-  copySourceFilePath?: string;
+  copySourceFilePath: string | undefined;
   /** 履歴更新を実施する場合の追加オプション。 */
-  history?: FinalizeResultHistoryOptions<TContext>;
+  history: FinalizeResultHistoryOptions<TContext> | undefined;
 }
 
 /**
