@@ -183,9 +183,37 @@ describe("ConfigEnv", () => {
     expectEnvIncludesBaseline(env, baseline);
   });
 
-  it.todo("process.env.HOME の値を ConfigEnv が保持する");
+  it("process.env.HOME の値を ConfigEnv が保持する", async () => {
+    const originalHome = process.env.HOME;
+    const fakeHome = path.join(tmpDirPath, "home-from-process");
+    try {
+      process.env.HOME = fakeHome;
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+      expect(env.get("HOME")).toBe(fakeHome);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
 
-  it.todo(".env に記載された HOME を ConfigEnv が読み込む");
+  it(".env に記載された HOME を ConfigEnv が読み込む", async () => {
+    const originalHome = process.env.HOME;
+    try {
+      delete process.env.HOME;
+      await fs.writeFile(path.join(tmpDirPath, ".env"), "HOME=/tmp/config-env-home\n");
+      const env = await ConfigEnv.create({ baseDir: tmpDirPath });
+      expect(env.get("HOME")).toBe("/tmp/config-env-home");
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
 });
 
 describe("configEnvSchema", () => {

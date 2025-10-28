@@ -187,7 +187,33 @@ describe("deliverOutput", () => {
     }
   });
 
-  test.todo("ConfigEnv のみで HOME を解決する");
+  test("ConfigEnv のみで HOME を解決する", async () => {
+    const originalHome = process.env.HOME;
+    const globalHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-global-home-"));
+    const configHome = await fs.mkdtemp(path.join(os.tmpdir(), "deliver-config-home-"));
+    const workspace = path.join(configHome, "workspace");
+    await fs.mkdir(workspace, { recursive: true });
+    process.env.HOME = globalHome;
+    try {
+      await deliverOutput({
+        content: "config home content",
+        cwd: workspace,
+        filePath: "~/workspace/result.txt",
+        configEnv: createConfigEnv({ HOME: configHome }),
+      });
+      const expected = path.join(configHome, "workspace", "result.txt");
+      const written = await fs.readFile(expected, "utf8");
+      expect(written).toBe("config home content");
+    } finally {
+      await fs.rm(globalHome, { recursive: true, force: true });
+      await fs.rm(configHome, { recursive: true, force: true });
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
 });
 
 describe("generateDefaultOutputPath", () => {
@@ -317,6 +343,20 @@ describe("generateDefaultOutputPath", () => {
       generateDefaultOutputPath({
         mode: "sql",
         extension: "sql",
+        cwd: tempDir,
+        configEnv,
+      }),
+    ).toThrow(/GPT_5_CLI_OUTPUT_DIR/u);
+  });
+
+  test("ConfigEnv が未設定でも process.env に依存しない", () => {
+    process.env[DEFAULT_OUTPUT_DIR_ENV] = "env-only/output";
+    const configEnv = createConfigEnv();
+
+    expect(() =>
+      generateDefaultOutputPath({
+        mode: "mermaid",
+        extension: "mmd",
         cwd: tempDir,
         configEnv,
       }),

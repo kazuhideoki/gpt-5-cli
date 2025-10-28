@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { prepareImageData } from "./image-attachments.js";
+import type { ConfigEnvironment } from "../../types.js";
 
 const SCREENSHOT_NAME = "スクリーンショット 2025-01-01.png";
 
@@ -69,5 +70,36 @@ describe("prepareImageData", () => {
     );
   });
 
-  it.todo("ConfigEnv の HOME を使用できる");
+  it("ConfigEnv の HOME を使用できる", () => {
+    if (!tempHomeDir) {
+      throw new Error("tempHomeDir must be initialized");
+    }
+    const configHome = fs.mkdtempSync(path.join(os.tmpdir(), "config-home-"));
+    try {
+      const configEnv: ConfigEnvironment = {
+        get: (key: string) => (key === "HOME" ? configHome : undefined),
+        has: (key: string) => key === "HOME",
+        entries(): IterableIterator<readonly [key: string, value: string]> {
+          return [[ "HOME", configHome ]][Symbol.iterator]();
+        },
+      };
+      const imagePath = path.join(configHome, "sample.png");
+      fs.writeFileSync(imagePath, Buffer.from("fake-png-data"));
+
+      process.env.HOME = tempHomeDir;
+
+      const prepareWithConfig = prepareImageData as unknown as (
+        imagePath: string | undefined,
+        logLabel: string,
+        configEnv: ConfigEnvironment,
+      ) => string | undefined;
+
+      const result = prepareWithConfig(imagePath, "[test-cli]", configEnv);
+
+      expect(result).toBeDefined();
+      expect(result?.startsWith("data:image/png;base64,")).toBe(true);
+    } finally {
+      fs.rmSync(configHome, { recursive: true, force: true });
+    }
+  });
 });

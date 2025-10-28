@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import type { ConfigEnvironment } from "../../types.js";
 import {
   decorateLevelValue,
   formatModelValue,
@@ -10,6 +11,19 @@ import {
 const originalNoColor = process.env.NO_COLOR;
 const hadOriginalStderrIsTTY = Object.hasOwn(process.stderr, "isTTY");
 const originalStderrIsTTY = process.stderr.isTTY;
+
+function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
+  return {
+    get: (key: string) => values[key],
+    has: (key: string) => values[key] !== undefined,
+    entries(): IterableIterator<readonly [key: string, value: string]> {
+      const entries = Object.entries(values).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      );
+      return entries[Symbol.iterator]();
+    },
+  };
+}
 
 function restoreNoColor(): void {
   if (originalNoColor === undefined) {
@@ -112,5 +126,16 @@ describe("formatModelValue / formatScaleValue", () => {
     expect(formatScaleValue("medium")).toBe("+medium+");
   });
 
-  it.todo("ConfigEnv による NO_COLOR 設定を参照する");
+  it("ConfigEnv による NO_COLOR 設定を参照する", () => {
+    delete process.env.NO_COLOR;
+    process.stderr.isTTY = true;
+    const configEnv = createConfigEnv({ NO_COLOR: "1" });
+    const decorateWithConfig = decorateLevelValue as unknown as (
+      value: string,
+      level: "low" | "medium" | "high",
+      configEnv: ConfigEnvironment,
+    ) => string;
+
+    expect(decorateWithConfig("value", "high", configEnv)).toBe("!value!");
+  });
 });

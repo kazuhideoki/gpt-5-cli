@@ -58,5 +58,10 @@ describe("createOpenAIClient", () => {
     expect(client).toBeInstanceOf(OpenAI);
   });
 
-  it.todo("process.env に依存せず ConfigEnv を唯一の情報源とする");
+  it("process.env に依存せず ConfigEnv を唯一の情報源とする", () => {
+    process.env.OPENAI_API_KEY = "env-key";
+    const configEnv = createConfigEnv();
+
+    expect(() => createOpenAIClient({ configEnv })).toThrow("OPENAI_API_KEY not found");
+  });
 });
