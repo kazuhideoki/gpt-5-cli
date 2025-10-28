@@ -40,8 +40,6 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
 }
 
 describe("finalizeResult", () => {
-  it("undefined を含む finalizeResult 呼び出しを定義する");
-
   it("履歴コンテキストを構築し upsertConversation を呼び出す", async () => {
     const upsertConversation = mock(() => undefined);
     const historyStore = {
