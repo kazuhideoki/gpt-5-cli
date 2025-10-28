@@ -1,4 +1,5 @@
 import type { EasyInputMessage } from "openai/resources/responses/responses";
+import type { ConfigEnvKey, ConfigEnvSnapshot } from "./pipeline/input/config-env.js";
 
 /** OpenAI Reasoning APIへ渡す effort レベル。 */
 export type EffortLevel = "low" | "medium" | "high";
@@ -28,25 +29,25 @@ export interface ConfigEnvironment {
   /**
    * 指定した環境キーに紐づく値を取得する。
    *
-   * @param key 参照対象の環境変数名。
+   * @param key 参照対象の環境変数名。ConfigEnv が認識しているキーのみ指定できる。
    * @returns キーが存在する場合は値、存在しない場合は undefined。
    */
-  get(key: string): string | undefined;
+  get<TKey extends ConfigEnvKey>(key: TKey): ConfigEnvSnapshot[TKey];
 
   /**
    * 指定した環境キーが保持されているか判定する。
    *
-   * @param key 存在確認を行う環境変数名。
+   * @param key 存在確認を行う環境変数名。ConfigEnv が認識しているキーのみ指定できる。
    * @returns キーが存在する場合は true、それ以外は false。
    */
-  has(key: string): boolean;
+  has(key: ConfigEnvKey): boolean;
 
   /**
    * 保持している全てのキーと値を列挙する。
    *
    * @returns イテレータで表現したキーと値のペア。値は読み取り専用として扱う。
    */
-  entries(): IterableIterator<readonly [key: string, value: string]>;
+  entries(): IterableIterator<readonly [key: ConfigEnvKey, value: string]>;
 }
 
 // 以降は CLI/Session 双方から参照される共通型
@@ -86,8 +87,7 @@ export interface HistoryEntry<TContext = unknown> {
 
 /**
  * CLI モード間で共有される解析済みフラグ値を表す。
- * いずれのフラグも CLI 入力に応じて任意で指定されるため、存在しない場合は
- * undefined で表現する必要があるプロパティのみ optional としている。
+ * すべてのプロパティを必須化し、値が存在しない場合は undefined を明示的に保持する。
  */
 export interface CommonCliOptions {
   model: string;
@@ -97,17 +97,17 @@ export interface CommonCliOptions {
   debug: boolean;
   maxIterations: number;
   maxIterationsExplicit: boolean;
-  responseOutputPath?: string;
+  responseOutputPath: string | undefined;
   responseOutputExplicit: boolean;
   copyOutput: boolean;
   copyExplicit: boolean;
-  resumeIndex?: number;
+  resumeIndex: number | undefined;
   resumeListOnly: boolean;
-  deleteIndex?: number;
-  showIndex?: number;
-  imagePath?: string;
+  deleteIndex: number | undefined;
+  showIndex: number | undefined;
+  imagePath: string | undefined;
   operation: "ask" | "compact";
-  compactIndex?: number;
+  compactIndex: number | undefined;
   args: string[];
   modelExplicit: boolean;
   effortExplicit: boolean;

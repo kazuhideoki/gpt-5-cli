@@ -4,8 +4,6 @@ import OpenAI from "openai";
 import type { ConfigEnvironment } from "../../types.js";
 
 interface CreateOpenAIClientOptions {
-  /** ConfigEnv から得た値をテスト等で上書きしたい場合に使う明示 API キー。 */
-  apiKey?: string;
   /** `.env` 群を読み取った ConfigEnv。 */
   configEnv: ConfigEnvironment;
 }
@@ -26,9 +24,6 @@ export function createOpenAIClient(options: CreateOpenAIClientOptions): OpenAI {
  * @throws `OPENAI_API_KEY not found` を含むエラー（テスト互換のため）。
  */
 function resolveOpenAIApiKey(options: CreateOpenAIClientOptions): string {
-  if (typeof options.apiKey === "string" && options.apiKey.trim().length > 0) {
-    return options.apiKey.trim();
-  }
   const configValue = options.configEnv.get("OPENAI_API_KEY");
   const rawFromConfig = typeof configValue === "string" ? configValue.trim() : "";
   if (rawFromConfig.length === 0) {

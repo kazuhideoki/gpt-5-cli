@@ -43,12 +43,6 @@ describe("createOpenAIClient", () => {
     expect(client).toBeInstanceOf(OpenAI);
   });
 
-  it("明示したAPIキーを優先して利用する", () => {
-    const configEnv = createConfigEnv({ OPENAI_API_KEY: "ignored" });
-    const client = createOpenAIClient({ apiKey: "override-key", configEnv });
-    expect(client).toBeInstanceOf(OpenAI);
-  });
-
   it("ConfigEnv の API キーを優先して参照する", () => {
     delete process.env.OPENAI_API_KEY;
     const configEnv = createConfigEnv({ OPENAI_API_KEY: "config-key" });
@@ -58,7 +52,7 @@ describe("createOpenAIClient", () => {
     expect(client).toBeInstanceOf(OpenAI);
   });
 
-  it("process.env に依存せず ConfigEnv を唯一の情報源とする", () => {
+  it("ConfigEnv にキーが無い場合は例外となる", () => {
     process.env.OPENAI_API_KEY = "env-key";
     const configEnv = createConfigEnv();
 

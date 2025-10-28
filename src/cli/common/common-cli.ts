@@ -16,7 +16,7 @@ const COMPACT_ERROR_MESSAGE = "Error: --compact の履歴番号は正の整数�
 const ITERATIONS_PARSE_MESSAGE = "Error: --iterations の値は正の整数で指定してください";
 const ITERATIONS_MIN_MESSAGE = "Error: --iterations の値は 1 以上で指定してください";
 
-const commonCliOptionsSchema: z.ZodType<CommonCliOptions> = z.object({
+const commonCliOptionsSchema = z.object({
   model: z.string(),
   effort: z.enum(["low", "medium", "high"]),
   verbosity: z.enum(["low", "medium", "high"]),
@@ -24,17 +24,17 @@ const commonCliOptionsSchema: z.ZodType<CommonCliOptions> = z.object({
   debug: z.boolean(),
   maxIterations: z.number(),
   maxIterationsExplicit: z.boolean(),
-  responseOutputPath: z.string().min(1).optional(),
+  responseOutputPath: z.union([z.string().min(1), z.undefined()]),
   responseOutputExplicit: z.boolean(),
   copyOutput: z.boolean(),
   copyExplicit: z.boolean(),
-  resumeIndex: z.number().optional(),
+  resumeIndex: z.union([z.number(), z.undefined()]),
   resumeListOnly: z.boolean(),
-  deleteIndex: z.number().optional(),
-  showIndex: z.number().optional(),
-  imagePath: z.string().optional(),
+  deleteIndex: z.union([z.number(), z.undefined()]),
+  showIndex: z.union([z.number(), z.undefined()]),
+  imagePath: z.union([z.string(), z.undefined()]),
   operation: z.union([z.literal("ask"), z.literal("compact")]),
-  compactIndex: z.number().optional(),
+  compactIndex: z.union([z.number(), z.undefined()]),
   args: z.array(z.string()),
   modelExplicit: z.boolean(),
   effortExplicit: z.boolean(),
@@ -220,7 +220,7 @@ export function parseCommonOptions(
     typeof opts.iterations === "number" ? opts.iterations : defaults.maxIterations;
 
   try {
-    const options = commonCliOptionsSchema.parse({
+    const optionsInput = {
       model,
       effort,
       verbosity,
@@ -245,7 +245,8 @@ export function parseCommonOptions(
       verbosityExplicit,
       hasExplicitHistory,
       helpRequested,
-    });
+    } satisfies Record<keyof CommonCliOptions, unknown>;
+    const options = commonCliOptionsSchema.parse(optionsInput) as CommonCliOptions;
     return { options, helpRequested };
   } catch (error) {
     if (error instanceof z.ZodError) {
