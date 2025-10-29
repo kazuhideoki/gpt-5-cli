@@ -29,6 +29,7 @@ import {
   finalizeResult,
   generateDefaultOutputPath,
   resolveResultOutput,
+  type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
@@ -162,19 +163,39 @@ const sqlCliHistoryContextStrictSchema = z.object({
 const sqlCliHistoryContextSchema = sqlCliHistoryContextStrictSchema
   .or(z.object({}).passthrough())
   .or(z.null());
-
-export type SqlCliHistoryContext = z.infer<typeof sqlCliHistoryContextStrictSchema>;
+type SqlCliHistoryContextRaw = z.infer<typeof sqlCliHistoryContextStrictSchema>;
+export type SqlCliHistoryContext = FileHistoryContext & {
+  cli: "sql";
+  engine: SqlEngine;
+  dsn_hash: string;
+  dsn: string | undefined;
+  connection: SqlConnectionMetadata | undefined;
+};
 type SqlCliHistoryStoreContext = z.infer<typeof sqlCliHistoryContextSchema>;
 
-function isSqlHistoryContext(
+function toSqlHistoryContext(
   value: SqlCliHistoryStoreContext | undefined,
-): value is SqlCliHistoryContext {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "cli" in value &&
-    (value as { cli?: unknown }).cli === "sql"
-  );
+): SqlCliHistoryContext | undefined {
+  if (!value || typeof value !== "object" || (value as { cli?: unknown }).cli !== "sql") {
+    return undefined;
+  }
+
+  const raw = value as SqlCliHistoryContextRaw;
+  const connection =
+    raw.connection && typeof raw.connection === "object"
+      ? (raw.connection as SqlConnectionMetadata)
+      : undefined;
+
+  return {
+    cli: "sql",
+    engine: raw.engine,
+    dsn_hash: raw.dsn_hash,
+    dsn: typeof raw.dsn === "string" ? raw.dsn : undefined,
+    connection,
+    absolute_path: typeof raw.absolute_path === "string" ? raw.absolute_path : undefined,
+    relative_path: typeof raw.relative_path === "string" ? raw.relative_path : undefined,
+    copy: typeof raw.copy === "boolean" ? raw.copy : undefined,
+  };
 }
 
 /**
@@ -548,32 +569,27 @@ export function buildSqlHistoryContext(
     cli: "sql",
     engine: options.engine,
     dsn_hash: options.dsnHash,
+    dsn: undefined,
+    connection: undefined,
+    absolute_path: previousContext?.absolute_path ?? undefined,
+    relative_path: undefined,
+    copy: undefined,
   };
   const resolvedDsn = options.dsn ?? previousContext?.dsn;
-  if (resolvedDsn) {
-    nextContext.dsn = resolvedDsn;
-  }
+  nextContext.dsn = resolvedDsn ?? undefined;
+
   const connectionEntries = Object.keys(normalizedConnection);
   if (connectionEntries.length > 0) {
     nextContext.connection = normalizedConnection;
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
   }
-  if (extras.historyArtifactPath !== undefined) {
-    nextContext.relative_path = extras.historyArtifactPath;
-  } else if (previousContext?.relative_path) {
-    nextContext.relative_path = previousContext.relative_path;
-  } else {
-    delete nextContext.relative_path;
-  }
 
-  if (extras.copyOutput) {
-    nextContext.copy = true;
-  } else if (previousContext?.copy) {
-    nextContext.copy = true;
-  } else {
-    delete nextContext.copy;
-  }
+  nextContext.relative_path =
+    extras.historyArtifactPath ?? previousContext?.relative_path ?? undefined;
+
+  nextContext.copy = extras.copyOutput || previousContext?.copy ? true : undefined;
+
   return nextContext;
 }
 
@@ -632,7 +648,9 @@ async function main(): Promise<void> {
         logLabel: LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "sql";
-          const historyContext = activeEntry.context as SqlCliHistoryContext | undefined;
+          const historyContext = toSqlHistoryContext(
+            activeEntry.context as SqlCliHistoryStoreContext | undefined,
+          );
           if (!nextOptions.responseOutputExplicit) {
             const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
             if (historyFile) {
@@ -713,9 +731,7 @@ async function main(): Promise<void> {
     const previousContextRaw = context.activeEntry?.context as
       | SqlCliHistoryStoreContext
       | undefined;
-    const previousContext = isSqlHistoryContext(previousContextRaw)
-      ? previousContextRaw
-      : undefined;
+    const previousContext = toSqlHistoryContext(previousContextRaw);
     const historyContext = buildSqlHistoryContext(
       {
         dsnHash: sqlEnv.hash,
@@ -735,8 +751,11 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptionsWithDsn.copyOutput,
-      copySourceFilePath: resolvedOptionsWithDsn.artifactPath,
+      copySourceFilePath: resolvedOptionsWithDsn.copyOutput
+        ? resolvedOptionsWithDsn.artifactPath
+        : undefined,
       configEnv,
+      stdout: undefined,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

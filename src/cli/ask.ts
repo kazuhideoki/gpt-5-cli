@@ -317,7 +317,11 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       textOutputPath,
       copyOutput: options.copyOutput,
+      copySourceFilePath: options.copyOutput
+        ? (options.responseOutputPath ?? undefined)
+        : undefined,
       configEnv,
+      stdout: undefined,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

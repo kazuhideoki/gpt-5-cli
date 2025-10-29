@@ -11,38 +11,54 @@ interface D2HistoryContext extends FileHistoryContext {
 describe("buildFileHistoryContext", () => {
   it("contextPath を absolute_path に反映する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       contextPath: "/absolute/d2.d2",
       defaultFilePath: "relative.d2",
       copyOutput: false,
     });
 
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
       absolute_path: "/absolute/d2.d2",
       relative_path: "relative.d2",
+      copy: undefined,
     });
   });
 
   it("contextPath が無い場合に defaultFilePath を relative_path として利用する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       defaultFilePath: "relative.d2",
       copyOutput: false,
     });
 
-    expect(context.relative_path).toBe("relative.d2");
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
+    expect(context).toEqual({
+      cli: "d2",
+      absolute_path: undefined,
+      relative_path: "relative.d2",
+      copy: undefined,
+    });
   });
 
   it("copyOutput が true のとき copy フラグを設定する", () => {
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       historyArtifactPath: "result.d2",
       copyOutput: true,
     });
 
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
+      absolute_path: undefined,
       relative_path: "result.d2",
       copy: true,
     });
@@ -56,13 +72,17 @@ describe("buildFileHistoryContext", () => {
     };
 
     const context = buildFileHistoryContext<D2HistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       copyOutput: false,
       previousContext: previous,
     });
 
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
+      absolute_path: undefined,
       relative_path: "previous.d2",
       copy: true,
     });

@@ -8,16 +8,16 @@ import { finalizeResult } from "./finalize-result.js";
 
 type D2HistoryContext = {
   cli: "d2";
-  absolute_path?: string;
-  relative_path?: string;
-  copy?: boolean;
+  absolute_path: string | undefined;
+  relative_path: string | undefined;
+  copy: boolean | undefined;
 };
 
 type MermaidHistoryContext = {
   cli: "mermaid";
-  absolute_path?: string;
-  relative_path?: string;
-  copy?: boolean;
+  absolute_path: string | undefined;
+  relative_path: string | undefined;
+  copy: boolean | undefined;
 };
 
 const baseConversation: ConversationContext = {
@@ -50,6 +50,7 @@ describe("finalizeResult", () => {
       cli: "d2",
       absolute_path: "/absolute/path.d2",
       relative_path: "diagram.d2",
+      copy: undefined,
     };
 
     const outcome = await finalizeResult<D2HistoryContext>({
@@ -57,7 +58,9 @@ describe("finalizeResult", () => {
       userText: "user-input",
       textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: "resp-1",
         store: historyStore,
@@ -81,6 +84,8 @@ describe("finalizeResult", () => {
     const previousContext: MermaidHistoryContext = {
       cli: "mermaid",
       absolute_path: "/from/history.mmd",
+      relative_path: undefined,
+      copy: undefined,
     };
     const upsertConversation = mock(() => undefined);
     const historyStore = {
@@ -90,6 +95,8 @@ describe("finalizeResult", () => {
     const contextData: MermaidHistoryContext = {
       cli: "mermaid",
       absolute_path: previousContext.absolute_path,
+      relative_path: undefined,
+      copy: undefined,
     };
 
     await finalizeResult<MermaidHistoryContext>({
@@ -97,7 +104,9 @@ describe("finalizeResult", () => {
       userText: "describe diagram",
       textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: "resp-2",
         store: historyStore,
@@ -122,15 +131,23 @@ describe("finalizeResult", () => {
     await finalizeResult<D2HistoryContext>({
       content: "noop",
       userText: "noop",
+      textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: undefined,
         store: historyStore,
         conversation: baseConversation,
         metadata: { model: "noop", effort: "low", verbosity: "low" },
         previousContextRaw: undefined,
-        contextData: { cli: "d2" },
+        contextData: {
+          cli: "d2",
+          absolute_path: undefined,
+          relative_path: undefined,
+          copy: undefined,
+        },
       },
     });
 

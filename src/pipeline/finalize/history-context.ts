@@ -4,34 +4,42 @@
  */
 import type { TaskMode } from "../../types.js";
 
+/**
+ * finalize 層が履歴へ保存するファイル成果物の基礎情報。
+ * 各プロパティは `undefined` の場合にコンテキスト未設定を示す。
+ */
 export interface FileHistoryContext {
   cli: TaskMode;
   /** 絶対パスでのファイル参照。 */
-  absolute_path?: string;
+  absolute_path: string | undefined;
   /** ワークスペース基準の相対パス。 */
-  relative_path?: string;
+  relative_path: string | undefined;
   /** コピー指示フラグ。 */
-  copy?: boolean;
+  copy: boolean | undefined;
 }
 
 interface BuildFileHistoryContextParams<TContext extends FileHistoryContext> {
   base: TContext;
   /**
    * 実際に生成された成果物の絶対パスなど、優先して使いたいファイルパス。
+   * `undefined` の場合は優先パスが存在しないことを示す。
    */
-  contextPath?: string;
+  contextPath: string | undefined;
   /**
    * CLI が認識している既定の出力パス。`contextPath` が無い場合のフォールバックに利用する。
+   * `undefined` の場合は CLI 既定値が存在しない。
    */
-  defaultFilePath?: string;
+  defaultFilePath: string | undefined;
   /**
    * 直前の履歴コンテキスト。ファイルパスや copy フラグを必要に応じて引き継ぐ。
+   * 履歴が無い場合は `undefined`。
    */
-  previousContext?: FileHistoryContext;
+  previousContext: FileHistoryContext | undefined;
   /**
    * 履歴に保存したい Artifact のパス。`responseOutputPath ?? options.<artifactPath>` などを想定する。
+   * 保存しない場合は `undefined`。
    */
-  historyArtifactPath?: string;
+  historyArtifactPath: string | undefined;
   /**
    * `--copy` フラグが有効かどうか。
    */
@@ -54,26 +62,15 @@ export function buildFileHistoryContext<TContext extends FileHistoryContext>(
     ...base,
   };
 
-  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path;
-  if (resolvedAbsolutePath !== undefined) {
-    result.absolute_path = resolvedAbsolutePath;
-  } else {
-    delete result.absolute_path;
-  }
+  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path ?? undefined;
+  result.absolute_path = resolvedAbsolutePath;
 
   const resolvedRelativePath =
-    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path;
-  if (resolvedRelativePath !== undefined) {
-    result.relative_path = resolvedRelativePath;
-  } else {
-    delete result.relative_path;
-  }
+    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path ?? undefined;
+  result.relative_path = resolvedRelativePath;
 
-  if (copyOutput || previousContext?.copy) {
-    result.copy = true;
-  } else {
-    delete result.copy;
-  }
+  const copyFromPrevious = previousContext?.copy === true;
+  result.copy = copyOutput || copyFromPrevious ? true : undefined;
 
   return result;
 }

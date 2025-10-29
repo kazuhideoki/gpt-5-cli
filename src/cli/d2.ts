@@ -20,6 +20,7 @@ import {
   generateDefaultOutputPath,
   buildFileHistoryContext,
   resolveResultOutput,
+  type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -116,19 +117,24 @@ const d2CliHistoryContextStrictSchema = z.object({
 const d2CliHistoryContextSchema = d2CliHistoryContextStrictSchema
   .or(z.object({}).passthrough())
   .or(z.null());
-
-export type D2CliHistoryContext = z.infer<typeof d2CliHistoryContextStrictSchema>;
+type D2CliHistoryContextRaw = z.infer<typeof d2CliHistoryContextStrictSchema>;
+export type D2CliHistoryContext = FileHistoryContext & { cli: "d2" };
 type D2CliHistoryStoreContext = z.infer<typeof d2CliHistoryContextSchema>;
 
-function isD2HistoryContext(
+function toD2HistoryContext(
   value: D2CliHistoryStoreContext | undefined,
-): value is D2CliHistoryContext {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "cli" in value &&
-    (value as { cli?: unknown }).cli === "d2"
-  );
+): D2CliHistoryContext | undefined {
+  if (!value || typeof value !== "object" || (value as { cli?: unknown }).cli !== "d2") {
+    return undefined;
+  }
+
+  const raw = value as D2CliHistoryContextRaw;
+  return {
+    cli: "d2",
+    absolute_path: typeof raw.absolute_path === "string" ? raw.absolute_path : undefined,
+    relative_path: typeof raw.relative_path === "string" ? raw.relative_path : undefined,
+    copy: typeof raw.copy === "boolean" ? raw.copy : undefined,
+  };
 }
 
 /**
@@ -377,7 +383,9 @@ async function main(): Promise<void> {
         logLabel: "[gpt-5-cli-d2]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
-          const historyContext = activeEntry.context as D2CliHistoryContext | undefined;
+          const historyContext = toD2HistoryContext(
+            activeEntry.context as D2CliHistoryStoreContext | undefined,
+          );
 
           if (!nextOptions.responseOutputExplicit) {
             const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
@@ -434,9 +442,9 @@ async function main(): Promise<void> {
     });
 
     const previousContextRaw = context.activeEntry?.context as D2CliHistoryStoreContext | undefined;
-    const previousContext = isD2HistoryContext(previousContextRaw) ? previousContextRaw : undefined;
+    const previousContext = toD2HistoryContext(previousContextRaw);
     const historyContext = buildFileHistoryContext<D2CliHistoryContext>({
-      base: { cli: "d2" },
+      base: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
       contextPath: d2Context.absolutePath,
       defaultFilePath: resolvedOptions.artifactPath,
       previousContext,
@@ -448,8 +456,9 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptions.copyOutput,
-      copySourceFilePath: resolvedOptions.artifactPath,
+      copySourceFilePath: resolvedOptions.copyOutput ? resolvedOptions.artifactPath : undefined,
       configEnv,
+      stdout: undefined,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

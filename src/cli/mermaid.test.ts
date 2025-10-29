@@ -151,7 +151,12 @@ describe("mermaid resolveInputOrExecuteHistoryAction", () => {
     const entry: MermaidHistoryEntry = {
       last_response_id: "resp-mermaid",
       title: "diagram",
-      context: { cli: "mermaid", absolute_path: "/tmp/out.mmd" },
+      context: {
+        cli: "mermaid",
+        absolute_path: "/tmp/out.mmd",
+        relative_path: undefined,
+        copy: undefined,
+      },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({
