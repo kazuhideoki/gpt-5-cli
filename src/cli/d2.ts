@@ -219,9 +219,14 @@ export function parseArgs(
 ): D2CliOptions {
   const program = createD2Program(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
+  const defaultOutputPath = generateDefaultOutputPath({
+    mode: "d2",
+    extension: "d2",
+    cwd: undefined,
+    configEnv,
+  });
   const resolvedResponseOutputPath =
-    commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "d2", extension: "d2", cwd: undefined, configEnv }).relativePath;
+    commonOptions.responseOutputPath ?? defaultOutputPath.relativePath;
   try {
     const optionsInput = {
       ...commonOptions,

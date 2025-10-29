@@ -292,14 +292,14 @@ export function parseArgs(
     }
     dsn = trimmed;
   }
+  const defaultOutputPath = generateDefaultOutputPath({
+    mode: "sql",
+    extension: "sql",
+    cwd: undefined,
+    configEnv,
+  });
   const resolvedResponseOutputPath =
-    commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({
-      mode: "sql",
-      extension: "sql",
-      cwd: undefined,
-      configEnv,
-    }).relativePath;
+    commonOptions.responseOutputPath ?? defaultOutputPath.relativePath;
   try {
     const optionsInput = {
       ...commonOptions,
