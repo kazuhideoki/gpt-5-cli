@@ -611,12 +611,19 @@ function normalizePort(value: number | undefined): number | undefined {
 }
 
 function hasAnyConnectionValue(connection: SqlConnectionMetadata): boolean {
-  return Boolean(
-    connection.host ??
-      connection.database ??
-      connection.user ??
-      (typeof connection.port === "number" ? connection.port : undefined),
-  );
+  if (typeof connection.port === "number") {
+    return true;
+  }
+  if (typeof connection.host === "string") {
+    return true;
+  }
+  if (typeof connection.database === "string") {
+    return true;
+  }
+  if (typeof connection.user === "string") {
+    return true;
+  }
+  return false;
 }
 
 /**
