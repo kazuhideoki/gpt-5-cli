@@ -203,6 +203,8 @@ describe("buildSqlHistoryContext", () => {
     expect(updated.relative_path).toBe("result.sql");
     expect(updated.copy).toBe(true);
   });
+
+  it("接続メタデータの未指定プロパティを undefined で保持する");
 });
 
 describe("inferSqlEngineFromDsn", () => {
