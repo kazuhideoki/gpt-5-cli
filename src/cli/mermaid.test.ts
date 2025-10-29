@@ -236,3 +236,7 @@ describe("ensureMermaidContext", () => {
     expect(result.context.exists).toBe(false);
   });
 });
+
+describe("mermaid main", () => {
+  it("maxIterations を超過した場合は完了ログを出力する");
+});

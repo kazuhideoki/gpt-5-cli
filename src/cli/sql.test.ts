@@ -391,3 +391,7 @@ describe("ensureSqlContext", () => {
     expect(options.responseOutputPath).toBe("./result.sql");
   });
 });
+
+describe("sql main", () => {
+  it("maxIterations を超過した場合は完了ログを出力する");
+});

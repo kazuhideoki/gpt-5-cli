@@ -261,6 +261,10 @@ describe("ensureD2Context", () => {
     // Step3 で実装
   });
 });
+
+describe("d2 main", () => {
+  it("maxIterations を超過した場合は完了ログを出力する");
+});
 it("正規化済みオプションを返す", () => {
   const input = createOptions({
     artifactPath: "./diagram.d2",

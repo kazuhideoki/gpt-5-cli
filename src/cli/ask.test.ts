@@ -440,6 +440,8 @@ describe("main", () => {
     const source = await file.text();
     expect(source.includes("maxTurns: options.maxIterations")).toBe(true);
   });
+
+  it("maxIterations を超過した場合は完了ログを出力する");
 });
 
 describe("ask web search integration", () => {
