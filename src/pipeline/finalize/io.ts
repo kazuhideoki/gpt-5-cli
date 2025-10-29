@@ -25,8 +25,11 @@ export interface DefaultOutputPathParams {
   mode: string;
   /** 生成するファイル名の拡張子。ドットを含めない。 */
   extension: string;
-  /** 生成の基準となるカレントディレクトリ。既定は `process.cwd()`。 */
-  cwd?: string;
+  /**
+   * 生成の基準となるカレントディレクトリ。
+   * `undefined` を渡した場合は `process.cwd()` を利用する。
+   */
+  cwd: string | undefined;
   /**
    * `.env` 群を取り込んだ環境スナップショット。
    * finalize 層では ConfigEnv が渡される想定。
@@ -46,14 +49,26 @@ export const DEFAULT_OUTPUT_DIR_ENV = "GPT_5_CLI_OUTPUT_DIR";
 export interface DeliverOutputParams {
   /** 書き出す本文。 */
   content: string;
-  /** CLI の実行ルート。既定は `process.cwd()` を利用する。 */
-  cwd?: string;
-  /** 保存対象の相対または絶対パス。未指定の場合はファイル保存を行わない。 */
-  filePath?: string;
-  /** クリップボードへコピーする場合に `true`。 */
-  copy?: boolean;
-  /** コピー対象を本文以外へ変更する場合の情報。 */
-  copySource?: CopySource;
+  /**
+   * CLI の実行ルート。
+   * `undefined` を渡した場合は `process.cwd()` を利用する。
+   */
+  cwd: string | undefined;
+  /**
+   * 保存対象の相対または絶対パス。
+   * `undefined` の場合はファイル保存を行わない。
+   */
+  filePath: string | undefined;
+  /**
+   * クリップボードへコピーする場合に `true`。
+   * `undefined` はコピー要求なしと解釈する。
+   */
+  copy: boolean | undefined;
+  /**
+   * コピー対象を本文以外へ変更する場合の情報。
+   * `undefined` の場合は本文をコピーする。
+   */
+  copySource: CopySource | undefined;
   /**
    * finalize 層で参照する環境スナップショット。
    * ConfigEnv から供給される値を使用する。
@@ -66,14 +81,14 @@ export interface DeliverOutputParams {
  */
 export interface DeliverOutputResult {
   /** ファイルへ書き出した場合の結果メタデータ。 */
-  file?: {
+  file: {
     /** 書き込み先の絶対パス。 */
     absolutePath: string;
     /** 書き込んだバイト数。 */
     bytesWritten: number;
-  };
+  } | undefined;
   /** クリップボードコピーを実行した場合は true。 */
-  copied?: boolean;
+  copied: boolean | undefined;
 }
 
 function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
@@ -206,7 +221,10 @@ async function copyWithPbcopy(content: string): Promise<void> {
  */
 export async function deliverOutput(params: DeliverOutputParams): Promise<DeliverOutputResult> {
   const cwd = params.cwd ?? process.cwd();
-  const result: DeliverOutputResult = {};
+  const result: DeliverOutputResult = {
+    file: undefined,
+    copied: undefined,
+  };
 
   if (params.filePath) {
     const resolved = ensureWorkspacePath(params.filePath, cwd, params.configEnv);
