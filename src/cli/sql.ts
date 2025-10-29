@@ -53,10 +53,10 @@ function resolveSqruffBin(configEnv: ConfigEnvironment): string {
 
 /** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
-  host?: string;
-  port?: number;
-  database?: string;
-  user?: string;
+  host: string | undefined;
+  port: number | undefined;
+  database: string | undefined;
+  user: string | undefined;
 }
 
 /** 実行時に使用するDSNとそのハッシュ、接続メタデータをまとめたスナップショット。 */
@@ -85,8 +85,8 @@ interface SqlContextResolution {
 
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
-  dsn?: string;
-  engine?: SqlEngine;
+  dsn: string | undefined;
+  engine: SqlEngine | undefined;
   artifactPath: string;
 }
 
@@ -562,9 +562,12 @@ export function buildSqlHistoryContext(
   if (!options.engine) {
     throw new Error("Error: SQL engine is required to build history context");
   }
-  const normalizedConnection = Object.fromEntries(
-    Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
-  );
+  const normalizedConnection: SqlConnectionMetadata = {
+    host: normalizeEmptyString(options.connection.host),
+    port: normalizePort(options.connection.port),
+    database: normalizeEmptyString(options.connection.database),
+    user: normalizeEmptyString(options.connection.user),
+  };
   const nextContext: SqlCliHistoryContext = {
     cli: "sql",
     engine: options.engine,
@@ -578,8 +581,7 @@ export function buildSqlHistoryContext(
   const resolvedDsn = options.dsn ?? previousContext?.dsn;
   nextContext.dsn = resolvedDsn ?? undefined;
 
-  const connectionEntries = Object.keys(normalizedConnection);
-  if (connectionEntries.length > 0) {
+  if (hasAnyConnectionValue(normalizedConnection)) {
     nextContext.connection = normalizedConnection;
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
@@ -591,6 +593,37 @@ export function buildSqlHistoryContext(
   nextContext.copy = extras.copyOutput || previousContext?.copy ? true : undefined;
 
   return nextContext;
+}
+
+function normalizeEmptyString(value: string | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePort(value: number | undefined): number | undefined {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function hasAnyConnectionValue(connection: SqlConnectionMetadata): boolean {
+  if (typeof connection.port === "number") {
+    return true;
+  }
+  if (typeof connection.host === "string") {
+    return true;
+  }
+  if (typeof connection.database === "string") {
+    return true;
+  }
+  if (typeof connection.user === "string") {
+    return true;
+  }
+  return false;
 }
 
 /**
