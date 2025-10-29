@@ -116,4 +116,6 @@ describe("runAgentConversation", () => {
       }),
     ).rejects.toThrow("Error: No user input found for agent execution");
   });
+
+  it("maxTurns 超過時に途中結果フラグ付きでテキストを返す");
 });
