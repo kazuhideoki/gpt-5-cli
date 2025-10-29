@@ -203,6 +203,53 @@ describe("buildSqlHistoryContext", () => {
     expect(updated.relative_path).toBe("result.sql");
     expect(updated.copy).toBe(true);
   });
+
+  it("接続メタデータの未指定プロパティを undefined で保持する", () => {
+    const context = buildSqlHistoryContext(
+      {
+        dsnHash: "sha256:partial",
+        dsn: "postgres://user:pass@db/analytics",
+        connection: { host: "db", port: undefined, database: undefined, user: undefined },
+        engine: "postgresql",
+      },
+      undefined,
+    );
+
+    expect(context.connection).toBeDefined();
+    expect(context.connection).toHaveProperty("host", "db");
+    expect(context.connection).toHaveProperty("port", undefined);
+    expect(context.connection).toHaveProperty("database", undefined);
+    expect(context.connection).toHaveProperty("user", undefined);
+  });
+
+  it("port が 0 の場合でも接続情報として扱う", () => {
+    const existing = {
+      cli: "sql" as const,
+      engine: "postgresql" as const,
+      dsn_hash: "sha256:prev",
+      dsn: "postgres://prev@host/db",
+      connection: { host: "prev-host", port: 5432, database: "prev-db", user: "prev-user" },
+      absolute_path: undefined,
+      relative_path: undefined,
+      copy: undefined,
+    };
+
+    const updated = buildSqlHistoryContext(
+      {
+        dsnHash: "sha256:zero",
+        dsn: "postgres://user@host:0/db",
+        connection: { host: undefined, port: 0, database: undefined, user: undefined },
+        engine: "postgresql",
+      },
+      existing,
+    );
+
+    expect(updated.connection).toBeDefined();
+    expect(updated.connection?.port).toBe(0);
+    expect(updated.connection?.host).toBeUndefined();
+    expect(updated.connection?.database).toBeUndefined();
+    expect(updated.connection?.user).toBeUndefined();
+  });
 });
 
 describe("inferSqlEngineFromDsn", () => {

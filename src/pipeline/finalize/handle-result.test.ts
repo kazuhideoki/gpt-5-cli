@@ -35,7 +35,10 @@ describe("handleResult", () => {
         handler: delivery,
         params: {
           content: undefined,
+          cwd: undefined,
           filePath: "out.txt",
+          copy: undefined,
+          copySource: undefined,
         },
       },
       configEnv: createConfigEnv(),
@@ -98,7 +101,16 @@ describe("handleResult", () => {
     await handleResult({
       content: "pass-through",
       configEnv,
-      output: { handler: delivery, params: { content: undefined } },
+      output: {
+        handler: delivery,
+        params: {
+          content: undefined,
+          cwd: undefined,
+          filePath: undefined,
+          copy: undefined,
+          copySource: undefined,
+        },
+      },
       stdout: undefined,
       history: undefined,
       exitCode: undefined,

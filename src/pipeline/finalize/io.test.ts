@@ -90,6 +90,8 @@ describe("deliverOutput", () => {
     await deliverOutput({
       content: "summary text",
       copy: true,
+      copySource: undefined,
+      filePath: undefined,
       cwd: tmpDir,
       configEnv: createConfigEnv(),
     });
@@ -104,6 +106,7 @@ describe("deliverOutput", () => {
       content: "summary text",
       copy: true,
       cwd: tmpDir,
+      filePath: undefined,
       copySource: {
         type: "file",
         filePath: "diagram.d2",
@@ -120,6 +123,7 @@ describe("deliverOutput", () => {
         content: "summary text",
         copy: true,
         cwd: tmpDir,
+        filePath: undefined,
         copySource: {
           type: "file",
           filePath: "missing.d2",
@@ -145,6 +149,8 @@ describe("deliverOutput", () => {
       content: "home expansion",
       cwd: workspace,
       filePath: targetPath,
+      copy: undefined,
+      copySource: undefined,
       configEnv: createConfigEnv({ HOME: fakeHome }),
     });
     const expectedPath = path.join(fakeHome, "workspace", "result.txt");
@@ -171,6 +177,8 @@ describe("deliverOutput", () => {
       content: "fallback expansion",
       cwd: workspace,
       filePath: "~/workspace/output.txt",
+      copy: undefined,
+      copySource: undefined,
       configEnv: createConfigEnv(),
     });
 
@@ -195,6 +203,8 @@ describe("deliverOutput", () => {
         content: "should fail",
         cwd: workspace,
         filePath: "~/outside.txt",
+        copy: undefined,
+        copySource: undefined,
         configEnv: createConfigEnv({ HOME: fakeHome }),
       }),
     ).rejects.toThrow(/ワークスペース配下/);
@@ -217,11 +227,46 @@ describe("deliverOutput", () => {
       content: "config home content",
       cwd: workspace,
       filePath: "~/workspace/result.txt",
+      copy: undefined,
+      copySource: undefined,
       configEnv: createConfigEnv({ HOME: configHome }),
     });
     const expected = path.join(configHome, "workspace", "result.txt");
     const written = await fs.readFile(expected, "utf8");
     expect(written).toBe("config home content");
+  });
+
+  test("コピーやファイル出力が不要な場合でも戻り値にプロパティが含まれる", async () => {
+    const result = await deliverOutput({
+      content: "no extra outputs",
+      copy: undefined,
+      copySource: undefined,
+      filePath: undefined,
+      cwd: tmpDir,
+      configEnv: createConfigEnv(),
+    });
+
+    expect(result.file).toBeUndefined();
+    expect(result.copied).toBeUndefined();
+  });
+
+  test("ファイル出力のみ実施した場合の戻り値を検証する", async () => {
+    const relativePath = path.join("artifacts", "result.txt");
+    const result = await deliverOutput({
+      content: "stored output",
+      copy: undefined,
+      copySource: undefined,
+      filePath: relativePath,
+      cwd: tmpDir,
+      configEnv: createConfigEnv(),
+    });
+
+    expect(result.file).toBeDefined();
+    expect(result.file?.absolutePath).toBe(path.join(tmpDir, relativePath));
+    expect(result.file?.bytesWritten).toBe(Buffer.byteLength("stored output", "utf8"));
+    const saved = await fs.readFile(path.join(tmpDir, relativePath), "utf8");
+    expect(saved).toBe("stored output");
+    expect(result.copied).toBeUndefined();
   });
 });
 
