@@ -41,7 +41,10 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
 }
 
 /**
- * Agents SDK を利用してリクエストを実行し、最終応答テキストとレスポンス ID を返す。
+ * Agents SDK を介してエージェント実行を行い、最終または途中応答とレスポンス ID を取得する。
+ *
+ * maxTurns を超過した場合でも {@link AgentConversationOutcome.reachedMaxIterations} を true に設定し、
+ * 可能な限りテキストを抽出して返す。
  */
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
@@ -284,6 +287,13 @@ function buildModelSettings(request: ResponseCreateParamsNonStreaming): ModelSet
   return Object.keys(settings).length > 0 ? settings : undefined;
 }
 
+/**
+ * Agents SDK の RunResult からテキストを抽出する。
+ *
+ * 1. 正常終了時にのみアクセス可能な finalOutput を最優先で利用する。
+ * 2. 未完成の場合は message_output_item から連結済みテキストを構築する。
+ * 3. それでも得られない場合は providerData.output_text をフォールバックとして採用する。
+ */
 function resolveAssistantText(result: AnyRunResult): string | undefined {
   if (hasFinalOutput(result)) {
     const finalOutput = result.finalOutput;
@@ -292,6 +302,7 @@ function resolveAssistantText(result: AnyRunResult): string | undefined {
     }
   }
 
+  // concatenated: 実行途中で積み上がった message_output_item を連結し、途中結果でも自然な文章を再構築する。
   const concatenated = extractAllTextOutput(result.newItems);
   if (typeof concatenated === "string" && concatenated.length > 0) {
     return concatenated;
@@ -310,7 +321,10 @@ function resolveAssistantText(result: AnyRunResult): string | undefined {
   return undefined;
 }
 
-function isMaxTurnsExceededError(error: unknown): error is MaxTurnsExceededError & { state: AnyRunState } {
+/** MaxTurnsExceededError かつ状態オブジェクトを保持しているか判定する。 */
+function isMaxTurnsExceededError(
+  error: unknown,
+): error is MaxTurnsExceededError & { state: AnyRunState } {
   return (
     error instanceof MaxTurnsExceededError &&
     typeof (error as MaxTurnsExceededError).state === "object" &&
@@ -318,6 +332,7 @@ function isMaxTurnsExceededError(error: unknown): error is MaxTurnsExceededError
   );
 }
 
+/** 正常終了時にのみ finalOutput が安全に読み取れる状態かを判定する。 */
 function hasFinalOutput(result: AnyRunResult): boolean {
   const state = (
     result as unknown as {
