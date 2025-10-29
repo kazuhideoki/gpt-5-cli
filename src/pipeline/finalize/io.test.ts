@@ -224,12 +224,39 @@ describe("deliverOutput", () => {
     expect(written).toBe("config home content");
   });
 
-  test("コピーやファイル出力が不要な場合でも戻り値にプロパティが含まれる", () => {
-    // 実装確認用のプレースホルダー。後続フェーズで詳細を記述する。
+  test("コピーやファイル出力が不要な場合でも戻り値にプロパティが含まれる", async () => {
+    const result = await deliverOutput({
+      content: "no extra outputs",
+      copy: undefined,
+      copySource: undefined,
+      filePath: undefined,
+      cwd: tmpDir,
+      configEnv: createConfigEnv(),
+    });
+
+    expect(Object.prototype.hasOwnProperty.call(result, "file")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(result, "copied")).toBe(true);
+    expect(result.file).toBeUndefined();
+    expect(result.copied).toBeUndefined();
   });
 
-  test("ファイル出力のみ実施した場合の戻り値を検証する", () => {
-    // 実装確認用のプレースホルダー。後続フェーズで詳細を記述する。
+  test("ファイル出力のみ実施した場合の戻り値を検証する", async () => {
+    const relativePath = path.join("artifacts", "result.txt");
+    const result = await deliverOutput({
+      content: "stored output",
+      copy: undefined,
+      copySource: undefined,
+      filePath: relativePath,
+      cwd: tmpDir,
+      configEnv: createConfigEnv(),
+    });
+
+    expect(result.file).toBeDefined();
+    expect(result.file?.absolutePath).toBe(path.join(tmpDir, relativePath));
+    expect(result.file?.bytesWritten).toBe(Buffer.byteLength("stored output", "utf8"));
+    const saved = await fs.readFile(path.join(tmpDir, relativePath), "utf8");
+    expect(saved).toBe("stored output");
+    expect(result.copied).toBeUndefined();
   });
 });
 
