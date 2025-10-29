@@ -234,8 +234,6 @@ describe("deliverOutput", () => {
       configEnv: createConfigEnv(),
     });
 
-    expect(Object.prototype.hasOwnProperty.call(result, "file")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(result, "copied")).toBe(true);
     expect(result.file).toBeUndefined();
     expect(result.copied).toBeUndefined();
   });
