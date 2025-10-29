@@ -197,7 +197,12 @@ export function parseArgs(
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "mermaid", extension: "mmd", configEnv }).relativePath;
+    generateDefaultOutputPath({
+      mode: "mermaid",
+      extension: "mmd",
+      cwd: undefined,
+      configEnv,
+    }).relativePath;
   try {
     const optionsInput = {
       ...commonOptions,

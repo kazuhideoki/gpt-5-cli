@@ -34,7 +34,10 @@ describe("handleResult", () => {
       output: {
         handler: delivery,
         params: {
+          cwd: undefined,
           filePath: "out.txt",
+          copy: undefined,
+          copySource: undefined,
         },
       },
       configEnv: createConfigEnv(),
@@ -89,7 +92,15 @@ describe("handleResult", () => {
     await handleResult({
       content: "pass-through",
       configEnv,
-      output: { handler: delivery, params: {} },
+      output: {
+        handler: delivery,
+        params: {
+          cwd: undefined,
+          filePath: undefined,
+          copy: undefined,
+          copySource: undefined,
+        },
+      },
     });
 
     expect(delivery).toHaveBeenCalledTimes(1);

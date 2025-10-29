@@ -81,12 +81,14 @@ export interface DeliverOutputParams {
  */
 export interface DeliverOutputResult {
   /** ファイルへ書き出した場合の結果メタデータ。 */
-  file: {
-    /** 書き込み先の絶対パス。 */
-    absolutePath: string;
-    /** 書き込んだバイト数。 */
-    bytesWritten: number;
-  } | undefined;
+  file:
+    | {
+        /** 書き込み先の絶対パス。 */
+        absolutePath: string;
+        /** 書き込んだバイト数。 */
+        bytesWritten: number;
+      }
+    | undefined;
   /** クリップボードコピーを実行した場合は true。 */
   copied: boolean | undefined;
 }

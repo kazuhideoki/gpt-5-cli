@@ -221,7 +221,7 @@ export function parseArgs(
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "d2", extension: "d2", configEnv }).relativePath;
+    generateDefaultOutputPath({ mode: "d2", extension: "d2", cwd: undefined, configEnv }).relativePath;
   try {
     const optionsInput = {
       ...commonOptions,

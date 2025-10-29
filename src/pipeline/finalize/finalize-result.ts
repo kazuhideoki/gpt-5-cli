@@ -92,20 +92,15 @@ export async function finalizeResult<TContext>(
       ? ({
           params: {
             configEnv,
-            ...(textOutputPath ? { filePath: textOutputPath } : {}),
-            ...(copyOutput
+            cwd: undefined,
+            filePath: textOutputPath ?? undefined,
+            copy: copyOutput ? true : undefined,
+            copySource: copySourceFilePath
               ? {
-                  copy: true,
-                  ...(copySourceFilePath
-                    ? {
-                        copySource: {
-                          type: "file" as const,
-                          filePath: copySourceFilePath,
-                        },
-                      }
-                    : {}),
+                  type: "file" as const,
+                  filePath: copySourceFilePath,
                 }
-              : {}),
+              : undefined,
           },
         } satisfies FinalizeDeliveryInstruction)
       : undefined;

@@ -294,7 +294,12 @@ export function parseArgs(
   }
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
-    generateDefaultOutputPath({ mode: "sql", extension: "sql", configEnv }).relativePath;
+    generateDefaultOutputPath({
+      mode: "sql",
+      extension: "sql",
+      cwd: undefined,
+      configEnv,
+    }).relativePath;
   try {
     const optionsInput = {
       ...commonOptions,
