@@ -118,6 +118,8 @@ describe("buildRequest", () => {
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
       configEnv: createConfigEnv(),
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
       toolset,
     });
 
@@ -133,6 +135,32 @@ describe("buildRequest", () => {
     expect(request.previous_response_id).toBeUndefined();
     expect(request.tools).toEqual(toolset.response);
     expect(agentTools).toEqual(toolset.agents);
+  });
+
+  it("systemPrompt が undefined のときに system メッセージを追加しない", () => {
+    const options = createOptions();
+    const context = createContext();
+    const toolset = {
+      response: [],
+      agents: [],
+    };
+
+    const { request } = buildRequest({
+      options,
+      context,
+      inputText: "質問内容",
+      systemPrompt: undefined,
+      defaults: DEFAULTS,
+      logLabel: "[test-cli]",
+      configEnv: createConfigEnv(),
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
+      toolset,
+    });
+
+    const inputMessages = request.input as OpenAIInputMessage[];
+    expect(inputMessages[0]?.role).toBe("user");
+    expect(inputMessages[0]?.content?.[0]).toEqual({ type: "input_text", text: "質問内容" });
   });
 
   it("継続会話では previous_response_id と追加の system メッセージを含める", () => {
@@ -215,9 +243,12 @@ describe("buildRequest", () => {
       options,
       context,
       inputText: "tool check",
+      systemPrompt: undefined,
+      imageDataUrl: undefined,
       defaults: DEFAULTS,
       logLabel: "[test-cli]",
       configEnv: createConfigEnv(),
+      additionalSystemMessages: undefined,
       toolset,
     });
 

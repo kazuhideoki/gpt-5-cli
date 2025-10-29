@@ -261,6 +261,8 @@ describe("buildRequest", () => {
       defaults,
       logLabel: "[test-cli]",
       configEnv,
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
         logLabel: "[test-cli]",
         debug: false,
@@ -295,6 +297,8 @@ describe("buildRequest", () => {
       defaults,
       logLabel: "[test-cli]",
       configEnv,
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
         logLabel: "[test-cli]",
         debug: false,
