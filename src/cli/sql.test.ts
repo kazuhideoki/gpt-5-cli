@@ -204,7 +204,26 @@ describe("buildSqlHistoryContext", () => {
     expect(updated.copy).toBe(true);
   });
 
-  it("接続メタデータの未指定プロパティを undefined で保持する");
+  it("接続メタデータの未指定プロパティを undefined で保持する", () => {
+    const context = buildSqlHistoryContext(
+      {
+        dsnHash: "sha256:partial",
+        dsn: "postgres://user:pass@db/analytics",
+        connection: { host: "db", port: undefined, database: undefined, user: undefined },
+        engine: "postgresql",
+      },
+      undefined,
+    );
+
+    expect(context.connection).toBeDefined();
+    expect(context.connection?.host).toBe("db");
+    expect("port" in (context.connection as Record<string, unknown>)).toBe(true);
+    expect(context.connection?.port).toBeUndefined();
+    expect("database" in (context.connection as Record<string, unknown>)).toBe(true);
+    expect(context.connection?.database).toBeUndefined();
+    expect("user" in (context.connection as Record<string, unknown>)).toBe(true);
+    expect(context.connection?.user).toBeUndefined();
+  });
 });
 
 describe("inferSqlEngineFromDsn", () => {
