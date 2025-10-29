@@ -34,10 +34,14 @@ describe("handleResult", () => {
       output: {
         handler: delivery,
         params: {
+          content: undefined,
           filePath: "out.txt",
         },
       },
       configEnv: createConfigEnv(),
+      stdout: undefined,
+      history: undefined,
+      exitCode: undefined,
     };
 
     const outcome = await handleResult(request);
@@ -64,6 +68,9 @@ describe("handleResult", () => {
         run: historyEffect,
       },
       configEnv: createConfigEnv(),
+      stdout: undefined,
+      output: undefined,
+      exitCode: undefined,
     });
 
     expect(historyEffect).toHaveBeenCalledTimes(1);
@@ -75,6 +82,8 @@ describe("handleResult", () => {
       stdout: "custom stdout",
       exitCode: 1,
       configEnv: createConfigEnv(),
+      output: undefined,
+      history: undefined,
     });
 
     expect(outcome.stdout).toBe("custom stdout");
@@ -89,7 +98,10 @@ describe("handleResult", () => {
     await handleResult({
       content: "pass-through",
       configEnv,
-      output: { handler: delivery, params: {} },
+      output: { handler: delivery, params: { content: undefined } },
+      stdout: undefined,
+      history: undefined,
+      exitCode: undefined,
     });
 
     expect(delivery).toHaveBeenCalledTimes(1);

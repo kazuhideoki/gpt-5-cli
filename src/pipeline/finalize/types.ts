@@ -80,9 +80,11 @@ export interface FinalizeRequest {
 export interface FinalizeOutcome {
   exitCode: FinalizeExitCode;
   stdout: string;
-  output: {
-    filePath: string | undefined;
-    bytesWritten: number | undefined;
-    copied: boolean | undefined;
-  } | undefined;
+  output:
+    | {
+        filePath: string | undefined;
+        bytesWritten: number | undefined;
+        copied: boolean | undefined;
+      }
+    | undefined;
 }

@@ -92,6 +92,7 @@ export async function finalizeResult<TContext>(
       ? ({
           params: {
             configEnv,
+            content: undefined,
             ...(textOutputPath ? { filePath: textOutputPath } : {}),
             ...(copyOutput
               ? {
@@ -107,6 +108,7 @@ export async function finalizeResult<TContext>(
                 }
               : {}),
           },
+          handler: undefined,
         } satisfies FinalizeDeliveryInstruction)
       : undefined;
 
@@ -140,5 +142,6 @@ export async function finalizeResult<TContext>(
     configEnv,
     output: finalizeOutputInstruction,
     history: finalizeHistoryEffect,
+    exitCode: undefined,
   });
 }
