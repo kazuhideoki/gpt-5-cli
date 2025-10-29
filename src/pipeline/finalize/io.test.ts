@@ -223,6 +223,14 @@ describe("deliverOutput", () => {
     const written = await fs.readFile(expected, "utf8");
     expect(written).toBe("config home content");
   });
+
+  test("コピーやファイル出力が不要な場合でも戻り値にプロパティが含まれる", () => {
+    // 実装確認用のプレースホルダー。後続フェーズで詳細を記述する。
+  });
+
+  test("ファイル出力のみ実施した場合の戻り値を検証する", () => {
+    // 実装確認用のプレースホルダー。後続フェーズで詳細を記述する。
+  });
 });
 
 describe("generateDefaultOutputPath", () => {
