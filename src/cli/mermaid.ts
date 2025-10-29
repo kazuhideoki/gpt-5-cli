@@ -195,14 +195,14 @@ export function parseArgs(
 ): MermaidCliOptions {
   const program = createMermaidProgram(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
-  const defaultOutputPath = generateDefaultOutputPath({
-    mode: "mermaid",
-    extension: "mmd",
-    cwd: undefined,
-    configEnv,
-  });
   const resolvedResponseOutputPath =
-    commonOptions.responseOutputPath ?? defaultOutputPath.relativePath;
+    commonOptions.responseOutputPath ??
+    generateDefaultOutputPath({
+      mode: "mermaid",
+      extension: "mmd",
+      cwd: undefined,
+      configEnv,
+    }).relativePath;
   try {
     const optionsInput = {
       ...commonOptions,
