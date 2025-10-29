@@ -71,6 +71,7 @@ describe("runAgentConversation", () => {
 
     expect(result.assistantText).toBe("Agent result");
     expect(result.responseId).toBe("resp_test");
+    expect(result.reachedMaxIterations).toBe(false);
     expect(client.responses.createCalls).toHaveLength(1);
 
     const [requestBody] = client.responses.createCalls;
@@ -92,6 +93,7 @@ describe("runAgentConversation", () => {
 
     expect(result.assistantText).toBe("Agent result");
     expect(result.responseId).toBe("resp_test");
+    expect(result.reachedMaxIterations).toBe(false);
   });
 
   it("ユーザー入力が存在しない場合にエラーを送出する", async () => {

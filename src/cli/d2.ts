@@ -435,6 +435,11 @@ async function main(): Promise<void> {
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });
+    if (agentResult.reachedMaxIterations) {
+      console.error(
+        "[gpt-5-cli-d2] info: 指定したイテレーション上限に達したため途中結果を出力します",
+      );
+    }
     const content = agentResult.assistantText;
     if (!content) {
       throw new Error("Error: Failed to parse response or empty content");
