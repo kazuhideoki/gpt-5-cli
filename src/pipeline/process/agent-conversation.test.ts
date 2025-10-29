@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { MaxTurnsExceededError, Runner } from "@openai/agents";
 import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type OpenAI from "openai";
 import type { CliOptions } from "../../types.js";
@@ -117,5 +118,37 @@ describe("runAgentConversation", () => {
     ).rejects.toThrow("Error: No user input found for agent execution");
   });
 
-  it("maxTurns 超過時に途中結果フラグ付きでテキストを返す");
+  it("maxTurns 超過時に途中結果フラグ付きでテキストを返す", async () => {
+    const client = new FakeOpenAI();
+    const originalRun = Runner.prototype.run;
+    const generatedItems = [
+      { type: "message_output_item", content: "途中までの" },
+      { type: "message_output_item", content: "応答です。" },
+    ];
+
+    Runner.prototype.run = async () => {
+      const errorState = {
+        _generatedItems: generatedItems,
+        _modelResponses: [{ responseId: "resp_partial" }],
+      };
+      throw new MaxTurnsExceededError("Max turns exceeded", errorState as any);
+    };
+
+    try {
+      const result = await runAgentConversation({
+        client: client as unknown as OpenAI,
+        request: BASE_REQUEST,
+        options: { ...BASE_OPTIONS, debug: false },
+        logLabel: "[agent-test]",
+        agentTools: [] as AgentsSdkTool[],
+        maxTurns: 1,
+      });
+
+      expect(result.assistantText).toBe("途中までの応答です。");
+      expect(result.responseId).toBe("resp_partial");
+      expect(result.reachedMaxIterations).toBe(true);
+    } finally {
+      Runner.prototype.run = originalRun;
+    }
+  });
 });
