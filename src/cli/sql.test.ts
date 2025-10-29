@@ -216,13 +216,10 @@ describe("buildSqlHistoryContext", () => {
     );
 
     expect(context.connection).toBeDefined();
-    expect(context.connection?.host).toBe("db");
-    expect("port" in (context.connection as Record<string, unknown>)).toBe(true);
-    expect(context.connection?.port).toBeUndefined();
-    expect("database" in (context.connection as Record<string, unknown>)).toBe(true);
-    expect(context.connection?.database).toBeUndefined();
-    expect("user" in (context.connection as Record<string, unknown>)).toBe(true);
-    expect(context.connection?.user).toBeUndefined();
+    expect(context.connection).toHaveProperty("host", "db");
+    expect(context.connection).toHaveProperty("port", undefined);
+    expect(context.connection).toHaveProperty("database", undefined);
+    expect(context.connection).toHaveProperty("user", undefined);
   });
 });
 

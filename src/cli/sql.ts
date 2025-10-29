@@ -562,9 +562,12 @@ export function buildSqlHistoryContext(
   if (!options.engine) {
     throw new Error("Error: SQL engine is required to build history context");
   }
-  const normalizedConnection = Object.fromEntries(
-    Object.entries(options.connection).filter(([, value]) => value !== undefined && value !== ""),
-  );
+  const normalizedConnection: SqlConnectionMetadata = {
+    host: normalizeEmptyString(options.connection.host),
+    port: normalizePort(options.connection.port),
+    database: normalizeEmptyString(options.connection.database),
+    user: normalizeEmptyString(options.connection.user),
+  };
   const nextContext: SqlCliHistoryContext = {
     cli: "sql",
     engine: options.engine,
@@ -578,8 +581,7 @@ export function buildSqlHistoryContext(
   const resolvedDsn = options.dsn ?? previousContext?.dsn;
   nextContext.dsn = resolvedDsn ?? undefined;
 
-  const connectionEntries = Object.keys(normalizedConnection);
-  if (connectionEntries.length > 0) {
+  if (hasAnyConnectionValue(normalizedConnection)) {
     nextContext.connection = normalizedConnection;
   } else if (previousContext?.connection) {
     nextContext.connection = previousContext.connection;
@@ -591,6 +593,30 @@ export function buildSqlHistoryContext(
   nextContext.copy = extras.copyOutput || previousContext?.copy ? true : undefined;
 
   return nextContext;
+}
+
+function normalizeEmptyString(value: string | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePort(value: number | undefined): number | undefined {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function hasAnyConnectionValue(connection: SqlConnectionMetadata): boolean {
+  return Boolean(
+    connection.host ??
+      connection.database ??
+      connection.user ??
+      (typeof connection.port === "number" ? connection.port : undefined),
+  );
 }
 
 /**
