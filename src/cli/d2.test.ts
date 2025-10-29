@@ -155,7 +155,12 @@ describe("d2 resolveInputOrExecuteHistoryAction", () => {
     const entry: D2HistoryEntry = {
       last_response_id: "resp-d2",
       title: "diagram",
-      context: { cli: "d2", absolute_path: "/tmp/out.d2" },
+      context: {
+        cli: "d2",
+        absolute_path: "/tmp/out.d2",
+        relative_path: undefined,
+        copy: undefined,
+      },
     };
     const store = new StubHistoryStore(entry);
     const options = createOptions({

@@ -62,26 +62,15 @@ export function buildFileHistoryContext<TContext extends FileHistoryContext>(
     ...base,
   };
 
-  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path;
-  if (resolvedAbsolutePath !== undefined) {
-    result.absolute_path = resolvedAbsolutePath;
-  } else {
-    delete result.absolute_path;
-  }
+  const resolvedAbsolutePath = contextPath ?? previousContext?.absolute_path ?? undefined;
+  result.absolute_path = resolvedAbsolutePath;
 
   const resolvedRelativePath =
-    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path;
-  if (resolvedRelativePath !== undefined) {
-    result.relative_path = resolvedRelativePath;
-  } else {
-    delete result.relative_path;
-  }
+    historyArtifactPath ?? defaultFilePath ?? previousContext?.relative_path ?? undefined;
+  result.relative_path = resolvedRelativePath;
 
-  if (copyOutput || previousContext?.copy) {
-    result.copy = true;
-  } else {
-    delete result.copy;
-  }
+  const copyFromPrevious = previousContext?.copy === true;
+  result.copy = copyOutput || copyFromPrevious ? true : undefined;
 
   return result;
 }

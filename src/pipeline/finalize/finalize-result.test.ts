@@ -58,7 +58,9 @@ describe("finalizeResult", () => {
       userText: "user-input",
       textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: "resp-1",
         store: historyStore,
@@ -102,7 +104,9 @@ describe("finalizeResult", () => {
       userText: "describe diagram",
       textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: "resp-2",
         store: historyStore,
@@ -127,15 +131,23 @@ describe("finalizeResult", () => {
     await finalizeResult<D2HistoryContext>({
       content: "noop",
       userText: "noop",
+      textOutputPath: undefined,
       copyOutput: false,
+      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
+      stdout: undefined,
       history: {
         responseId: undefined,
         store: historyStore,
         conversation: baseConversation,
         metadata: { model: "noop", effort: "low", verbosity: "low" },
         previousContextRaw: undefined,
-        contextData: { cli: "d2", absolute_path: undefined, relative_path: undefined, copy: undefined },
+        contextData: {
+          cli: "d2",
+          absolute_path: undefined,
+          relative_path: undefined,
+          copy: undefined,
+        },
       },
     });
 

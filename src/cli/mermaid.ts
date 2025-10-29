@@ -18,6 +18,7 @@ import {
   generateDefaultOutputPath,
   buildFileHistoryContext,
   resolveResultOutput,
+  type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -93,19 +94,23 @@ const mermaidCliHistoryContextStrictSchema = z.object({
 const mermaidCliHistoryContextSchema = mermaidCliHistoryContextStrictSchema
   .or(z.object({}).passthrough())
   .or(z.null());
-
-export type MermaidCliHistoryContext = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
+type MermaidCliHistoryContextRaw = z.infer<typeof mermaidCliHistoryContextStrictSchema>;
+export type MermaidCliHistoryContext = FileHistoryContext & { cli: "mermaid" };
 type MermaidCliHistoryStoreContext = z.infer<typeof mermaidCliHistoryContextSchema>;
 
-function isMermaidHistoryContext(
+function toMermaidHistoryContext(
   value: MermaidCliHistoryStoreContext | undefined,
-): value is MermaidCliHistoryContext {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "cli" in value &&
-    (value as { cli?: unknown }).cli === "mermaid"
-  );
+): MermaidCliHistoryContext | undefined {
+  if (!value || typeof value !== "object" || (value as { cli?: unknown }).cli !== "mermaid") {
+    return undefined;
+  }
+  const raw = value as MermaidCliHistoryContextRaw;
+  return {
+    cli: "mermaid",
+    absolute_path: typeof raw.absolute_path === "string" ? raw.absolute_path : undefined,
+    relative_path: typeof raw.relative_path === "string" ? raw.relative_path : undefined,
+    copy: typeof raw.copy === "boolean" ? raw.copy : undefined,
+  };
 }
 
 /**
@@ -343,7 +348,9 @@ async function main(): Promise<void> {
         logLabel: "[gpt-5-cli-mermaid]",
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "mermaid";
-          const historyContext = activeEntry.context as MermaidCliHistoryContext | undefined;
+          const historyContext = toMermaidHistoryContext(
+            activeEntry.context as MermaidCliHistoryStoreContext | undefined,
+          );
 
           if (!nextOptions.responseOutputExplicit) {
             const historyFile = historyContext?.relative_path ?? historyContext?.absolute_path;
@@ -405,11 +412,9 @@ async function main(): Promise<void> {
     const previousContextRaw = context.activeEntry?.context as
       | MermaidCliHistoryStoreContext
       | undefined;
-    const previousContext = isMermaidHistoryContext(previousContextRaw)
-      ? previousContextRaw
-      : undefined;
+    const previousContext = toMermaidHistoryContext(previousContextRaw);
     const historyContext = buildFileHistoryContext<MermaidCliHistoryContext>({
-      base: { cli: "mermaid" },
+      base: { cli: "mermaid", absolute_path: undefined, relative_path: undefined, copy: undefined },
       contextPath: mermaidContext.absolutePath,
       defaultFilePath: resolvedOptions.artifactPath,
       previousContext,
@@ -421,8 +426,9 @@ async function main(): Promise<void> {
       userText: determine.inputText,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptions.copyOutput,
-      copySourceFilePath: resolvedOptions.artifactPath,
+      copySourceFilePath: resolvedOptions.copyOutput ? resolvedOptions.artifactPath : undefined,
       configEnv,
+      stdout: undefined,
       history: agentResult.responseId
         ? {
             responseId: agentResult.responseId,

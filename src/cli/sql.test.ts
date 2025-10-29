@@ -181,6 +181,9 @@ describe("buildSqlHistoryContext", () => {
       dsn_hash: "sha256:old",
       dsn: "postgres://legacy/db",
       connection: { host: "legacy" },
+      absolute_path: undefined,
+      relative_path: undefined,
+      copy: undefined,
     };
     const updated = buildSqlHistoryContext(
       {

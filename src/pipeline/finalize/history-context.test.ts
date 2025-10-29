@@ -17,9 +17,9 @@ describe("buildFileHistoryContext", () => {
       copyOutput: false,
     });
 
-    expect(Object.prototype.hasOwnProperty.call(context, "absolute_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "relative_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "copy")).toBe(true);
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
       absolute_path: "/absolute/d2.d2",
@@ -35,9 +35,9 @@ describe("buildFileHistoryContext", () => {
       copyOutput: false,
     });
 
-    expect(Object.prototype.hasOwnProperty.call(context, "absolute_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "relative_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "copy")).toBe(true);
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
       absolute_path: undefined,
@@ -53,9 +53,9 @@ describe("buildFileHistoryContext", () => {
       copyOutput: true,
     });
 
-    expect(Object.prototype.hasOwnProperty.call(context, "absolute_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "relative_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "copy")).toBe(true);
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
       absolute_path: undefined,
@@ -77,9 +77,9 @@ describe("buildFileHistoryContext", () => {
       previousContext: previous,
     });
 
-    expect(Object.prototype.hasOwnProperty.call(context, "absolute_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "relative_path")).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(context, "copy")).toBe(true);
+    expect(Object.hasOwn(context, "absolute_path")).toBe(true);
+    expect(Object.hasOwn(context, "relative_path")).toBe(true);
+    expect(Object.hasOwn(context, "copy")).toBe(true);
     expect(context).toEqual({
       cli: "d2",
       absolute_path: undefined,
