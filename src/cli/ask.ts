@@ -293,7 +293,9 @@ async function main(): Promise<void> {
       maxTurns: options.maxIterations,
     });
     if (agentResult.reachedMaxIterations) {
-      console.error("[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力します");
+      console.error(
+        "[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",
+      );
     }
     const content = agentResult.assistantText;
     if (!content) {

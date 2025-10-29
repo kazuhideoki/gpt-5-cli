@@ -405,7 +405,7 @@ async function main(): Promise<void> {
     });
     if (agentResult.reachedMaxIterations) {
       console.error(
-        "[gpt-5-cli-mermaid] info: 指定したイテレーション上限に達したため途中結果を出力します",
+        "[gpt-5-cli-mermaid] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",
       );
     }
     const content = agentResult.assistantText;

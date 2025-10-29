@@ -757,7 +757,7 @@ async function main(): Promise<void> {
     });
     if (agentResult.reachedMaxIterations) {
       console.error(
-        `${LOG_LABEL} info: 指定したイテレーション上限に達したため途中結果を出力します`,
+        `${LOG_LABEL} info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します`,
       );
     }
     const content = agentResult.assistantText;
