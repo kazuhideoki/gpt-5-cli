@@ -53,10 +53,10 @@ function resolveSqruffBin(configEnv: ConfigEnvironment): string {
 
 /** DSNから抽出した接続メタデータを保持するための型。 */
 interface SqlConnectionMetadata {
-  host?: string;
-  port?: number;
-  database?: string;
-  user?: string;
+  host: string | undefined;
+  port: number | undefined;
+  database: string | undefined;
+  user: string | undefined;
 }
 
 /** 実行時に使用するDSNとそのハッシュ、接続メタデータをまとめたスナップショット。 */
@@ -85,8 +85,8 @@ interface SqlContextResolution {
 
 /** SQLモードの解析済みCLIオプションを表す型。 */
 export interface SqlCliOptions extends CliOptions {
-  dsn?: string;
-  engine?: SqlEngine;
+  dsn: string | undefined;
+  engine: SqlEngine | undefined;
   artifactPath: string;
 }
 
