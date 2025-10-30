@@ -57,9 +57,7 @@ describe("finalizeResult", () => {
       content: "assistant-content",
       userText: "user-input",
       textOutputPath: undefined,
-      copyOutput: false,
       actions: [],
-      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
       stdout: undefined,
       history: {
@@ -104,9 +102,7 @@ describe("finalizeResult", () => {
       content: "diagram",
       userText: "describe diagram",
       textOutputPath: undefined,
-      copyOutput: false,
       actions: [],
-      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
       stdout: undefined,
       history: {
@@ -134,9 +130,7 @@ describe("finalizeResult", () => {
       content: "noop",
       userText: "noop",
       textOutputPath: undefined,
-      copyOutput: false,
       actions: [],
-      copySourceFilePath: undefined,
       configEnv: createConfigEnv(),
       stdout: undefined,
       history: {

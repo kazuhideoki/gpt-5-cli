@@ -16,7 +16,6 @@ import type {
   FinalizeOutcome,
   FinalizeActionList,
 } from "./types.js";
-import { createClipboardAction } from "./actions/builders.js";
 
 /**
  * 履歴へ保存する際に必要となるモデル情報のスナップショット。
@@ -66,10 +65,6 @@ export interface FinalizeResultParams<TContext> {
   stdout: string | undefined;
   /** ファイル保存先の相対または絶対パス。 */
   textOutputPath: string | undefined;
-  /** クリップボードへコピーするかどうか。 */
-  copyOutput: boolean;
-  /** コピー元をファイルへ切り替える場合のパス。 */
-  copySourceFilePath: string | undefined;
   /** 履歴更新を実施する場合の追加オプション。 */
   history: FinalizeResultHistoryOptions<TContext> | undefined;
 }
@@ -80,53 +75,21 @@ export interface FinalizeResultParams<TContext> {
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const {
-    content,
-    actions: initialActions,
-    stdout,
-    textOutputPath,
-    copyOutput,
-    copySourceFilePath,
-    history,
-    userText,
-    configEnv,
-  } = params;
+  const { content, actions, stdout, textOutputPath, history, userText, configEnv } = params;
 
-  const actions: FinalizeActionList = [...initialActions];
-
-  const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
-    textOutputPath || copyOutput
-      ? ({
-          params: {
-            configEnv,
-            content: undefined,
-            cwd: undefined,
-            filePath: textOutputPath ?? undefined,
-            copy: undefined,
-            copySource: undefined,
-          },
-          handler: undefined,
-        } satisfies FinalizeDeliveryInstruction)
-      : undefined;
-
-  if (copyOutput) {
-    actions.push(
-      createClipboardAction({
-        flag: "--copy",
-        source: copySourceFilePath
-          ? {
-              type: "file",
-              filePath: copySourceFilePath,
-            }
-          : {
-              type: "content",
-              value: content,
-            },
-        workingDirectory: process.cwd(),
-        priority: 100,
-      }),
-    );
-  }
+  const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined = textOutputPath
+    ? ({
+        params: {
+          configEnv,
+          content: undefined,
+          cwd: undefined,
+          filePath: textOutputPath,
+          copy: undefined,
+          copySource: undefined,
+        },
+        handler: undefined,
+      } satisfies FinalizeDeliveryInstruction)
+    : undefined;
 
   let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
   if (history?.responseId) {

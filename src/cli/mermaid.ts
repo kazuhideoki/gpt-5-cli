@@ -18,6 +18,8 @@ import {
   generateDefaultOutputPath,
   buildFileHistoryContext,
   resolveResultOutput,
+  createClipboardAction,
+  type FinalizeActionList,
   type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
@@ -431,13 +433,26 @@ async function main(): Promise<void> {
       historyArtifactPath: outputResolution.artifactReferencePath,
       copyOutput: resolvedOptions.copyOutput,
     });
+    const clipboardActions: FinalizeActionList = [];
+    if (resolvedOptions.copyOutput) {
+      clipboardActions.push(
+        createClipboardAction({
+          flag: "--copy",
+          source: {
+            type: "file",
+            filePath: resolvedOptions.artifactPath,
+          },
+          workingDirectory: process.cwd(),
+          priority: 100,
+        }),
+      );
+    }
+
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      actions: [],
+      actions: clipboardActions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
-      copyOutput: resolvedOptions.copyOutput,
-      copySourceFilePath: resolvedOptions.copyOutput ? resolvedOptions.artifactPath : undefined,
       configEnv,
       stdout: undefined,
       history: agentResult.responseId
