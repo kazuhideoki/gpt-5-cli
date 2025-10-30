@@ -15,6 +15,7 @@ import type {
   FinalizeHistoryEffect,
   FinalizeOutcome,
   FinalizeActionList,
+  FinalizeClipboardAction,
 } from "./types.js";
 
 /**
@@ -57,7 +58,7 @@ export interface FinalizeResultParams<TContext> {
   content: string;
   /** 今回のユーザー入力。 */
   userText: string;
-  /** 終了後に実行するアクションリスト。 */
+  /** CLI 固有で事前定義された終了後アクション。 */
   actions: FinalizeActionList;
   /** finalize 層が利用する ConfigEnv。 */
   configEnv: ConfigEnvironment;
@@ -81,7 +82,7 @@ export async function finalizeResult<TContext>(
 ): Promise<FinalizeOutcome> {
   const {
     content,
-    actions,
+    actions: initialActions,
     stdout,
     textOutputPath,
     copyOutput,
@@ -91,6 +92,8 @@ export async function finalizeResult<TContext>(
     configEnv,
   } = params;
 
+  const actions: FinalizeActionList = [...initialActions];
+
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
     textOutputPath || copyOutput
       ? ({
@@ -99,17 +102,32 @@ export async function finalizeResult<TContext>(
             content: undefined,
             cwd: undefined,
             filePath: textOutputPath ?? undefined,
-            copy: copyOutput ? true : undefined,
-            copySource: copySourceFilePath
-              ? {
-                  type: "file" as const,
-                  filePath: copySourceFilePath,
-                }
-              : undefined,
+            copy: undefined,
+            copySource: undefined,
           },
           handler: undefined,
         } satisfies FinalizeDeliveryInstruction)
       : undefined;
+
+  if (copyOutput) {
+    const copySource: FinalizeClipboardAction["source"] = copySourceFilePath
+      ? {
+          type: "file",
+          filePath: copySourceFilePath,
+        }
+      : {
+          type: "content",
+          value: content,
+        };
+
+    actions.push({
+      kind: "clipboard",
+      flag: "--copy",
+      source: copySource,
+      workingDirectory: process.cwd(),
+      priority: 100,
+    });
+  }
 
   let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
   if (history?.responseId) {

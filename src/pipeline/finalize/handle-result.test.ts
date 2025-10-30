@@ -21,6 +21,14 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
   };
 }
 
+interface MockStdin extends EventEmitter {
+  end: (chunk: string, encoding?: BufferEncoding) => void;
+}
+
+interface MockClipboardChild extends EventEmitter {
+  stdin: MockStdin;
+}
+
 describe("handleResult", () => {
   it("既定のコンテンツを出力ハンドラーへ渡し、成果物メタデータを返す", async () => {
     const delivery = mock(async () => ({
@@ -183,6 +191,52 @@ describe("handleResult", () => {
       { command: "second", args: ["two"], cwd: "/workspace/project" },
     ]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("clipboard アクションで本文をコピーする", async () => {
+    const copied: string[] = [];
+    const spawnMock = mock((command: string) => {
+      if (command !== "pbcopy") {
+        throw new Error(`Unexpected command: ${command}`);
+      }
+      const child = new EventEmitter() as MockClipboardChild;
+      const stdin = new EventEmitter() as MockStdin;
+      stdin.end = (chunk: string) => {
+        copied.push(chunk);
+        child.emit("close", 0);
+      };
+      child.stdin = stdin;
+      return child as unknown as ChildProcess;
+    });
+
+    mock.module("node:child_process", () => ({
+      spawn: spawnMock,
+    }));
+
+    try {
+      await handleResult({
+        content: "primary",
+        actions: [
+          {
+            kind: "clipboard",
+            flag: "--copy",
+            source: { type: "content", value: "copied text" },
+            workingDirectory: process.cwd(),
+            priority: 5,
+          },
+        ],
+        configEnv: createConfigEnv(),
+        stdout: undefined,
+        output: undefined,
+        history: undefined,
+        exitCode: undefined,
+      });
+    } finally {
+      mock.restore();
+    }
+
+    expect(copied).toEqual(["copied text"]);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
   });
 
   it.todo("tool アクションの実行は finalize-action 実装時に追加する");

@@ -35,9 +35,24 @@ export interface FinalizeToolAction {
 }
 
 /**
+ * finalize 層が扱うクリップボードコピーの入力構造。
+ */
+export interface FinalizeClipboardAction {
+  kind: "clipboard";
+  /** アクションの有効化に利用された CLI フラグ名。 */
+  flag: string;
+  /** コピー内容の取得元。 */
+  source: FinalizeCopySource;
+  /** ファイル参照時のワークスペースルートとなる作業ディレクトリ。 */
+  workingDirectory: string;
+  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
+  priority: number;
+}
+
+/**
  * finalize 層で利用する後続アクションの判別共用体。
  */
-export type FinalizeAction = FinalizeCommandAction | FinalizeToolAction;
+export type FinalizeAction = FinalizeCommandAction | FinalizeToolAction | FinalizeClipboardAction;
 
 /**
  * finalize 層が受け取る後続アクションの配列。

@@ -7,6 +7,7 @@ import { deliverOutput } from "./io.js";
 import type { FinalizeOutcome, FinalizeRequest } from "./types.js";
 
 const DEFAULT_EXIT_CODE = 0;
+const FINALIZE_LOG_LABEL = "[gpt-5-cli finalize]";
 
 /**
  * CLI の結果をファイル出力・履歴更新・標準出力へ反映する。
@@ -54,37 +55,59 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
       .map((entry) => entry.action);
 
     for (const action of sortedActions) {
-      if (action.kind === "command") {
-        if (action.arguments.length === 0) {
-          throw new Error(`Error: ${action.flag} で実行するコマンドが設定されていません`);
-        }
-        const [command, ...commandArgs] = action.arguments;
-        await new Promise<void>((resolve, reject) => {
-          const child = spawn(command, commandArgs, {
+      console.error(
+        `${FINALIZE_LOG_LABEL} action start: ${action.flag} (priority=${action.priority})`,
+      );
+      try {
+        if (action.kind === "command") {
+          if (action.arguments.length === 0) {
+            throw new Error(`Error: ${action.flag} で実行するコマンドが設定されていません`);
+          }
+          const [command, ...commandArgs] = action.arguments;
+          await new Promise<void>((resolve, reject) => {
+            const child = spawn(command, commandArgs, {
+              cwd: action.workingDirectory,
+              stdio: "inherit",
+            });
+            child.once("error", (error) => {
+              reject(
+                new Error(
+                  `Error: ${action.flag} のコマンド実行に失敗しました: ${(error as Error).message}`,
+                ),
+              );
+            });
+            child.once("close", (code) => {
+              if ((code ?? 1) === 0) {
+                resolve();
+                return;
+              }
+              reject(
+                new Error(
+                  `Error: ${action.flag} のコマンドが終了コード ${code ?? -1} で終了しました`,
+                ),
+              );
+            });
+          });
+        } else if (action.kind === "clipboard") {
+          const result = await deliverOutput({
+            content: action.source.type === "content" ? action.source.value : args.content,
             cwd: action.workingDirectory,
-            stdio: "inherit",
+            filePath: undefined,
+            copy: true,
+            copySource: action.source,
+            configEnv: args.configEnv,
           });
-          child.once("error", (error) => {
-            reject(
-              new Error(
-                `Error: ${action.flag} のコマンド実行に失敗しました: ${(error as Error).message}`,
-              ),
-            );
-          });
-          child.once("close", (code) => {
-            if ((code ?? 1) === 0) {
-              resolve();
-              return;
-            }
-            reject(
-              new Error(
-                `Error: ${action.flag} のコマンドが終了コード ${code ?? -1} で終了しました`,
-              ),
-            );
-          });
-        });
-      } else {
-        // TODO: finalize-action tool 実行を実装する
+          if (result.copied) {
+            copied = true;
+          }
+        } else {
+          // TODO: finalize-action tool 実行を実装する
+        }
+        console.error(`${FINALIZE_LOG_LABEL} action success: ${action.flag}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`${FINALIZE_LOG_LABEL} action failure: ${action.flag} - ${message}`);
+        throw error;
       }
     }
   }

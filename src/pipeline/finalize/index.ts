@@ -17,6 +17,7 @@ export type {
   FinalizeActionList,
   FinalizeCommandAction,
   FinalizeToolAction,
+  FinalizeClipboardAction,
 } from "./types.js";
 
 export {
