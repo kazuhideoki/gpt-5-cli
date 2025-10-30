@@ -1,64 +1,40 @@
 /**
  * @file finalize 層が公開する契約型。結果処理まわりの入力・出力を定義する。
  */
-import { z } from "zod";
 import type { ConfigEnvironment } from "../../types.js";
 import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.js";
 
 /**
- * finalize 層が扱う、終了後に実行するコマンドアクションのスキーマ。
- */
-export const finalizeCommandActionSchema = z.object({
-  kind: z.literal("command"),
-  flag: z.string().min(1),
-  arguments: z.array(z.string()).min(1),
-  workingDirectory: z.string().min(1),
-  priority: z.number().int(),
-});
-
-/**
- * finalize 層が扱う、終了後に実行するツールアクションのスキーマ。
- */
-export const finalizeToolActionSchema = z.object({
-  kind: z.literal("tool"),
-  flag: z.string().min(1),
-  toolIdentifier: z.string().min(1),
-  input: z.unknown(),
-  priority: z.number().int(),
-});
-
-/**
- * finalize 層でサポートするアクションのスキーマ。
- */
-export const finalizeActionSchema = z.discriminatedUnion("kind", [
-  finalizeCommandActionSchema,
-  finalizeToolActionSchema,
-]);
-
-/**
- * finalize 層が受け取る後続アクションの配列スキーマ。
- */
-export const finalizeActionListSchema = z.array(finalizeActionSchema);
-
-/**
  * finalize 層が扱う終了後コマンドの入力構造。
  */
-export type FinalizeCommandAction = z.infer<typeof finalizeCommandActionSchema>;
+export interface FinalizeCommandAction {
+  kind: "command";
+  flag: string;
+  arguments: string[];
+  workingDirectory: string;
+  priority: number;
+}
 
 /**
  * finalize 層が扱う終了後ツール実行の入力構造。
  */
-export type FinalizeToolAction = z.infer<typeof finalizeToolActionSchema>;
+export interface FinalizeToolAction {
+  kind: "tool";
+  flag: string;
+  toolIdentifier: string;
+  input: unknown;
+  priority: number;
+}
 
 /**
  * finalize 層で利用する後続アクションの判別共用体。
  */
-export type FinalizeAction = z.infer<typeof finalizeActionSchema>;
+export type FinalizeAction = FinalizeCommandAction | FinalizeToolAction;
 
 /**
  * finalize 層が受け取る後続アクションの配列。
  */
-export type FinalizeActionList = z.infer<typeof finalizeActionListSchema>;
+export type FinalizeActionList = FinalizeAction[];
 
 /**
  * サマリ出力先を決定するために finalize 層へ渡される情報。
