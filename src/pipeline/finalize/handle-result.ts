@@ -40,6 +40,8 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     await args.history.run();
   }
 
+  // TODO: finalize-action 実行ロジックを追加する（command/tool など）
+
   return {
     exitCode: args.exitCode ?? DEFAULT_EXIT_CODE,
     stdout,

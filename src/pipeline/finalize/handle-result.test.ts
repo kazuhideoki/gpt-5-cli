@@ -31,6 +31,7 @@ describe("handleResult", () => {
 
     const request: FinalizeRequest = {
       content: "primary output",
+      actions: [],
       output: {
         handler: delivery,
         params: {
@@ -67,6 +68,7 @@ describe("handleResult", () => {
 
     await handleResult({
       content: "history",
+      actions: [],
       history: {
         run: historyEffect,
       },
@@ -84,6 +86,7 @@ describe("handleResult", () => {
       content: "fallback",
       stdout: "custom stdout",
       exitCode: 1,
+      actions: [],
       configEnv: createConfigEnv(),
       output: undefined,
       history: undefined,
@@ -100,6 +103,7 @@ describe("handleResult", () => {
 
     await handleResult({
       content: "pass-through",
+      actions: [],
       configEnv,
       output: {
         handler: delivery,
@@ -120,4 +124,10 @@ describe("handleResult", () => {
     const [args] = delivery.mock.calls;
     expect(args?.[0]?.configEnv).toBe(configEnv);
   });
+
+  it("アクションを優先順位順に実行する", async () => {
+    // TODO: finalize-action 実行ロジックのテストを実装する
+  });
+
+  it.todo("tool アクションの実行は finalize-action 実装時に追加する");
 });

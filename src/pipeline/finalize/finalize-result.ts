@@ -56,6 +56,8 @@ export interface FinalizeResultParams<TContext> {
   content: string;
   /** 今回のユーザー入力。 */
   userText: string;
+  /** 終了後に実行するアクションリスト。 */
+  actions: FinalizeActionList;
   /** finalize 層が利用する ConfigEnv。 */
   configEnv: ConfigEnvironment;
   /** 標準出力へそのまま流したい補足テキスト。 */
@@ -78,6 +80,7 @@ export async function finalizeResult<TContext>(
 ): Promise<FinalizeOutcome> {
   const {
     content,
+    actions,
     stdout,
     textOutputPath,
     copyOutput,
@@ -136,6 +139,7 @@ export async function finalizeResult<TContext>(
     stdout,
     configEnv,
     output: finalizeOutputInstruction,
+    actions,
     history: finalizeHistoryEffect,
     exitCode: undefined,
   });
