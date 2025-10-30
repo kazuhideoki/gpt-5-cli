@@ -9,9 +9,13 @@ import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.
  */
 export interface FinalizeCommandAction {
   kind: "command";
+  /** アクションの有効化に利用された CLI フラグ名。 */
   flag: string;
+  /** 実行するコマンドへ渡す引数列。先頭要素は実コマンド名を想定する。 */
   arguments: string[];
+  /** コマンドを実行する作業ディレクトリ。 */
   workingDirectory: string;
+  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
   priority: number;
 }
 
@@ -20,9 +24,13 @@ export interface FinalizeCommandAction {
  */
 export interface FinalizeToolAction {
   kind: "tool";
+  /** アクションの有効化に利用された CLI フラグ名。 */
   flag: string;
+  /** 実行対象となるツールの識別子。 */
   toolIdentifier: string;
+  /** ツールへ受け渡す入力値。 */
   input: unknown;
+  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
   priority: number;
 }
 
