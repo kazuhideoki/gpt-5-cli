@@ -51,6 +51,9 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     copyOutput: false,
     copyExplicit: false,
     artifactPath: "diagram.d2",
+    htmlOutputPath: "diagram.html",
+    htmlOutputExplicit: false,
+    openHtml: false,
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -119,6 +122,18 @@ describe("d2 parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--debug", "図"], defaults, createConfigEnv());
     expect(options.debug).toBe(true);
+  });
+
+  it("既定で成果物パスに基づく HTML 出力パスを設定する", () => {
+    // Step3 で実装
+  });
+
+  it("--output-html で HTML 出力パスを明示できる", () => {
+    // Step3 で実装
+  });
+
+  it("--open-html で HTML を生成後に開ける", () => {
+    // Step3 で実装
   });
 });
 
