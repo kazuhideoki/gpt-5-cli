@@ -8,8 +8,6 @@ import type { FinalizeClipboardAction, FinalizeCopySource } from "../types.js";
  * クリップボードアクション生成時に必要な入力。
  */
 export interface ClipboardActionParams {
-  /** アクションの実行トリガーとなった CLI フラグ。 */
-  flag: string;
   /** コピー対象を表す情報。 */
   source: FinalizeCopySource;
   /** アクションを実行する作業ディレクトリ。 */
@@ -24,7 +22,7 @@ export interface ClipboardActionParams {
 export function createClipboardAction(params: ClipboardActionParams): FinalizeClipboardAction {
   return {
     kind: "clipboard",
-    flag: params.flag,
+    flag: "--copy",
     source: params.source,
     workingDirectory: params.workingDirectory,
     priority: params.priority,

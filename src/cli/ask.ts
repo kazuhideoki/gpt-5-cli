@@ -321,7 +321,7 @@ async function main(): Promise<void> {
       copyOutput: options.copyOutput,
     });
 
-    const clipboardActions: FinalizeActionList = [];
+    const actions: FinalizeActionList = [];
     if (options.copyOutput) {
       const source = options.responseOutputPath
         ? {
@@ -329,9 +329,8 @@ async function main(): Promise<void> {
             filePath: options.responseOutputPath,
           }
         : { type: "content" as const, value: content };
-      clipboardActions.push(
+      actions.push(
         createClipboardAction({
-          flag: "--copy",
           source,
           workingDirectory: process.cwd(),
           priority: 100,
@@ -342,7 +341,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      actions: clipboardActions,
+      actions,
       textOutputPath,
       configEnv,
       stdout: undefined,

@@ -32,19 +32,17 @@ export async function executeFinalizeAction(
   action: FinalizeAction,
   context: ExecuteFinalizeActionContext,
 ): Promise<ExecuteFinalizeActionResult> {
-  console.error(
-    `${FINALIZE_ACTION_LOG_LABEL} action start: ${action.flag} (priority=${action.priority})`,
-  );
+  console.error(`${FINALIZE_ACTION_LOG_LABEL} action start: --copy (priority=${action.priority})`);
 
   try {
     await runClipboardAction(action, context);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`${FINALIZE_ACTION_LOG_LABEL} action failure: ${action.flag} - ${message}`);
+    console.error(`${FINALIZE_ACTION_LOG_LABEL} action failure: --copy - ${message}`);
     throw error;
   }
 
-  console.error(`${FINALIZE_ACTION_LOG_LABEL} action success: ${action.flag}`);
+  console.error(`${FINALIZE_ACTION_LOG_LABEL} action success: --copy`);
   return { copied: true };
 }
 

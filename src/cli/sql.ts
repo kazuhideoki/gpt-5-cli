@@ -791,11 +791,10 @@ async function main(): Promise<void> {
       },
     );
 
-    const clipboardActions: FinalizeActionList = [];
+    const actions: FinalizeActionList = [];
     if (resolvedOptionsWithDsn.copyOutput) {
-      clipboardActions.push(
+      actions.push(
         createClipboardAction({
-          flag: "--copy",
           source: {
             type: "file",
             filePath: resolvedOptionsWithDsn.artifactPath,
@@ -809,7 +808,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      actions: clipboardActions,
+      actions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       configEnv,
       stdout: undefined,

@@ -433,11 +433,10 @@ async function main(): Promise<void> {
       historyArtifactPath: outputResolution.artifactReferencePath,
       copyOutput: resolvedOptions.copyOutput,
     });
-    const clipboardActions: FinalizeActionList = [];
+    const actions: FinalizeActionList = [];
     if (resolvedOptions.copyOutput) {
-      clipboardActions.push(
+      actions.push(
         createClipboardAction({
-          flag: "--copy",
           source: {
             type: "file",
             filePath: resolvedOptions.artifactPath,
@@ -451,7 +450,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
-      actions: clipboardActions,
+      actions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       configEnv,
       stdout: undefined,
