@@ -1,13 +1,26 @@
 // agent-conversation.ts: Agents SDK を利用して CLI からの会話処理を実行するラッパー。
-import { Agent, Runner, extractAllTextOutput, setTraceProcessors, user } from "@openai/agents";
+import {
+  Agent,
+  MaxTurnsExceededError,
+  RunResult,
+  Runner,
+  extractAllTextOutput,
+  setTraceProcessors,
+  user,
+} from "@openai/agents";
+import type { RunState } from "@openai/agents";
 import type { Tool as AgentsSdkTool } from "@openai/agents";
 import type { AgentInputItem, ModelSettings } from "@openai/agents";
 import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
-import type { CliOptions, OpenAIInputMessage } from "../../types.js";
+import type { AgentConversationOutcome, CliOptions, OpenAIInputMessage } from "../../types.js";
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);
+
+type AnyAgent = Agent<unknown, any>;
+type AnyRunResult = RunResult<unknown, AnyAgent>;
+type AnyRunState = RunState<unknown, AnyAgent>;
 
 /**
  * runAgentConversation が必要とする実行パラメータ群。
@@ -28,21 +41,14 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
 }
 
 /**
- * runAgentConversation が返す応答結果。
- */
-interface AgentConversationResult {
-  /** 最終的に得られたアシスタントのテキスト。 */
-  assistantText: string;
-  /** 最後に取得した Responses API のレスポンス ID。 */
-  responseId: string | undefined;
-}
-
-/**
- * Agents SDK を利用してリクエストを実行し、最終応答テキストとレスポンス ID を返す。
+ * Agents SDK を介してエージェント実行を行い、最終または途中応答とレスポンス ID を取得する。
+ *
+ * maxTurns を超過した場合でも {@link AgentConversationOutcome.reachedMaxIterations} を true に設定し、
+ * 可能な限りテキストを抽出して返す。
  */
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
-): Promise<AgentConversationResult> {
+): Promise<AgentConversationOutcome> {
   const { client, request, options, logLabel, agentTools, maxTurns } = params;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
@@ -74,28 +80,23 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     );
   }
   const runner = new Runner({ tracingDisabled: true });
-  const result = await runner.run(agent, userInputs, {
-    maxTurns,
-    previousResponseId,
-  });
-
-  let responseText =
-    typeof result.finalOutput === "string" && result.finalOutput.length > 0
-      ? result.finalOutput
-      : extractAllTextOutput(result.newItems);
-
-  if (!responseText || responseText.length === 0) {
-    const latestProviderData = result.rawResponses.at(-1)?.providerData as
-      | { output_text: string | string[] | undefined }
-      | undefined;
-    const fallbackText = latestProviderData?.output_text;
-    if (typeof fallbackText === "string" && fallbackText.length > 0) {
-      responseText = fallbackText;
-    } else if (Array.isArray(fallbackText) && fallbackText.length > 0) {
-      responseText = fallbackText.join("\n");
+  let reachedMaxIterations = false;
+  let result: AnyRunResult;
+  try {
+    result = (await runner.run(agent, userInputs, {
+      maxTurns,
+      previousResponseId,
+    })) as AnyRunResult;
+  } catch (error) {
+    if (isMaxTurnsExceededError(error)) {
+      reachedMaxIterations = true;
+      result = new RunResult<unknown, AnyAgent>(error.state as AnyRunState);
+    } else {
+      throw error;
     }
   }
 
+  const responseText = resolveAssistantText(result);
   if (!responseText || responseText.length === 0) {
     throw new Error("Error: Failed to resolve agent response text");
   }
@@ -103,6 +104,7 @@ export async function runAgentConversation<TOptions extends CliOptions>(
   return {
     assistantText: responseText,
     responseId: result.lastResponseId,
+    reachedMaxIterations,
   };
 }
 
@@ -283,4 +285,59 @@ function buildModelSettings(request: ResponseCreateParamsNonStreaming): ModelSet
   }
 
   return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
+/**
+ * Agents SDK の RunResult からテキストを抽出する。
+ *
+ * 1. 正常終了時にのみアクセス可能な finalOutput を最優先で利用する。
+ * 2. 未完成の場合は message_output_item から連結済みテキストを構築する。
+ * 3. それでも得られない場合は providerData.output_text をフォールバックとして採用する。
+ */
+function resolveAssistantText(result: AnyRunResult): string | undefined {
+  if (hasFinalOutput(result)) {
+    const finalOutput = result.finalOutput;
+    if (typeof finalOutput === "string" && finalOutput.length > 0) {
+      return finalOutput;
+    }
+  }
+
+  // concatenated: 実行途中で積み上がった message_output_item を連結し、途中結果でも自然な文章を再構築する。
+  const concatenated = extractAllTextOutput(result.newItems);
+  if (typeof concatenated === "string" && concatenated.length > 0) {
+    return concatenated;
+  }
+
+  const latestProviderData = result.rawResponses.at(-1)?.providerData as
+    | { output_text: string | string[] | undefined }
+    | undefined;
+  const fallbackText = latestProviderData?.output_text;
+  if (typeof fallbackText === "string" && fallbackText.length > 0) {
+    return fallbackText;
+  }
+  if (Array.isArray(fallbackText) && fallbackText.length > 0) {
+    return fallbackText.join("\n");
+  }
+  return undefined;
+}
+
+/** MaxTurnsExceededError かつ状態オブジェクトを保持しているか判定する。 */
+function isMaxTurnsExceededError(
+  error: unknown,
+): error is MaxTurnsExceededError & { state: AnyRunState } {
+  return (
+    error instanceof MaxTurnsExceededError &&
+    typeof (error as MaxTurnsExceededError).state === "object" &&
+    (error as MaxTurnsExceededError).state !== null
+  );
+}
+
+/** 正常終了時にのみ finalOutput が安全に読み取れる状態かを判定する。 */
+function hasFinalOutput(result: AnyRunResult): boolean {
+  const state = (
+    result as unknown as {
+      state?: { _currentStep?: { type?: string } | undefined };
+    }
+  ).state;
+  return state?._currentStep?.type === "next_step_final_output";
 }

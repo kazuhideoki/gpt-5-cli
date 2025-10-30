@@ -136,3 +136,19 @@ export interface ConversationContext {
   activeEntry?: HistoryEntry;
   activeLastResponseId?: string;
 }
+
+/** Agents SDK での会話実行結果を CLI 層へ受け渡すための契約。 */
+export interface AgentConversationOutcome {
+  /**
+   * エージェントが生成したテキスト出力。途中終了時は未完成の可能性がある。
+   */
+  assistantText: string;
+  /**
+   * Responses API が返した最後のレスポンス ID。未取得の場合は undefined。
+   */
+  responseId: string | undefined;
+  /**
+   * 最大イテレーションに到達して途中結果を返している場合は true。
+   */
+  reachedMaxIterations: boolean;
+}

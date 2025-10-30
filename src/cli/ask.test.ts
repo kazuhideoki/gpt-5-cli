@@ -440,6 +440,14 @@ describe("main", () => {
     const source = await file.text();
     expect(source.includes("maxTurns: options.maxIterations")).toBe(true);
   });
+
+  it("maxIterations を超過した場合は完了ログを出力する", async () => {
+    const file = Bun.file(new URL("./ask.ts", import.meta.url));
+    const source = await file.text();
+    expect(source).toMatch(
+      /console\.error\(\s*"\[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
+    );
+  });
 });
 
 describe("ask web search integration", () => {
