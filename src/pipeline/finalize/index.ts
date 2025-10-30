@@ -13,18 +13,17 @@ export type {
   FinalizeHistoryEffect,
   FinalizeCopySource,
   FinalizeExitCode,
-  type FinalizeAction,
-  type FinalizeActionList,
-  type FinalizeCommandAction,
-  type FinalizeToolAction,
+  FinalizeAction,
+  FinalizeActionList,
+  FinalizeCommandAction,
+  FinalizeToolAction,
 } from "./types.js";
 
 export {
   DEFAULT_OUTPUT_DIR_ENV,
   deliverOutput,
   generateDefaultOutputPath,
-  type DefaultOutputPathParams,
-  type DefaultOutputPathResult,
 } from "./io.js";
+export type { DefaultOutputPathParams, DefaultOutputPathResult } from "./io.js";
 export { buildFileHistoryContext } from "./history-context.js";
 export type { FileHistoryContext } from "./history-context.js";

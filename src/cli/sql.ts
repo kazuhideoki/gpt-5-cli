@@ -792,6 +792,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
+      actions: [],
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptionsWithDsn.copyOutput,
       copySourceFilePath: resolvedOptionsWithDsn.copyOutput

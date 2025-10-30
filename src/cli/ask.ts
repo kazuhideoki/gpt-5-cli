@@ -320,6 +320,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
+      actions: [],
       textOutputPath,
       copyOutput: options.copyOutput,
       copySourceFilePath: options.copyOutput

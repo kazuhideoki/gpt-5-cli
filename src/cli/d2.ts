@@ -464,6 +464,7 @@ async function main(): Promise<void> {
     const finalizeOutcome = await finalizeResult<D2CliHistoryStoreContext>({
       content,
       userText: determine.inputText,
+      actions: [],
       textOutputPath: outputResolution.textOutputPath ?? undefined,
       copyOutput: resolvedOptions.copyOutput,
       copySourceFilePath: resolvedOptions.copyOutput ? resolvedOptions.artifactPath : undefined,

@@ -2,6 +2,7 @@
  * @file finalize 層のエントリーポイント。CLI の結果処理を集約する。
  */
 
+import { spawn } from "node:child_process";
 import { deliverOutput } from "./io.js";
 import type { FinalizeOutcome, FinalizeRequest } from "./types.js";
 
@@ -40,7 +41,53 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     await args.history.run();
   }
 
-  // TODO: finalize-action 実行ロジックを追加する（command/tool など）
+  if (args.actions.length > 0) {
+    const sortedActions = args.actions
+      .map((action, index) => ({ action, index }))
+      .sort((left, right) => {
+        const priorityDiff = left.action.priority - right.action.priority;
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.action);
+
+    for (const action of sortedActions) {
+      if (action.kind === "command") {
+        if (action.arguments.length === 0) {
+          throw new Error(`Error: ${action.flag} で実行するコマンドが設定されていません`);
+        }
+        const [command, ...commandArgs] = action.arguments;
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn(command, commandArgs, {
+            cwd: action.workingDirectory,
+            stdio: "inherit",
+          });
+          child.once("error", (error) => {
+            reject(
+              new Error(
+                `Error: ${action.flag} のコマンド実行に失敗しました: ${(error as Error).message}`,
+              ),
+            );
+          });
+          child.once("close", (code) => {
+            if ((code ?? 1) === 0) {
+              resolve();
+              return;
+            }
+            reject(
+              new Error(
+                `Error: ${action.flag} のコマンドが終了コード ${code ?? -1} で終了しました`,
+              ),
+            );
+          });
+        });
+      } else {
+        // TODO: finalize-action tool 実行を実装する
+      }
+    }
+  }
 
   return {
     exitCode: args.exitCode ?? DEFAULT_EXIT_CODE,
