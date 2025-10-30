@@ -13,6 +13,14 @@ export type {
   FinalizeHistoryEffect,
   FinalizeCopySource,
   FinalizeExitCode,
+  finalizeActionSchema,
+  finalizeActionListSchema,
+  finalizeCommandActionSchema,
+  finalizeToolActionSchema,
+  type FinalizeAction,
+  type FinalizeActionList,
+  type FinalizeCommandAction,
+  type FinalizeToolAction,
 } from "./types.js";
 
 export {
