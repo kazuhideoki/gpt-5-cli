@@ -35,7 +35,14 @@ import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
+  /** D2 成果物（.d2 ファイル）の保存先を表す相対パス。 */
   artifactPath: string;
+  /** HTML 化した出力ファイルの保存先を表す相対パス。 */
+  htmlOutputPath: string;
+  /** `--output-html` が明示指定された場合に true。 */
+  htmlOutputExplicit: boolean;
+  /** HTML 出力後に既定ブラウザで開く場合に true。 */
+  openHtml: boolean;
 }
 
 /**
