@@ -5,24 +5,6 @@ import type { ConfigEnvironment } from "../../types.js";
 import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.js";
 
 /**
- * finalize 層が扱う終了後コマンドの入力構造。
- */
-export interface FinalizeCommandAction {
-  kind: "command";
-  /** アクションの有効化に利用された CLI フラグ名。 */
-  flag: string;
-  /** 実行するコマンドへ渡す引数列。先頭要素は実コマンド名を想定する。 */
-  arguments: string[];
-  /** コマンドを実行する作業ディレクトリ。 */
-  workingDirectory: string;
-  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
-  priority: number;
-}
-
-/**
- * finalize 層が扱う終了後ツール実行の入力構造。
- */
-/**
  * finalize 層が扱うクリップボードコピーの入力構造。
  */
 export interface FinalizeClipboardAction {
@@ -40,7 +22,7 @@ export interface FinalizeClipboardAction {
 /**
  * finalize 層で利用する後続アクションの判別共用体。
  */
-export type FinalizeAction = FinalizeCommandAction | FinalizeClipboardAction;
+export type FinalizeAction = FinalizeClipboardAction;
 
 /**
  * finalize 層が受け取る後続アクションの配列。

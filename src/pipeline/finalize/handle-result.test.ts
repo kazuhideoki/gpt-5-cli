@@ -3,7 +3,6 @@
  */
 import { describe, expect, it, mock } from "bun:test";
 import { EventEmitter } from "node:events";
-import type { ChildProcess, SpawnOptions } from "node:child_process";
 import type { ConfigEnvironment } from "../../types.js";
 import type { FinalizeRequest } from "./types.js";
 import { handleResult } from "./handle-result.js";
@@ -135,44 +134,40 @@ describe("handleResult", () => {
     expect(args?.[0]?.configEnv).toBe(configEnv);
   });
 
-  it("アクションを優先順位順に実行する", async () => {
-    interface RecordedCall {
-      command: string;
-      args: readonly string[];
-      cwd: string | undefined;
-    }
+  it("clipboard アクションを優先順位順に実行する", async () => {
+    const copied: string[] = [];
+    const spawnMock = mock((command: string) => {
+      if (command !== "pbcopy") {
+        throw new Error(`Unexpected command: ${command}`);
+      }
+      const child = new EventEmitter() as MockClipboardChild;
+      const stdin = new EventEmitter() as MockStdin;
+      stdin.end = (chunk: string) => {
+        copied.push(chunk);
+        child.emit("close", 0);
+      };
+      child.stdin = stdin;
+      return child as unknown as any;
+    });
 
-    const recorded: RecordedCall[] = [];
-    const spawnMock = mock(
-      (command: string, args: readonly string[] = [], options?: SpawnOptions) => {
-        recorded.push({ command, args, cwd: options?.cwd });
-        const child = new EventEmitter();
-        queueMicrotask(() => {
-          child.emit("close", 0);
-        });
-        return child as ChildProcess;
-      },
-    );
-    mock.module("node:child_process", () => ({
-      spawn: spawnMock,
-    }));
+    mock.module("node:child_process", () => ({ spawn: spawnMock }));
 
     try {
       await handleResult({
-        content: "action-run",
+        content: "fallback",
         actions: [
           {
-            kind: "command",
-            flag: "--after",
-            arguments: ["second", "two"],
-            workingDirectory: "/workspace/project",
+            kind: "clipboard",
+            flag: "--copy",
+            source: { type: "content", value: "second" },
+            workingDirectory: process.cwd(),
             priority: 20,
           },
           {
-            kind: "command",
-            flag: "--after",
-            arguments: ["first", "one"],
-            workingDirectory: "/workspace/project",
+            kind: "clipboard",
+            flag: "--copy",
+            source: { type: "content", value: "first" },
+            workingDirectory: process.cwd(),
             priority: 10,
           },
         ],
@@ -186,56 +181,7 @@ describe("handleResult", () => {
       mock.restore();
     }
 
-    expect(recorded).toEqual([
-      { command: "first", args: ["one"], cwd: "/workspace/project" },
-      { command: "second", args: ["two"], cwd: "/workspace/project" },
-    ]);
+    expect(copied).toEqual(["first", "second"]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("clipboard アクションで本文をコピーする", async () => {
-    const copied: string[] = [];
-    const spawnMock = mock((command: string) => {
-      if (command !== "pbcopy") {
-        throw new Error(`Unexpected command: ${command}`);
-      }
-      const child = new EventEmitter() as MockClipboardChild;
-      const stdin = new EventEmitter() as MockStdin;
-      stdin.end = (chunk: string) => {
-        copied.push(chunk);
-        child.emit("close", 0);
-      };
-      child.stdin = stdin;
-      return child as unknown as ChildProcess;
-    });
-
-    mock.module("node:child_process", () => ({
-      spawn: spawnMock,
-    }));
-
-    try {
-      await handleResult({
-        content: "primary",
-        actions: [
-          {
-            kind: "clipboard",
-            flag: "--copy",
-            source: { type: "content", value: "copied text" },
-            workingDirectory: process.cwd(),
-            priority: 5,
-          },
-        ],
-        configEnv: createConfigEnv(),
-        stdout: undefined,
-        output: undefined,
-        history: undefined,
-        exitCode: undefined,
-      });
-    } finally {
-      mock.restore();
-    }
-
-    expect(copied).toEqual(["copied text"]);
-    expect(spawnMock).toHaveBeenCalledTimes(1);
   });
 });
