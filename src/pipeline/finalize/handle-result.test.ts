@@ -238,6 +238,4 @@ describe("handleResult", () => {
     expect(copied).toEqual(["copied text"]);
     expect(spawnMock).toHaveBeenCalledTimes(1);
   });
-
-  it.todo("tool アクションの実行は finalize-action 実装時に追加する");
 });

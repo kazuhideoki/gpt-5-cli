@@ -45,9 +45,6 @@ export async function executeFinalizeAction(
       case "clipboard":
         await runClipboardAction(action, context);
         break;
-      case "tool":
-        // TODO(finalize/actions): implement tool action execution
-        break;
       default: {
         const neverAction: never = action;
         throw new Error(`Error: unknown finalize action type: ${String(neverAction)}`);

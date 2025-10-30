@@ -22,18 +22,6 @@ export interface FinalizeCommandAction {
 /**
  * finalize 層が扱う終了後ツール実行の入力構造。
  */
-export interface FinalizeToolAction {
-  kind: "tool";
-  /** アクションの有効化に利用された CLI フラグ名。 */
-  flag: string;
-  /** 実行対象となるツールの識別子。 */
-  toolIdentifier: string;
-  /** ツールへ受け渡す入力値。 */
-  input: unknown;
-  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
-  priority: number;
-}
-
 /**
  * finalize 層が扱うクリップボードコピーの入力構造。
  */
@@ -52,7 +40,7 @@ export interface FinalizeClipboardAction {
 /**
  * finalize 層で利用する後続アクションの判別共用体。
  */
-export type FinalizeAction = FinalizeCommandAction | FinalizeToolAction | FinalizeClipboardAction;
+export type FinalizeAction = FinalizeCommandAction | FinalizeClipboardAction;
 
 /**
  * finalize 層が受け取る後続アクションの配列。
