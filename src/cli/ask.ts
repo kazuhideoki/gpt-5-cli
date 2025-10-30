@@ -5,7 +5,11 @@ import { webSearchTool } from "@openai/agents-openai";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, ConfigEnvironment } from "../types.js";
 import { createOpenAIClient } from "../pipeline/process/openai-client.js";
-import { finalizeResult } from "../pipeline/finalize/index.js";
+import {
+  finalizeResult,
+  createClipboardAction,
+  type FinalizeActionList,
+} from "../pipeline/finalize/index.js";
 import {
   READ_FILE_TOOL,
   buildConversationToolset,
@@ -317,14 +321,28 @@ async function main(): Promise<void> {
       copyOutput: options.copyOutput,
     });
 
+    const actions: FinalizeActionList = [];
+    if (options.copyOutput) {
+      const source = options.responseOutputPath
+        ? {
+            type: "file" as const,
+            filePath: options.responseOutputPath,
+          }
+        : { type: "content" as const, value: content };
+      actions.push(
+        createClipboardAction({
+          source,
+          workingDirectory: process.cwd(),
+          priority: 100,
+        }),
+      );
+    }
+
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
+      actions,
       textOutputPath,
-      copyOutput: options.copyOutput,
-      copySourceFilePath: options.copyOutput
-        ? (options.responseOutputPath ?? undefined)
-        : undefined,
       configEnv,
       stdout: undefined,
       history: agentResult.responseId

@@ -29,6 +29,8 @@ import {
   finalizeResult,
   generateDefaultOutputPath,
   resolveResultOutput,
+  createClipboardAction,
+  type FinalizeActionList,
   type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
@@ -789,14 +791,25 @@ async function main(): Promise<void> {
       },
     );
 
+    const actions: FinalizeActionList = [];
+    if (resolvedOptionsWithDsn.copyOutput) {
+      actions.push(
+        createClipboardAction({
+          source: {
+            type: "file",
+            filePath: resolvedOptionsWithDsn.artifactPath,
+          },
+          workingDirectory: process.cwd(),
+          priority: 100,
+        }),
+      );
+    }
+
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
       userText: determine.inputText,
+      actions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
-      copyOutput: resolvedOptionsWithDsn.copyOutput,
-      copySourceFilePath: resolvedOptionsWithDsn.copyOutput
-        ? resolvedOptionsWithDsn.artifactPath
-        : undefined,
       configEnv,
       stdout: undefined,
       history: agentResult.responseId

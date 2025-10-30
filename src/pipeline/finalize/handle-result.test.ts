@@ -2,6 +2,7 @@
  * @file finalize 層のエントリーポイントに対するユニットテスト。
  */
 import { describe, expect, it, mock } from "bun:test";
+import { EventEmitter } from "node:events";
 import type { ConfigEnvironment } from "../../types.js";
 import type { FinalizeRequest } from "./types.js";
 import { handleResult } from "./handle-result.js";
@@ -19,6 +20,14 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
   };
 }
 
+interface MockStdin extends EventEmitter {
+  end: (chunk: string, encoding?: BufferEncoding) => void;
+}
+
+interface MockClipboardChild extends EventEmitter {
+  stdin: MockStdin;
+}
+
 describe("handleResult", () => {
   it("既定のコンテンツを出力ハンドラーへ渡し、成果物メタデータを返す", async () => {
     const delivery = mock(async () => ({
@@ -31,6 +40,7 @@ describe("handleResult", () => {
 
     const request: FinalizeRequest = {
       content: "primary output",
+      actions: [],
       output: {
         handler: delivery,
         params: {
@@ -67,6 +77,7 @@ describe("handleResult", () => {
 
     await handleResult({
       content: "history",
+      actions: [],
       history: {
         run: historyEffect,
       },
@@ -84,6 +95,7 @@ describe("handleResult", () => {
       content: "fallback",
       stdout: "custom stdout",
       exitCode: 1,
+      actions: [],
       configEnv: createConfigEnv(),
       output: undefined,
       history: undefined,
@@ -100,6 +112,7 @@ describe("handleResult", () => {
 
     await handleResult({
       content: "pass-through",
+      actions: [],
       configEnv,
       output: {
         handler: delivery,
@@ -119,5 +132,56 @@ describe("handleResult", () => {
     expect(delivery).toHaveBeenCalledTimes(1);
     const [args] = delivery.mock.calls;
     expect(args?.[0]?.configEnv).toBe(configEnv);
+  });
+
+  it("clipboard アクションを優先順位順に実行する", async () => {
+    const copied: string[] = [];
+    const spawnMock = mock((command: string) => {
+      if (command !== "pbcopy") {
+        throw new Error(`Unexpected command: ${command}`);
+      }
+      const child = new EventEmitter() as MockClipboardChild;
+      const stdin = new EventEmitter() as MockStdin;
+      stdin.end = (chunk: string) => {
+        copied.push(chunk);
+        child.emit("close", 0);
+      };
+      child.stdin = stdin;
+      return child as unknown as any;
+    });
+
+    mock.module("node:child_process", () => ({ spawn: spawnMock }));
+
+    try {
+      await handleResult({
+        content: "fallback",
+        actions: [
+          {
+            kind: "clipboard",
+            flag: "--copy",
+            source: { type: "content", value: "second" },
+            workingDirectory: process.cwd(),
+            priority: 20,
+          },
+          {
+            kind: "clipboard",
+            flag: "--copy",
+            source: { type: "content", value: "first" },
+            workingDirectory: process.cwd(),
+            priority: 10,
+          },
+        ],
+        configEnv: createConfigEnv(),
+        stdout: undefined,
+        output: undefined,
+        history: undefined,
+        exitCode: undefined,
+      });
+    } finally {
+      mock.restore();
+    }
+
+    expect(copied).toEqual(["first", "second"]);
+    expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 });

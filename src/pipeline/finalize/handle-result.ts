@@ -2,6 +2,7 @@
  * @file finalize 層のエントリーポイント。CLI の結果処理を集約する。
  */
 
+import { executeFinalizeAction } from "./actions/execute.js";
 import { deliverOutput } from "./io.js";
 import type { FinalizeOutcome, FinalizeRequest } from "./types.js";
 
@@ -33,6 +34,29 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     }
     if (deliverResult.copied) {
       copied = true;
+    }
+  }
+
+  if (args.actions.length > 0) {
+    const sortedActions = args.actions
+      .map((action, index) => ({ action, index }))
+      .sort((left, right) => {
+        const priorityDiff = left.action.priority - right.action.priority;
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.action);
+
+    for (const action of sortedActions) {
+      const result = await executeFinalizeAction(action, {
+        configEnv: args.configEnv,
+        defaultContent: args.content,
+      });
+      if (result.copied) {
+        copied = true;
+      }
     }
   }
 

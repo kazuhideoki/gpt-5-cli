@@ -14,6 +14,7 @@ import type {
   FinalizeDeliveryInstruction,
   FinalizeHistoryEffect,
   FinalizeOutcome,
+  FinalizeActionList,
 } from "./types.js";
 
 /**
@@ -56,16 +57,14 @@ export interface FinalizeResultParams<TContext> {
   content: string;
   /** 今回のユーザー入力。 */
   userText: string;
+  /** CLI 固有で事前定義された終了後アクション。 */
+  actions: FinalizeActionList;
   /** finalize 層が利用する ConfigEnv。 */
   configEnv: ConfigEnvironment;
   /** 標準出力へそのまま流したい補足テキスト。 */
   stdout: string | undefined;
   /** ファイル保存先の相対または絶対パス。 */
   textOutputPath: string | undefined;
-  /** クリップボードへコピーするかどうか。 */
-  copyOutput: boolean;
-  /** コピー元をファイルへ切り替える場合のパス。 */
-  copySourceFilePath: string | undefined;
   /** 履歴更新を実施する場合の追加オプション。 */
   history: FinalizeResultHistoryOptions<TContext> | undefined;
 }
@@ -76,36 +75,21 @@ export interface FinalizeResultParams<TContext> {
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const {
-    content,
-    stdout,
-    textOutputPath,
-    copyOutput,
-    copySourceFilePath,
-    history,
-    userText,
-    configEnv,
-  } = params;
+  const { content, actions, stdout, textOutputPath, history, userText, configEnv } = params;
 
-  const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined =
-    textOutputPath || copyOutput
-      ? ({
-          params: {
-            configEnv,
-            content: undefined,
-            cwd: undefined,
-            filePath: textOutputPath ?? undefined,
-            copy: copyOutput ? true : undefined,
-            copySource: copySourceFilePath
-              ? {
-                  type: "file" as const,
-                  filePath: copySourceFilePath,
-                }
-              : undefined,
-          },
-          handler: undefined,
-        } satisfies FinalizeDeliveryInstruction)
-      : undefined;
+  const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined = textOutputPath
+    ? ({
+        params: {
+          configEnv,
+          content: undefined,
+          cwd: undefined,
+          filePath: textOutputPath,
+          copy: undefined,
+          copySource: undefined,
+        },
+        handler: undefined,
+      } satisfies FinalizeDeliveryInstruction)
+    : undefined;
 
   let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
   if (history?.responseId) {
@@ -136,6 +120,7 @@ export async function finalizeResult<TContext>(
     stdout,
     configEnv,
     output: finalizeOutputInstruction,
+    actions,
     history: finalizeHistoryEffect,
     exitCode: undefined,
   });

@@ -13,14 +13,23 @@ export type {
   FinalizeHistoryEffect,
   FinalizeCopySource,
   FinalizeExitCode,
+  FinalizeAction,
+  FinalizeActionList,
+  FinalizeClipboardAction,
 } from "./types.js";
 
 export {
   DEFAULT_OUTPUT_DIR_ENV,
   deliverOutput,
   generateDefaultOutputPath,
-  type DefaultOutputPathParams,
-  type DefaultOutputPathResult,
 } from "./io.js";
+export type { DefaultOutputPathParams, DefaultOutputPathResult } from "./io.js";
 export { buildFileHistoryContext } from "./history-context.js";
 export type { FileHistoryContext } from "./history-context.js";
+export { createClipboardAction } from "./actions/builders.js";
+export {
+  executeFinalizeAction,
+  FINALIZE_ACTION_LOG_LABEL,
+  type ExecuteFinalizeActionContext,
+  type ExecuteFinalizeActionResult,
+} from "./actions/execute.js";
