@@ -444,8 +444,8 @@ describe("main", () => {
   it("maxIterations を超過した場合は完了ログを出力する", async () => {
     const file = Bun.file(new URL("./ask.ts", import.meta.url));
     const source = await file.text();
-    expect(source).toContain(
-      'console.error("[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します");',
+    expect(source).toMatch(
+      /console\.error\(\s*"\[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
     );
   });
 });
