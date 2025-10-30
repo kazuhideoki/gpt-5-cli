@@ -34,11 +34,11 @@ export interface FinalizeDeliveryInstruction {
   /**
    * `deliverOutput` に与えるパラメータ。`content` が未指定の場合は `FinalizeRequest.content` を用いる。
    */
-  params: Omit<DeliverOutputParams, "content"> & { content?: string };
+  params: Omit<DeliverOutputParams, "content"> & { content: string | undefined };
   /**
    * 出力先を差し替えたい場合に利用する任意のハンドラー。
    */
-  handler?: FinalizeDeliveryHandler;
+  handler: FinalizeDeliveryHandler | undefined;
 }
 
 export type FinalizeDeliveryHandler = (params: DeliverOutputParams) => Promise<DeliverOutputResult>;
@@ -62,27 +62,29 @@ export interface FinalizeRequest {
   /**
    * stdout へ書き出すテキストを明示的に指定したい場合に利用する。
    */
-  stdout?: string;
+  stdout: string | undefined;
   /**
    * ファイル保存やクリップボードコピーなどの出力指示。
    */
-  output?: FinalizeDeliveryInstruction;
+  output: FinalizeDeliveryInstruction | undefined;
   /**
    * 履歴更新など任意の副作用。
    */
-  history?: FinalizeHistoryEffect;
+  history: FinalizeHistoryEffect | undefined;
   /**
    * finalize が返す終了コード。未指定時は 0。
    */
-  exitCode?: FinalizeExitCode;
+  exitCode: FinalizeExitCode | undefined;
 }
 
 export interface FinalizeOutcome {
   exitCode: FinalizeExitCode;
   stdout: string;
-  output?: {
-    filePath?: string;
-    bytesWritten?: number;
-    copied?: boolean;
-  };
+  output:
+    | {
+        filePath: string | undefined;
+        bytesWritten: number | undefined;
+        copied: boolean | undefined;
+      }
+    | undefined;
 }
