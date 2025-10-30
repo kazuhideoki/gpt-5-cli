@@ -9,7 +9,11 @@ export interface CliLoggerParams {
   /**
    * ロガーが紐づく CLI モード。
    */
-  cli: TaskMode;
+  task: TaskMode;
+  /**
+   * ロガーに付与する任意のラベル。
+   */
+  label: string;
   /**
    * デバッグレベルの詳細ログを有効化する場合は true。
    */
