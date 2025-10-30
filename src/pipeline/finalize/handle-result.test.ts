@@ -2,6 +2,8 @@
  * @file finalize 層のエントリーポイントに対するユニットテスト。
  */
 import { describe, expect, it, mock } from "bun:test";
+import { EventEmitter } from "node:events";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import type { ConfigEnvironment } from "../../types.js";
 import type { FinalizeRequest } from "./types.js";
 import { handleResult } from "./handle-result.js";
@@ -126,7 +128,61 @@ describe("handleResult", () => {
   });
 
   it("アクションを優先順位順に実行する", async () => {
-    // TODO: finalize-action 実行ロジックのテストを実装する
+    interface RecordedCall {
+      command: string;
+      args: readonly string[];
+      cwd: string | undefined;
+    }
+
+    const recorded: RecordedCall[] = [];
+    const spawnMock = mock(
+      (command: string, args: readonly string[] = [], options?: SpawnOptions) => {
+        recorded.push({ command, args, cwd: options?.cwd });
+        const child = new EventEmitter();
+        queueMicrotask(() => {
+          child.emit("close", 0);
+        });
+        return child as ChildProcess;
+      },
+    );
+    mock.module("node:child_process", () => ({
+      spawn: spawnMock,
+    }));
+
+    try {
+      await handleResult({
+        content: "action-run",
+        actions: [
+          {
+            kind: "command",
+            flag: "--after",
+            arguments: ["second", "two"],
+            workingDirectory: "/workspace/project",
+            priority: 20,
+          },
+          {
+            kind: "command",
+            flag: "--after",
+            arguments: ["first", "one"],
+            workingDirectory: "/workspace/project",
+            priority: 10,
+          },
+        ],
+        configEnv: createConfigEnv(),
+        stdout: undefined,
+        output: undefined,
+        history: undefined,
+        exitCode: undefined,
+      });
+    } finally {
+      mock.restore();
+    }
+
+    expect(recorded).toEqual([
+      { command: "first", args: ["one"], cwd: "/workspace/project" },
+      { command: "second", args: ["two"], cwd: "/workspace/project" },
+    ]);
+    expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
   it.todo("tool アクションの実行は finalize-action 実装時に追加する");
