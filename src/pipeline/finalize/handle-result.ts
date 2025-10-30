@@ -37,10 +37,6 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     }
   }
 
-  if (args.history) {
-    await args.history.run();
-  }
-
   if (args.actions.length > 0) {
     const sortedActions = args.actions
       .map((action, index) => ({ action, index }))
@@ -62,6 +58,10 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
         copied = true;
       }
     }
+  }
+
+  if (args.history) {
+    await args.history.run();
   }
 
   return {
