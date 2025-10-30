@@ -123,17 +123,55 @@ describe("d2 parseArgs", () => {
     const options = parseArgs(["--debug", "図"], defaults, createConfigEnv());
     expect(options.debug).toBe(true);
   });
+});
 
+describe("d2 parseArgs html options", () => {
   it("既定で成果物パスに基づく HTML 出力パスを設定する", () => {
-    // Step3 で実装
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    const options = parseArgs(["グラフを描いて"], defaults, configEnv);
+
+    expect(options.openHtml).toBe(false);
+    expect(options.htmlOutputExplicit).toBe(false);
+    const baseName = options.artifactPath.replace(/\.d2$/u, "");
+    expect(options.htmlOutputPath).toBe(`${baseName}.html`);
+  });
+
+  it("--open-html で HTML 生成を有効にできる", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    const options = parseArgs(["--open-html", "グラフ"], defaults, configEnv);
+
+    expect(options.openHtml).toBe(true);
+    expect(options.htmlOutputExplicit).toBe(false);
+    const baseName = options.artifactPath.replace(/\.d2$/u, "");
+    expect(options.htmlOutputPath).toBe(`${baseName}.html`);
+  });
+
+  it("--output-html は --open-html と同時に指定する必要がある", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    expect(() =>
+      parseArgs(["--output-html", "diagram.html", "図"], defaults, configEnv),
+    ).toThrow("Error: --output-html を使うには --open-html を同時に指定してください");
   });
 
   it("--output-html で HTML 出力パスを明示できる", () => {
-    // Step3 で実装
-  });
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
 
-  it("--open-html で HTML を生成後に開ける", () => {
-    // Step3 で実装
+    const options = parseArgs(
+      ["--open-html", "--output-html", "custom.html", "図"],
+      defaults,
+      configEnv,
+    );
+
+    expect(options.openHtml).toBe(true);
+    expect(options.htmlOutputExplicit).toBe(true);
+    expect(options.htmlOutputPath).toBe("custom.html");
   });
 });
 
