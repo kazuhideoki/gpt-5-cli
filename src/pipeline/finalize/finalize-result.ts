@@ -14,6 +14,7 @@ import type {
   FinalizeDeliveryInstruction,
   FinalizeHistoryEffect,
   FinalizeOutcome,
+  FinalizeActionList,
 } from "./types.js";
 
 /**
