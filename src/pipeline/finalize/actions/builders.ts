@@ -1,0 +1,32 @@
+/**
+ * @file finalize アクション生成のためのビルダー群。
+ * CLI 層などが利用するヘルパーをまとめる。
+ */
+import type { FinalizeClipboardAction, FinalizeCopySource } from "../types.js";
+
+/**
+ * クリップボードアクション生成時に必要な入力。
+ */
+export interface ClipboardActionParams {
+  /** アクションの実行トリガーとなった CLI フラグ。 */
+  flag: string;
+  /** コピー対象を表す情報。 */
+  source: FinalizeCopySource;
+  /** アクションを実行する作業ディレクトリ。 */
+  workingDirectory: string;
+  /** 実行優先順位。小さい値ほど先に実行される。 */
+  priority: number;
+}
+
+/**
+ * クリップボードアクションを構築する。
+ */
+export function createClipboardAction(params: ClipboardActionParams): FinalizeClipboardAction {
+  return {
+    kind: "clipboard",
+    flag: params.flag,
+    source: params.source,
+    workingDirectory: params.workingDirectory,
+    priority: params.priority,
+  };
+}

@@ -15,8 +15,8 @@ import type {
   FinalizeHistoryEffect,
   FinalizeOutcome,
   FinalizeActionList,
-  FinalizeClipboardAction,
 } from "./types.js";
+import { createClipboardAction } from "./actions/builders.js";
 
 /**
  * 履歴へ保存する際に必要となるモデル情報のスナップショット。
@@ -110,23 +110,22 @@ export async function finalizeResult<TContext>(
       : undefined;
 
   if (copyOutput) {
-    const copySource: FinalizeClipboardAction["source"] = copySourceFilePath
-      ? {
-          type: "file",
-          filePath: copySourceFilePath,
-        }
-      : {
-          type: "content",
-          value: content,
-        };
-
-    actions.push({
-      kind: "clipboard",
-      flag: "--copy",
-      source: copySource,
-      workingDirectory: process.cwd(),
-      priority: 100,
-    });
+    actions.push(
+      createClipboardAction({
+        flag: "--copy",
+        source: copySourceFilePath
+          ? {
+              type: "file",
+              filePath: copySourceFilePath,
+            }
+          : {
+              type: "content",
+              value: content,
+            },
+        workingDirectory: process.cwd(),
+        priority: 100,
+      }),
+    );
   }
 
   let finalizeHistoryEffect: FinalizeHistoryEffect | undefined;
