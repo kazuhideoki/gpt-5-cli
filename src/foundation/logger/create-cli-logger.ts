@@ -6,6 +6,7 @@ import type { CliLogger, CliLoggerParams } from "./types.js";
 const MESSAGE_SYMBOL = Symbol.for("message");
 const LEVEL_SYMBOL = Symbol.for("level");
 const SPLAT_SYMBOL = Symbol.for("splat");
+// Winston ログの JSON 化で BigInt を拒否しないよう文字列へ変換する。
 const JSON_REPLACER = (_key: string, value: unknown) => {
   if (typeof value === "bigint") {
     return value.toString();
@@ -102,6 +103,7 @@ function extractMetadata(info: TransformableInfo): string | undefined {
     metadata[String(symbolKey)] = residual[symbolKey];
   }
 
+  // format.splat() が保持する追加メタデータを欠落させないよう JSON に含める。
   if (Array.isArray(splat) && splat.length > 0) {
     metadata.splat = splat;
   }

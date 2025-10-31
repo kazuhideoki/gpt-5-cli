@@ -30,6 +30,51 @@ describe("createCliLogger", () => {
     expect(formatted?.[Symbol.for("message")]).toContain("hello");
   });
 
+  it("追加メタデータを JSON として末尾に付与する", () => {
+    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
+    const info: TransformableInfo = {
+      level: "info",
+      message: "hello",
+      label: LABEL,
+      timestamp: "2025-03-01T10:00:00.000Z",
+      extra: "value",
+    };
+    const formatted = logger.format.transform(info, logger.format.options ?? {});
+    expect(formatted?.[Symbol.for("message")]).toContain(
+      '{"extra":"value"}',
+    );
+  });
+
+  it("BigInt を含むメタデータも安全にシリアライズする", () => {
+    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
+    const info: TransformableInfo = {
+      level: "info",
+      message: "hello",
+      label: LABEL,
+      timestamp: "2025-03-01T10:00:00.000Z",
+      bigintValue: BigInt(42),
+    };
+    const formatted = logger.format.transform(info, logger.format.options ?? {});
+    expect(formatted?.[Symbol.for("message")]).toContain(
+      '{"bigintValue":"42"}',
+    );
+  });
+
+  it("format.splat の追加引数を splat メタデータとして残す", () => {
+    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
+    const info: TransformableInfo = {
+      level: "info",
+      message: "hello world",
+      label: LABEL,
+      timestamp: "2025-03-01T10:00:00.000Z",
+      [Symbol.for("splat")]: ["world", { foo: 1 }],
+    };
+    const formatted = logger.format.transform(info, logger.format.options ?? {});
+    expect(formatted?.[Symbol.for("message")]).toContain(
+      '{"splat":["world",{"foo":1}]}',
+    );
+  });
+
   it("モード情報をメタデータとして保持する", () => {
     const logger = createCliLogger({ task: "mermaid", label: "mermaid-cli", debug: false });
     expect(logger.defaultMeta).toEqual({ task: "mermaid" });
