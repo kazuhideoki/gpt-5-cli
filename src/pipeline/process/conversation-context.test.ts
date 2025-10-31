@@ -2,9 +2,29 @@ import { describe, expect, it } from "bun:test";
 import type { CliOptions } from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { computeContext } from "./conversation-context.js";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 
 interface TestHistoryTask {
   note?: string;
+}
+
+function createLoggerConfig(partial?: Partial<CliLoggerConfig>): CliLoggerConfig {
+  const baseLogger = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+    level: "info",
+    transports: [],
+    log: () => undefined,
+  } as unknown as CliLogger;
+  return {
+    logger: baseLogger,
+    logLabel: "[test-cli]",
+    debugEnabled: false,
+    ...partial,
+  };
 }
 
 function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
@@ -47,11 +67,13 @@ describe("computeContext", () => {
     const historyStore = {
       findLatest: () => undefined,
     } as unknown as HistoryStore<TestHistoryTask>;
+    const loggerConfig = createLoggerConfig();
 
     const context = computeContext({
       options,
       historyStore,
       inputText: "最初の 問い合わせ",
+      loggerConfig,
     });
 
     expect(context.isNewConversation).toBe(true);
@@ -88,6 +110,7 @@ describe("computeContext", () => {
     const historyStore = {
       findLatest: () => latestEntry,
     } as unknown as HistoryStore<TestHistoryTask>;
+    const loggerConfig = createLoggerConfig();
 
     const context = computeContext({
       options,
@@ -100,6 +123,7 @@ describe("computeContext", () => {
           synchronized = true;
         },
       },
+      loggerConfig,
     });
 
     expect(context.isNewConversation).toBe(false);
@@ -115,4 +139,6 @@ describe("computeContext", () => {
     expect(options.verbosity).toBe("medium");
     expect(synchronized).toBe(true);
   });
+
+  it("CLI 層から注入した loggerConfig の logLabel を警告ログに利用する");
 });

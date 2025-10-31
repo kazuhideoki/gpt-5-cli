@@ -276,13 +276,13 @@ describe("buildRequest", () => {
       inputText: "最初の質問",
       systemPrompt: "system message",
       defaults,
-      logLabel: "[test-cli]",
       configEnv,
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
         loggerConfig: createLoggerConfig(false),
       }),
+      loggerConfig: createLoggerConfig(false),
     });
     const input = request.input as any[];
     expect(input[0]).toEqual({
@@ -311,13 +311,13 @@ describe("buildRequest", () => {
       inputText: "続きの質問",
       systemPrompt: "system message",
       defaults,
-      logLabel: "[test-cli]",
       configEnv,
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
         loggerConfig: createLoggerConfig(false),
       }),
+      loggerConfig: createLoggerConfig(false),
     });
     const input = request.input as any[];
     const systemTexts = input

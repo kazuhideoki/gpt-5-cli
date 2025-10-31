@@ -11,6 +11,7 @@ import type {
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import type { Response } from "openai/resources/responses/responses";
 import { buildRequest, extractResponseText, performCompact } from "./responses.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
 interface TestHistoryTask {
   label?: string;
@@ -78,6 +79,24 @@ const originalStdoutWrite = process.stdout.write;
 let restoredConsoleLog = false;
 const originalConsoleLog = console.log;
 
+function createLoggerConfig(overrides: Partial<CliLoggerConfig> = {}): CliLoggerConfig {
+  const logger = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+    level: "info",
+    transports: [],
+    log: () => undefined,
+  } as unknown as CliLogger;
+  return {
+    logger,
+    logLabel: "[test-cli]",
+    debugEnabled: false,
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   // 念のため stdout / console を元に戻す
   if (restoredStdout) {
@@ -116,7 +135,7 @@ describe("buildRequest", () => {
       inputText: "質問内容",
       systemPrompt: "system message",
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig: createLoggerConfig(),
       configEnv: createConfigEnv(),
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
@@ -151,7 +170,7 @@ describe("buildRequest", () => {
       inputText: "質問内容",
       systemPrompt: undefined,
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig: createLoggerConfig(),
       configEnv: createConfigEnv(),
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
@@ -199,7 +218,7 @@ describe("buildRequest", () => {
       inputText: "続きの質問",
       systemPrompt: "system message",
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig: createLoggerConfig(),
       additionalSystemMessages: additional,
       imageDataUrl: "data:image/png;base64,AAA",
       configEnv: createConfigEnv(),
@@ -246,7 +265,7 @@ describe("buildRequest", () => {
       systemPrompt: undefined,
       imageDataUrl: undefined,
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig: createLoggerConfig(),
       configEnv: createConfigEnv(),
       additionalSystemMessages: undefined,
       toolset,
@@ -255,6 +274,8 @@ describe("buildRequest", () => {
     expect(request.tools).toBe(toolset.response);
     expect(agentTools).toBe(toolset.agents);
   });
+
+  it("loggerConfig.logLabel をログ出力に利用する");
 });
 
 describe("extractResponseText", () => {
@@ -326,7 +347,13 @@ describe("performCompact", () => {
       },
     } as unknown as OpenAI;
 
-    await performCompact(options, DEFAULTS, historyStore, client, "[test-cli]");
+    await performCompact(
+      options,
+      DEFAULTS,
+      historyStore,
+      client,
+      createLoggerConfig(),
+    );
 
     expect(savedEntries).not.toBeNull();
     const updated = savedEntries?.find((entry) => entry.last_response_id === "resp_target");

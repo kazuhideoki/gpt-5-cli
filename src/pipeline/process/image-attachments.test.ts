@@ -4,12 +4,31 @@ import os from "node:os";
 import path from "node:path";
 import { prepareImageData } from "./image-attachments.js";
 import type { ConfigEnvironment } from "../../types.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
 const SCREENSHOT_NAME = "スクリーンショット 2025-01-01.png";
 
 let originalHome: string | undefined;
 let tempHomeDir: string | undefined;
 let originalConsoleLog: typeof console.log;
+
+function createLoggerConfig(overrides: Partial<CliLoggerConfig> = {}): CliLoggerConfig {
+  const logger = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+    debug: () => undefined,
+    level: "info",
+    transports: [],
+    log: () => undefined,
+  } as unknown as CliLogger;
+  return {
+    logger,
+    logLabel: "[test-cli]",
+    debugEnabled: false,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   originalHome = process.env.HOME;
@@ -41,7 +60,7 @@ describe("prepareImageData", () => {
     };
 
     const configEnv = createConfigEnv({ HOME: process.env.HOME });
-    const result = prepareImageData(imagePath, "[test-cli]", configEnv);
+    const result = prepareImageData(imagePath, createLoggerConfig(), configEnv);
 
     expect(result).toBeDefined();
     expect(result?.startsWith("data:image/png;base64,")).toBe(true);
@@ -56,7 +75,7 @@ describe("prepareImageData", () => {
     fs.writeFileSync(screenshotPath, Buffer.from("fake-screenshot"));
 
     const configEnv = createConfigEnv({ HOME: process.env.HOME });
-    const result = prepareImageData(SCREENSHOT_NAME, "[test-cli]", configEnv);
+    const result = prepareImageData(SCREENSHOT_NAME, createLoggerConfig(), configEnv);
 
     expect(result).toBeDefined();
     expect(result?.startsWith("data:image/png;base64,")).toBe(true);
@@ -68,7 +87,7 @@ describe("prepareImageData", () => {
     }
     const outsidePath = path.join(tempHomeDir, "..", "outside.png");
     const configEnv = createConfigEnv({ HOME: tempHomeDir });
-    expect(() => prepareImageData(outsidePath, "[test-cli]", configEnv)).toThrow(
+    expect(() => prepareImageData(outsidePath, createLoggerConfig(), configEnv)).toThrow(
       "Error: -i で指定できるフルパスは",
     );
   });
@@ -85,13 +104,15 @@ describe("prepareImageData", () => {
     process.env.HOME = tempHomeDir;
 
     try {
-      const result = prepareImageData(imagePath, "[test-cli]", configEnv);
+      const result = prepareImageData(imagePath, createLoggerConfig(), configEnv);
       expect(result).toBeDefined();
       expect(result?.startsWith("data:image/png;base64,")).toBe(true);
     } finally {
       fs.rmSync(configHome, { recursive: true, force: true });
     }
   });
+
+  it("loggerConfig.logLabel を画像添付ログに反映する");
 });
 
 function createConfigEnv(values: Record<string, string | undefined>): ConfigEnvironment {
