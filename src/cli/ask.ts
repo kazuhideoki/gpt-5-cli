@@ -14,7 +14,6 @@ import {
   READ_FILE_TOOL,
   buildConversationToolset,
   type ConversationToolset,
-  type BuildAgentsToolListOptions,
 } from "../pipeline/process/tools/index.js";
 import { computeContext } from "../pipeline/process/conversation-context.js";
 import { prepareImageData } from "../pipeline/process/image-attachments.js";
@@ -24,31 +23,19 @@ import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
+import type { CliLoggerConfig } from "./common/types.js";
+import { createCliToolLoggerOptions, updateCliLoggerLevel } from "./common/logger.js";
+import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
+const ASK_LOG_LABEL = "[gpt-5-cli]";
 
 interface BuildAskToolsetParams {
-  logLabel: string;
-  debug: boolean;
+  loggerConfig: CliLoggerConfig;
 }
 
 export function buildAskConversationToolset(params: BuildAskToolsetParams): ConversationToolset {
-  const agentOptions: BuildAgentsToolListOptions = {
-    logLabel: params.logLabel,
-    createExecutionContext: () => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${params.logLabel} ${message}`);
-      },
-    }),
-  };
-
-  if (params.debug) {
-    agentOptions.debugLog = (message: string) => {
-      console.error(`${params.logLabel} debug: ${message}`);
-    };
-  }
-
+  const agentOptions = createCliToolLoggerOptions(params.loggerConfig);
   return buildConversationToolset(ASK_TOOL_REGISTRATIONS, {
     cli: { appendWebSearchPreview: false },
     agents: agentOptions,
@@ -205,12 +192,17 @@ export function parseArgs(
  * ask CLI のメイン処理。環境初期化からAPI呼び出し・履歴更新までを統括する。
  */
 async function main(): Promise<void> {
+  const logger = createCliLogger({
+    task: "ask",
+    label: ASK_LOG_LABEL,
+    debug: false,
+  });
   try {
     const argv = process.argv.slice(2);
 
     const bootstrap = await bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
       argv,
-      logLabel: "[gpt-5-cli]",
+      logLabel: ASK_LOG_LABEL,
       parseArgs,
       historyContextSchema: askCliHistoryContextSchema,
       historyEntryFilter: createCliHistoryEntryFilter("ask"),
@@ -222,11 +214,17 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    updateCliLoggerLevel(logger, options.debug ? "debug" : "info");
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: ASK_LOG_LABEL,
+      debugEnabled: options.debug,
+    };
 
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, "[gpt-5-cli]");
+      await performCompact(options, defaults, historyStore, client, ASK_LOG_LABEL);
       return;
     }
 
@@ -253,7 +251,7 @@ async function main(): Promise<void> {
       explicitPrevId: determine.previousResponseId,
       explicitPrevTitle: determine.previousTitle,
       config: {
-        logLabel: "[gpt-5-cli]",
+        logLabel: ASK_LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "ask";
           const historyContext = activeEntry.context as AskCliHistoryContext | undefined;
@@ -270,10 +268,9 @@ async function main(): Promise<void> {
       },
     });
 
-    const imageDataUrl = prepareImageData(options.imagePath, "[gpt-5-cli]", configEnv);
+    const imageDataUrl = prepareImageData(options.imagePath, ASK_LOG_LABEL, configEnv);
     const toolset = buildAskConversationToolset({
-      logLabel: "[gpt-5-cli]",
-      debug: options.debug,
+      loggerConfig,
     });
 
     const { request, agentTools } = buildRequest({
@@ -283,7 +280,7 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: "[gpt-5-cli]",
+      logLabel: ASK_LOG_LABEL,
       configEnv,
       additionalSystemMessages: undefined,
       toolset,
@@ -292,14 +289,12 @@ async function main(): Promise<void> {
       client,
       request,
       options,
-      logLabel: "[gpt-5-cli]",
+      logLabel: ASK_LOG_LABEL,
       agentTools,
       maxTurns: options.maxIterations,
     });
     if (agentResult.reachedMaxIterations) {
-      console.error(
-        "[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",
-      );
+      logger.warn("指定したイテレーション上限に達したため途中結果を出力して処理を終了します");
     }
     const content = agentResult.assistantText;
     if (!content) {
@@ -364,9 +359,9 @@ async function main(): Promise<void> {
     process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(error.message);
+      logger.error(error.message);
     } else {
-      console.error(String(error));
+      logger.error(String(error));
     }
     process.exit(1);
   }

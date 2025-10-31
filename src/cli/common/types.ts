@@ -6,6 +6,7 @@
 import type { Command } from "commander";
 import type { CliDefaults, CommonCliOptions, TaskMode } from "../../types.js";
 import type { EffortLevel, VerbosityLevel } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 
 /**
  * Commander に共通引数を登録する際のコールバック。
@@ -30,6 +31,19 @@ export interface CommonCommandBuildOptions {
   mode: TaskMode;
   argument: CommandArgumentDescriptor;
   extraOptionRegistrars: CommanderOptionRegistrar[];
+}
+
+/**
+ * CLI 実装で共有するロガー依存性を表す。
+ * Winston 依存を直接晒さず、依存注入する契約を固定する。
+ */
+export interface CliLoggerConfig {
+  /** CLI で利用する Winston ベースのロガー。 */
+  logger: CliLogger;
+  /** 既存メッセージと互換性を保つためのラベル。 */
+  logLabel: string;
+  /** デバッグ出力を有効化するか。 */
+  debugEnabled: boolean;
 }
 
 /**

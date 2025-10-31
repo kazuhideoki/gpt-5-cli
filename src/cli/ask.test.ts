@@ -11,6 +11,8 @@ import {
 import type { CliDefaults, CliOptions, ConfigEnvironment, ConversationContext } from "../types.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { AskCliHistoryContext } from "./ask.js";
+import type { CliLoggerConfig } from "./common/types.js";
+import type { CliLogger } from "../foundation/logger/types.js";
 
 type TestHistoryEntry = HistoryEntry<AskCliHistoryContext>;
 type HistoryStoreLike = HistoryStore<AskCliHistoryContext>;
@@ -102,6 +104,21 @@ class StubHistoryStore {
     }
     throw new Error("entry not found");
   }
+}
+
+function createLoggerConfig(debugEnabled = false): CliLoggerConfig {
+  const logger = {
+    level: "info",
+    info: () => logger,
+    debug: () => logger,
+    warn: () => logger,
+    error: () => logger,
+  } as unknown as CliLogger;
+  return {
+    logger,
+    logLabel: "[test-cli]",
+    debugEnabled,
+  };
 }
 
 describe("parseArgs", () => {
@@ -264,8 +281,7 @@ describe("buildRequest", () => {
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
-        logLabel: "[test-cli]",
-        debug: false,
+        loggerConfig: createLoggerConfig(false),
       }),
     });
     const input = request.input as any[];
@@ -300,8 +316,7 @@ describe("buildRequest", () => {
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
       toolset: buildAskConversationToolset({
-        logLabel: "[test-cli]",
-        debug: false,
+        loggerConfig: createLoggerConfig(false),
       }),
     });
     const input = request.input as any[];
@@ -445,7 +460,7 @@ describe("main", () => {
     const file = Bun.file(new URL("./ask.ts", import.meta.url));
     const source = await file.text();
     expect(source).toMatch(
-      /console\.error\(\s*"\[gpt-5-cli] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
+      /logger\.warn\(\s*"指定したイテレーション上限に達したため途中結果を出力して処理を終了します"\s*\);/,
     );
   });
 });
@@ -463,8 +478,7 @@ describe("ask web search integration", () => {
 
   it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
     const toolset = buildAskConversationToolset({
-      logLabel: "[test-cli]",
-      debug: false,
+      loggerConfig: createLoggerConfig(false),
     });
     const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);

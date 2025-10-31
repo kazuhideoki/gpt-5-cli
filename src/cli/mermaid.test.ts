@@ -242,7 +242,7 @@ describe("mermaid main", () => {
     const file = Bun.file(new URL("./mermaid.ts", import.meta.url));
     const source = await file.text();
     expect(source).toMatch(
-      /console\.error\(\s*"\[gpt-5-cli-mermaid] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
+      /logger\.warn\(\s*"指定したイテレーション上限に達したため途中結果を出力して処理を終了します"\s*\);/,
     );
   });
 });

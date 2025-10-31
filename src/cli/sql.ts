@@ -22,7 +22,6 @@ import {
   WRITE_FILE_TOOL,
   buildConversationToolset,
   type ConversationToolset,
-  type BuildAgentsToolListOptions,
   setSqlEnvironment,
 } from "../pipeline/process/tools/index.js";
 import {
@@ -40,6 +39,9 @@ import type { CliDefaults, CliOptions, ConfigEnvironment, OpenAIInputMessage } f
 import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
+import type { CliLoggerConfig } from "./common/types.js";
+import { createCliToolLoggerOptions, updateCliLoggerLevel } from "./common/logger.js";
+import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
 
@@ -112,28 +114,13 @@ const SQL_TOOL_REGISTRY: Record<SqlEngine, typeof POSTGRES_SQL_TOOL_REGISTRATION
 };
 
 interface BuildSqlToolsetParams {
-  logLabel: string;
-  debug: boolean;
+  loggerConfig: CliLoggerConfig;
   engine: SqlEngine;
 }
 
 function buildSqlConversationToolset(params: BuildSqlToolsetParams): ConversationToolset {
   const registrations = SQL_TOOL_REGISTRY[params.engine];
-  const agentOptions: BuildAgentsToolListOptions = {
-    logLabel: params.logLabel,
-    createExecutionContext: () => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${params.logLabel} ${message}`);
-      },
-    }),
-  };
-
-  if (params.debug) {
-    agentOptions.debugLog = (message: string) => {
-      console.error(`${params.logLabel} debug: ${message}`);
-    };
-  }
+  const agentOptions = createCliToolLoggerOptions(params.loggerConfig);
 
   return buildConversationToolset(registrations, {
     cli: { appendWebSearchPreview: true },
@@ -637,6 +624,11 @@ function hasAnyConnectionValue(connection: SqlConnectionMetadata): boolean {
  * SQLモード CLI のエントリーポイント。環境初期化からAPI利用・履歴更新までを統括する。
  */
 async function main(): Promise<void> {
+  const logger = createCliLogger({
+    task: "sql",
+    label: LOG_LABEL,
+    debug: false,
+  });
   try {
     const argv = process.argv.slice(2);
     const bootstrap = await bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
@@ -723,11 +715,16 @@ async function main(): Promise<void> {
       dsn: sqlEnv.dsn,
       engine: sqlEnv.engine,
     };
+    updateCliLoggerLevel(logger, resolvedOptionsWithDsn.debug ? "debug" : "info");
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: LOG_LABEL,
+      debugEnabled: resolvedOptionsWithDsn.debug,
+    };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine, sqruffBin });
     const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL, configEnv);
     const toolset = buildSqlConversationToolset({
-      logLabel: LOG_LABEL,
-      debug: resolvedOptionsWithDsn.debug,
+      loggerConfig,
       engine: sqlEnv.engine,
     });
     const { request, agentTools } = buildRequest({
@@ -758,9 +755,7 @@ async function main(): Promise<void> {
       maxTurns: resolvedOptionsWithDsn.maxIterations,
     });
     if (agentResult.reachedMaxIterations) {
-      console.error(
-        `${LOG_LABEL} info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します`,
-      );
+      logger.warn("指定したイテレーション上限に達したため途中結果を出力して処理を終了します");
     }
     const content = agentResult.assistantText;
     if (!content) {
@@ -829,15 +824,15 @@ async function main(): Promise<void> {
     });
 
     if (fs.existsSync(sqlOutputAbsolutePath)) {
-      console.log(`[gpt-5-cli-sql] artifact file: ${resolvedOptionsWithDsn.artifactPath}`);
+      logger.info(`artifact file: ${resolvedOptionsWithDsn.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(error.message);
+      logger.error(error.message);
     } else {
-      console.error(String(error));
+      logger.error(String(error));
     }
     process.exit(1);
   }

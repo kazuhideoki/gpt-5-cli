@@ -12,11 +12,28 @@ import type { CliDefaults, ConfigEnvironment } from "../types.js";
 import type { D2CliOptions } from "./d2.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { D2CliHistoryContext } from "./d2.js";
+import type { CliLoggerConfig } from "./common/types.js";
+import type { CliLogger } from "../foundation/logger/types.js";
 
 type HistoryStoreLike = HistoryStore<D2CliHistoryContext>;
 type D2HistoryEntry = HistoryEntry<D2CliHistoryContext>;
 
 const noopDeps = { printHelp: () => {} };
+
+function createLoggerConfig(debugEnabled = false): CliLoggerConfig {
+  const logger = {
+    level: "info",
+    info: () => logger,
+    debug: () => logger,
+    warn: () => logger,
+    error: () => logger,
+  } as unknown as CliLogger;
+  return {
+    logger,
+    logLabel: "[test-cli-d2]",
+    debugEnabled,
+  };
+}
 
 function createDefaults(): CliDefaults {
   return {
@@ -291,8 +308,7 @@ describe("d2 web search integration", () => {
 
   it("toolset は web_search_preview を含まず Agents ツールに web_search を含める", () => {
     const toolset = buildD2ConversationToolset({
-      logLabel: "[test-cli-d2]",
-      debug: false,
+      loggerConfig: createLoggerConfig(false),
     });
     const hasPreview = toolset.response.some((tool) => tool.type === "web_search_preview");
     expect(hasPreview).toBe(false);
@@ -358,7 +374,7 @@ describe("d2 main", () => {
     const file = Bun.file(new URL("./d2.ts", import.meta.url));
     const source = await file.text();
     expect(source).toMatch(
-      /console\.error\(\s*"\[gpt-5-cli-d2] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
+      /logger\.warn\(\s*"指定したイテレーション上限に達したため途中結果を出力して処理を終了します"\s*\);/,
     );
   });
 });
