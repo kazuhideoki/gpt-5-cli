@@ -3,6 +3,7 @@
  */
 import { describe, expect, it, mock } from "bun:test";
 import type { ConfigEnvironment, ConversationContext } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 import type { HistoryStore } from "../history/store.js";
 import { finalizeResult } from "./finalize-result.js";
 
@@ -39,6 +40,24 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
   };
 }
 
+function createLoggerStub() {
+  const state: { logger: CliLogger } = { logger: undefined as unknown as CliLogger };
+  const info = mock((..._args: unknown[]) => state.logger);
+  const error = mock((..._args: unknown[]) => state.logger);
+  const warn = mock((..._args: unknown[]) => state.logger);
+  const debug = mock((..._args: unknown[]) => state.logger);
+  const logger = {
+    info,
+    error,
+    warn,
+    debug,
+    level: "info",
+    transports: [],
+  } as unknown as CliLogger;
+  state.logger = logger;
+  return { logger, info, error, warn, debug };
+}
+
 describe("finalizeResult", () => {
   it("履歴コンテキストを構築し upsertConversation を呼び出す", async () => {
     const upsertConversation = mock(() => undefined);
@@ -53,8 +72,11 @@ describe("finalizeResult", () => {
       copy: undefined,
     };
 
+    const loggerStub = createLoggerStub();
+
     const outcome = await finalizeResult<D2HistoryContext>({
       content: "assistant-content",
+      logger: loggerStub.logger,
       userText: "user-input",
       textOutputPath: undefined,
       actions: [],
@@ -98,8 +120,11 @@ describe("finalizeResult", () => {
       copy: undefined,
     };
 
+    const loggerStub = createLoggerStub();
+
     await finalizeResult<MermaidHistoryContext>({
       content: "diagram",
+      logger: loggerStub.logger,
       userText: "describe diagram",
       textOutputPath: undefined,
       actions: [],
@@ -126,8 +151,11 @@ describe("finalizeResult", () => {
       upsertConversation,
     } as unknown as HistoryStore<D2HistoryContext>;
 
+    const loggerStub = createLoggerStub();
+
     await finalizeResult<D2HistoryContext>({
       content: "noop",
+      logger: loggerStub.logger,
       userText: "noop",
       textOutputPath: undefined,
       actions: [],

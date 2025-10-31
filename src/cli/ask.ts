@@ -337,6 +337,7 @@ async function main(): Promise<void> {
 
     const finalizeOutcome = await finalizeResult<AskCliHistoryStoreContext>({
       content,
+      logger,
       userText: determine.inputText,
       actions,
       textOutputPath,

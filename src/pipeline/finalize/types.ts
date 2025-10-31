@@ -1,6 +1,7 @@
 /**
  * @file finalize 層が公開する契約型。結果処理まわりの入力・出力を定義する。
  */
+import type { CliLogger } from "../../foundation/logger/types.js";
 import type { ConfigEnvironment } from "../../types.js";
 import type { CopySource, DeliverOutputParams, DeliverOutputResult } from "./io.js";
 
@@ -105,6 +106,10 @@ export interface FinalizeRequest {
    * finalize 層で環境値を参照するための ConfigEnv。
    */
   configEnv: ConfigEnvironment;
+  /**
+   * finalize 層で利用する CLI ロガー。
+   */
+  logger: CliLogger;
   /**
    * stdout へ書き出すテキストを明示的に指定したい場合に利用する。
    */
