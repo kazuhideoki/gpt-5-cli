@@ -65,6 +65,7 @@ function coerceMessage(info: TransformableInfo): string {
   return JSON.stringify(info.message);
 }
 
+/** Winston が付与する内部フィールドを取り除いた追加メタデータのみを JSON 化して返す。*/
 function extractMetadata(info: TransformableInfo): string | undefined {
   const residual = { ...info } as Record<string | symbol, unknown>;
   delete residual.message;
