@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { deliverOutput } from "../io.js";
 import type { FinalizeAction, FinalizeClipboardAction, FinalizeD2HtmlAction } from "../types.js";
 import type { ConfigEnvironment } from "../../../types.js";
+import type { CliLogger } from "../../../foundation/logger/types.js";
 
 export const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
 
@@ -12,6 +13,8 @@ export const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
  * finalize アクション実行時に渡されるコンテキスト。
  */
 export interface ExecuteFinalizeActionContext {
+  /** finalize 層で使用する CLI ロガー。 */
+  logger: CliLogger;
   /** finalize 層が参照する環境スナップショット。 */
   configEnv: ConfigEnvironment;
   /** CLI から受け取った標準出力用コンテンツ。 */

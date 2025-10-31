@@ -8,6 +8,7 @@ import type {
   EffortLevel,
   VerbosityLevel,
 } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 import type { HistoryStore } from "../history/store.js";
 import { handleResult } from "./handle-result.js";
 import type {
@@ -55,6 +56,8 @@ export interface FinalizeResultHistoryOptions<TContext> {
 export interface FinalizeResultParams<TContext> {
   /** 応答テキスト本体。 */
   content: string;
+  /** finalize 層で利用する CLI ロガー。 */
+  logger: CliLogger;
   /** 今回のユーザー入力。 */
   userText: string;
   /** CLI 固有で事前定義された終了後アクション。 */
