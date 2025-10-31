@@ -26,16 +26,14 @@ describe("executeFinalizeAction", () => {
       args: string[];
       options: Record<string, unknown>;
     }> = [];
-    const spawnMock = mock(
-      (command: string, args: string[], options: Record<string, unknown>) => {
-        spawnCalls.push({ command, args, options });
-        const child = new EventEmitter();
-        queueMicrotask(() => {
-          child.emit("close", 0);
-        });
-        return child as unknown as any;
-      },
-    );
+    const spawnMock = mock((command: string, args: string[], options: Record<string, unknown>) => {
+      spawnCalls.push({ command, args, options });
+      const child = new EventEmitter();
+      queueMicrotask(() => {
+        child.emit("close", 0);
+      });
+      return child as unknown as any;
+    });
     mock.module("node:child_process", () => ({ spawn: spawnMock }));
 
     try {
@@ -104,15 +102,9 @@ describe("executeFinalizeAction", () => {
       args: ["--layout=elk", "diagram.d2", "diagram.html"],
     });
     const openerCommand =
-      process.platform === "darwin"
-        ? "open"
-        : process.platform === "win32"
-        ? "cmd"
-        : "xdg-open";
+      process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
     const openerArgs =
-      process.platform === "win32"
-        ? ["/c", "start", "", "diagram.html"]
-        : ["diagram.html"];
+      process.platform === "win32" ? ["/c", "start", "", "diagram.html"] : ["diagram.html"];
     expect(spawnCalls[1]).toEqual({
       command: openerCommand,
       args: openerArgs,

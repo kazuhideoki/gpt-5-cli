@@ -27,7 +27,7 @@ export {
 export type { DefaultOutputPathParams, DefaultOutputPathResult } from "./io.js";
 export { buildFileHistoryContext } from "./history-context.js";
 export type { FileHistoryContext } from "./history-context.js";
-export { createClipboardAction } from "./actions/builders.js";
+export { createClipboardAction, createD2HtmlAction } from "./actions/builders.js";
 export {
   executeFinalizeAction,
   FINALIZE_ACTION_LOG_LABEL,

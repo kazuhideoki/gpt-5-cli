@@ -21,6 +21,7 @@ import {
   buildFileHistoryContext,
   resolveResultOutput,
   createClipboardAction,
+  createD2HtmlAction,
   type FinalizeActionList,
   type FileHistoryContext,
 } from "../pipeline/finalize/index.js";
@@ -157,7 +158,13 @@ function createD2Program(defaults: CliDefaults) {
     defaults,
     mode: "d2",
     argument: { tokens: "[input...]", description: "ユーザー入力" },
-    extraOptionRegistrars: [],
+    extraOptionRegistrars: [
+      (program) => {
+        program
+          .option("-H, --open-html", "生成した D2 HTML をブラウザで開きます")
+          .option("-O, --output-html <path>", "生成する D2 HTML の保存先を指定します");
+      },
+    ],
   });
 }
 
@@ -187,6 +194,9 @@ const cliOptionsSchema = z
     operation: z.union([z.literal("ask"), z.literal("compact")]),
     compactIndex: z.union([z.number(), z.undefined()]),
     artifactPath: z.string().min(1),
+    htmlOutputPath: z.string().min(1),
+    htmlOutputExplicit: z.boolean(),
+    openHtml: z.boolean(),
     maxIterations: z.number(),
     maxIterationsExplicit: z.boolean(),
     args: z.array(z.string()),
@@ -228,6 +238,20 @@ export function parseArgs(
 ): D2CliOptions {
   const program = createD2Program(defaults);
   const { options: commonOptions } = parseCommonOptions(argv, defaults, program);
+  const extraOptions = program.opts<{
+    openHtml?: boolean;
+    outputHtml?: string;
+  }>();
+  const openHtml = Boolean(extraOptions.openHtml);
+  const rawHtmlOutputPath =
+    typeof extraOptions.outputHtml === "string" ? extraOptions.outputHtml.trim() : undefined;
+  if (rawHtmlOutputPath === "") {
+    throw new Error("Error: --output-html には空でないパスを指定してください");
+  }
+  if (!openHtml && rawHtmlOutputPath) {
+    throw new Error("Error: --output-html を使うには --open-html を同時に指定してください");
+  }
+
   const resolvedResponseOutputPath =
     commonOptions.responseOutputPath ??
     generateDefaultOutputPath({
@@ -236,12 +260,19 @@ export function parseArgs(
       cwd: undefined,
       configEnv,
     }).relativePath;
+  const defaultHtmlOutputPath = resolvedResponseOutputPath.endsWith(".d2")
+    ? `${resolvedResponseOutputPath.slice(0, -".d2".length)}.html`
+    : `${resolvedResponseOutputPath}.html`;
+  const htmlOutputPath = rawHtmlOutputPath ?? defaultHtmlOutputPath;
   try {
     const optionsInput = {
       ...commonOptions,
       taskMode: "d2",
       responseOutputPath: resolvedResponseOutputPath,
       artifactPath: resolvedResponseOutputPath,
+      htmlOutputPath,
+      htmlOutputExplicit: Boolean(rawHtmlOutputPath),
+      openHtml,
     } satisfies Record<keyof D2CliOptions, unknown>;
     return cliOptionsSchema.parse(optionsInput) as D2CliOptions;
   } catch (error) {
@@ -279,10 +310,25 @@ export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  const htmlAbsolutePath = path.resolve(cwd, options.htmlOutputPath);
+  const htmlRelative = path.relative(normalizedRoot, htmlAbsolutePath);
+  const isHtmlInside =
+    htmlRelative === "" || (!htmlRelative.startsWith("..") && !path.isAbsolute(htmlRelative));
+  if (!isHtmlInside) {
+    throw new Error(
+      `Error: HTML 出力はカレントディレクトリ配下に指定してください: ${options.htmlOutputPath}`,
+    );
+  }
+  if (fs.existsSync(htmlAbsolutePath) && fs.statSync(htmlAbsolutePath).isDirectory()) {
+    throw new Error(`Error: 指定した HTML 出力パスはディレクトリです: ${options.htmlOutputPath}`);
+  }
+  const htmlRelativePath =
+    path.relative(normalizedRoot, htmlAbsolutePath) || path.basename(htmlAbsolutePath);
   const normalizedOptions: D2CliOptions = {
     ...options,
     artifactPath: relativePath,
     responseOutputPath: relativePath,
+    htmlOutputPath: htmlRelativePath,
   };
   const exists = fs.existsSync(absolutePath);
   return {
@@ -471,6 +517,17 @@ async function main(): Promise<void> {
       copyOutput: resolvedOptions.copyOutput,
     });
     const actions: FinalizeActionList = [];
+    if (resolvedOptions.openHtml) {
+      actions.push(
+        createD2HtmlAction({
+          sourcePath: resolvedOptions.artifactPath,
+          htmlOutputPath: resolvedOptions.htmlOutputPath,
+          workingDirectory: process.cwd(),
+          openHtml: true,
+          priority: 80,
+        }),
+      );
+    }
     if (resolvedOptions.copyOutput) {
       actions.push(
         createClipboardAction({

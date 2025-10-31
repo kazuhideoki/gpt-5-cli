@@ -154,9 +154,9 @@ describe("d2 parseArgs html options", () => {
     const defaults = createDefaults();
     const configEnv = createConfigEnv();
 
-    expect(() =>
-      parseArgs(["--output-html", "diagram.html", "図"], defaults, configEnv),
-    ).toThrow("Error: --output-html を使うには --open-html を同時に指定してください");
+    expect(() => parseArgs(["--output-html", "diagram.html", "図"], defaults, configEnv)).toThrow(
+      "Error: --output-html を使うには --open-html を同時に指定してください",
+    );
   });
 
   it("--output-html で HTML 出力パスを明示できる", () => {
@@ -307,11 +307,35 @@ describe("d2 web search integration", () => {
 
 describe("ensureD2Context", () => {
   it("正規化済みオプションを返す", () => {
-    // Step3 で実装
+    const input = createOptions({
+      artifactPath: "./diagram.d2",
+      responseOutputPath: "./diagram.d2",
+      htmlOutputPath: "./diagram.html",
+      htmlOutputExplicit: true,
+      openHtml: true,
+    });
+    const snapshot = { ...input };
+
+    const result = ensureD2Context(input);
+
+    expect(result.normalizedOptions).not.toBe(input);
+    expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
+    expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
+    expect(result.normalizedOptions.htmlOutputPath).toBe("diagram.html");
+    expect(result.normalizedOptions.openHtml).toBe(true);
+    expect(result.normalizedOptions.htmlOutputExplicit).toBe(true);
+    expect(input).toEqual(snapshot);
   });
 
   it("ファイル検証結果を context に含める", () => {
-    // Step3 で実装
+    const result = ensureD2Context(
+      createOptions({ artifactPath: "./diagram.d2", htmlOutputPath: "./diagram.html" }),
+    );
+
+    expect(result.context.relativePath).toBe("diagram.d2");
+    expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
+    expect(result.context.exists).toBe(false);
+    expect(result.normalizedOptions.htmlOutputPath).toBe("diagram.html");
   });
 });
 
@@ -323,28 +347,4 @@ describe("d2 main", () => {
       /console\.error\(\s*"\[gpt-5-cli-d2] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
     );
   });
-});
-it("正規化済みオプションを返す", () => {
-  const input = createOptions({
-    artifactPath: "./diagram.d2",
-    responseOutputPath: "./diagram.d2",
-  });
-  const snapshot = { ...input };
-
-  const result = ensureD2Context(input);
-
-  expect(result.normalizedOptions).not.toBe(input);
-  expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
-  expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
-  expect(input).toEqual(snapshot);
-});
-
-it("ファイル検証結果を context に含める", () => {
-  const input = createOptions({ artifactPath: "./diagram.d2" });
-
-  const result = ensureD2Context(input);
-
-  expect(result.context.relativePath).toBe("diagram.d2");
-  expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
-  expect(result.context.exists).toBe(false);
 });
