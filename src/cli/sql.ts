@@ -633,6 +633,7 @@ async function main(): Promise<void> {
     const argv = process.argv.slice(2);
     const bootstrap = await bootstrapCli<SqlCliOptions, SqlCliHistoryStoreContext>({
       argv,
+      logger,
       logLabel: LOG_LABEL,
       parseArgs,
       historyContextSchema: sqlCliHistoryContextSchema,
@@ -660,6 +661,7 @@ async function main(): Promise<void> {
       defaults,
       {
         printHelp: outputHelp,
+        logger,
       },
       configEnv,
     );

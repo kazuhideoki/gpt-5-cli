@@ -393,6 +393,7 @@ async function main(): Promise<void> {
     const argv = process.argv.slice(2);
     const bootstrap = await bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
       argv,
+      logger,
       logLabel: D2_LOG_LABEL,
       parseArgs,
       historyContextSchema: d2CliHistoryContextSchema,
@@ -418,6 +419,7 @@ async function main(): Promise<void> {
       defaults,
       {
         printHelp: outputHelp,
+        logger,
       },
       configEnv,
     );

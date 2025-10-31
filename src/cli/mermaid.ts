@@ -302,6 +302,7 @@ async function main(): Promise<void> {
     const argv = process.argv.slice(2);
     const bootstrap = await bootstrapCli<MermaidCliOptions, MermaidCliHistoryStoreContext>({
       argv,
+      logger,
       logLabel: MERMAID_LOG_LABEL,
       parseArgs,
       historyContextSchema: mermaidCliHistoryContextSchema,
@@ -327,6 +328,7 @@ async function main(): Promise<void> {
       defaults,
       {
         printHelp: outputHelp,
+        logger,
       },
       configEnv,
     );

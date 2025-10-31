@@ -5,6 +5,7 @@ import { HistoryStore } from "../history/store.js";
 import { loadDefaults, loadEnvironment } from "./config.js";
 import { loadPrompt, resolvePromptPath } from "./prompts.js";
 import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 import type { z } from "zod";
 import type { ConfigEnvInitOptions } from "./config-env.js";
 
@@ -16,6 +17,8 @@ import type { ConfigEnvInitOptions } from "./config-env.js";
 interface CliBootstrapParams<TOptions extends CliOptions, THistoryContext> {
   /**プロセス引数列。CLI 入口の入力そのものを渡す。*/
   argv: string[];
+  /**ログ出力に用いる CLI ロガー。標準出力/標準エラーへの形式統一を担う。*/
+  logger: CliLogger;
   /**ログ出力に用いる CLI 名。識別しやすくするため必須。*/
   logLabel: string;
   /**引数解析関数。既定値を考慮しつつ CLI 固有のオプション型へ変換する。*/
@@ -91,16 +94,18 @@ export async function bootstrapCli<TOptions extends CliOptions, THistoryContext 
     ...params.configEnvOptions,
   });
   const defaults = loadDefaults(configEnv);
-  console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
+  params.logger.info(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
 
   const options = params.parseArgs(params.argv, defaults, configEnv);
   const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
   const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
   if (systemPrompt) {
     const bytes = Buffer.byteLength(systemPrompt, "utf8");
-    console.log(`${params.logLabel} system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
+    params.logger.info(
+      `${params.logLabel} system_prompt: loaded (${bytes} bytes) path=${promptPath}`,
+    );
   } else {
-    console.error(`${params.logLabel} system_prompt: not found or empty path=${promptPath}`);
+    params.logger.warn(`${params.logLabel} system_prompt: not found or empty path=${promptPath}`);
   }
 
   if (options.helpRequested) {
