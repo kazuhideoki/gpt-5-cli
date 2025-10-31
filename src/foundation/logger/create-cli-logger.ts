@@ -6,6 +6,12 @@ import type { CliLogger, CliLoggerParams } from "./types.js";
 const MESSAGE_SYMBOL = Symbol.for("message");
 const LEVEL_SYMBOL = Symbol.for("level");
 const SPLAT_SYMBOL = Symbol.for("splat");
+const JSON_REPLACER = (_key: string, value: unknown) => {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  return value;
+};
 
 /**
  * CLI 専用ロガーを生成する。
@@ -74,6 +80,7 @@ function extractMetadata(info: TransformableInfo): string | undefined {
   delete residual.label;
   delete residual[MESSAGE_SYMBOL];
   delete residual[LEVEL_SYMBOL];
+  const splat = residual[SPLAT_SYMBOL];
   delete residual[SPLAT_SYMBOL];
 
   const keys = Object.keys(residual);
@@ -95,5 +102,13 @@ function extractMetadata(info: TransformableInfo): string | undefined {
     metadata[String(symbolKey)] = residual[symbolKey];
   }
 
-  return JSON.stringify(metadata);
+  if (Array.isArray(splat) && splat.length > 0) {
+    metadata.splat = splat;
+  }
+
+  if (Object.keys(metadata).length === 0 && Object.getOwnPropertySymbols(metadata).length === 0) {
+    return undefined;
+  }
+
+  return JSON.stringify(metadata, JSON_REPLACER);
 }
