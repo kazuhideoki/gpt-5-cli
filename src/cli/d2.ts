@@ -13,7 +13,6 @@ import {
   WRITE_FILE_TOOL,
   buildConversationToolset,
   type ConversationToolset,
-  type BuildAgentsToolListOptions,
 } from "../pipeline/process/tools/index.js";
 import {
   finalizeResult,
@@ -33,6 +32,9 @@ import { resolveInputOrExecuteHistoryAction } from "../pipeline/input/cli-input.
 import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
+import type { CliLoggerConfig } from "./common/types.js";
+import { createCliToolLoggerOptions } from "./common/logger.js";
+import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
 export interface D2CliOptions extends CliOptions {
@@ -70,6 +72,7 @@ const D2_TOOL_REGISTRATIONS = [
   D2_CHECK_TOOL,
   D2_FMT_TOOL,
 ] as const;
+const D2_LOG_LABEL = "[gpt-5-cli-d2]";
 
 const D2_WEB_SEARCH_ALLOWED_DOMAINS = ["d2lang.com"] as const;
 const D2_TOUR_URL = "https://d2lang.com/tour";
@@ -86,30 +89,14 @@ export function createD2WebSearchTool(): AgentsSdkTool {
 }
 
 interface BuildD2ToolsetParams {
-  logLabel: string;
-  debug: boolean;
+  loggerConfig: CliLoggerConfig;
 }
 
 /**
  * d2 モードで使用するツールセットを生成する。
  */
 export function buildD2ConversationToolset(params: BuildD2ToolsetParams): ConversationToolset {
-  const agentOptions: BuildAgentsToolListOptions = {
-    logLabel: params.logLabel,
-    createExecutionContext: () => ({
-      cwd: process.cwd(),
-      log: (message: string) => {
-        console.log(`${params.logLabel} ${message}`);
-      },
-    }),
-  };
-
-  if (params.debug) {
-    agentOptions.debugLog = (message: string) => {
-      console.error(`${params.logLabel} debug: ${message}`);
-    };
-  }
-
+  const agentOptions = createCliToolLoggerOptions(params.loggerConfig);
   return buildConversationToolset(D2_TOOL_REGISTRATIONS, {
     cli: { appendWebSearchPreview: false },
     agents: agentOptions,
@@ -397,11 +384,16 @@ function buildD2InstructionMessages(d2Context: D2ContextInfo): OpenAIInputMessag
  * CLIエントリーポイント。環境ロードからAPI呼び出しまでを統括する。
  */
 async function main(): Promise<void> {
+  const logger = createCliLogger({
+    task: "d2",
+    label: D2_LOG_LABEL,
+    debug: false,
+  });
   try {
     const argv = process.argv.slice(2);
     const bootstrap = await bootstrapCli<D2CliOptions, D2CliHistoryStoreContext>({
       argv,
-      logLabel: "[gpt-5-cli-d2]",
+      logLabel: D2_LOG_LABEL,
       parseArgs,
       historyContextSchema: d2CliHistoryContextSchema,
       historyEntryFilter: createCliHistoryEntryFilter("d2"),
@@ -416,7 +408,7 @@ async function main(): Promise<void> {
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, "[gpt-5-cli-d2]");
+      await performCompact(options, defaults, historyStore, client, D2_LOG_LABEL);
       return;
     }
 
@@ -443,7 +435,7 @@ async function main(): Promise<void> {
       explicitPrevId: determine.previousResponseId,
       explicitPrevTitle: determine.previousTitle,
       config: {
-        logLabel: "[gpt-5-cli-d2]",
+        logLabel: D2_LOG_LABEL,
         synchronizeWithHistory: ({ options: nextOptions, activeEntry }) => {
           nextOptions.taskMode = "d2";
           const historyContext = toD2HistoryContext(
@@ -467,11 +459,16 @@ async function main(): Promise<void> {
     const { context: d2Context, normalizedOptions } = ensureD2Context(options);
 
     const resolvedOptions = normalizedOptions;
+    logger.level = resolvedOptions.debug ? "debug" : "info";
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: D2_LOG_LABEL,
+      debugEnabled: resolvedOptions.debug,
+    };
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, "[gpt-5-cli-d2]", configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, D2_LOG_LABEL, configEnv);
     const toolset = buildD2ConversationToolset({
-      logLabel: "[gpt-5-cli-d2]",
-      debug: resolvedOptions.debug,
+      loggerConfig,
     });
     const { request, agentTools } = buildRequest({
       options: resolvedOptions,
@@ -480,7 +477,7 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: "[gpt-5-cli-d2]",
+      logLabel: D2_LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
       toolset,
@@ -489,14 +486,12 @@ async function main(): Promise<void> {
       client,
       request,
       options: resolvedOptions,
-      logLabel: "[gpt-5-cli-d2]",
+      logLabel: D2_LOG_LABEL,
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });
     if (agentResult.reachedMaxIterations) {
-      console.error(
-        "[gpt-5-cli-d2] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",
-      );
+      logger.warn("指定したイテレーション上限に達したため途中結果を出力して処理を終了します");
     }
     const content = agentResult.assistantText;
     if (!content) {
@@ -569,15 +564,15 @@ async function main(): Promise<void> {
 
     const artifactAbsolutePath = d2Context.absolutePath;
     if (fs.existsSync(artifactAbsolutePath)) {
-      console.log(`[gpt-5-cli-d2] artifact file: ${resolvedOptions.artifactPath}`);
+      logger.info(`artifact file: ${resolvedOptions.artifactPath}`);
     }
 
     process.stdout.write(`${finalizeOutcome.stdout}\n`);
   } catch (error) {
     if (error instanceof Error) {
-      console.error(error.message);
+      logger.error(error.message);
     } else {
-      console.error(String(error));
+      logger.error(String(error));
     }
     process.exit(1);
   }

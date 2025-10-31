@@ -8,21 +8,15 @@ import type { BuildAgentsToolListOptions } from "../../pipeline/process/tools/ru
 /**
  * ツール実行時ログを CLI ロガーへ委譲するためのオプションを構築する。
  */
-export function createCliToolLoggerOptions(
-  config: CliLoggerConfig,
-): BuildAgentsToolListOptions {
+export function createCliToolLoggerOptions(config: CliLoggerConfig): BuildAgentsToolListOptions {
   return {
     logLabel: config.logLabel,
     createExecutionContext: () => ({
       cwd: process.cwd(),
       log: (message: string) => {
-        console.log(`${config.logLabel} ${message}`);
+        config.logger.info(message);
       },
     }),
-    debugLog: config.debugEnabled
-      ? (message: string) => {
-          console.error(`${config.logLabel} debug: ${message}`);
-        }
-      : undefined,
+    debugLog: config.debugEnabled ? (message: string) => config.logger.debug(message) : undefined,
   };
 }

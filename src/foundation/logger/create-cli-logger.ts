@@ -38,6 +38,8 @@ export function createCliLogger(params: CliLoggerParams): CliLogger {
     transports: [
       new transports.Console({
         level,
+        stderrLevels: ["error"],
+        consoleWarnLevels: ["warn"],
       }),
     ],
   });
@@ -54,7 +56,9 @@ function formatConsoleLine(
     throw new Error("Logger format requires timestamp metadata.");
   }
 
-  const line = `${info.timestamp} [${info.label}] ${info.level}: ${coerceMessage(info)}`;
+  const resolvedLabel = info.label.startsWith("[") ? info.label : `[${info.label}]`;
+  const prefixParts = [resolvedLabel, info.timestamp];
+  const line = `${prefixParts.join(" ")} ${info.level}: ${coerceMessage(info)}`;
   const metadata = extractMetadata(info);
   return metadata === undefined ? line : `${line} ${metadata}`;
 }

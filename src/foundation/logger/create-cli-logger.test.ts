@@ -29,7 +29,7 @@ describe("createCliLogger", () => {
     } finally {
       dispose();
     }
-    expect(messages[0]).toContain(`[${LABEL}] info: hello`);
+    expect(messages[0]).toMatch(/^\[ask] .* info: hello/);
   });
 
   it("追加メタデータを JSON として末尾に付与する", () => {
