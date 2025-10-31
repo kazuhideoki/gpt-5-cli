@@ -51,6 +51,9 @@ function createOptions(overrides: Partial<D2CliOptions> = {}): D2CliOptions {
     copyOutput: false,
     copyExplicit: false,
     artifactPath: "diagram.d2",
+    htmlOutputPath: "diagram.html",
+    htmlOutputExplicit: false,
+    openHtml: false,
     args: [],
     modelExplicit: false,
     effortExplicit: false,
@@ -119,6 +122,56 @@ describe("d2 parseArgs", () => {
     const defaults = createDefaults();
     const options = parseArgs(["--debug", "図"], defaults, createConfigEnv());
     expect(options.debug).toBe(true);
+  });
+});
+
+describe("d2 parseArgs html options", () => {
+  it("既定で成果物パスに基づく HTML 出力パスを設定する", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    const options = parseArgs(["グラフを描いて"], defaults, configEnv);
+
+    expect(options.openHtml).toBe(false);
+    expect(options.htmlOutputExplicit).toBe(false);
+    const baseName = options.artifactPath.replace(/\.d2$/u, "");
+    expect(options.htmlOutputPath).toBe(`${baseName}.html`);
+  });
+
+  it("--open-html で HTML 生成を有効にできる", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    const options = parseArgs(["--open-html", "グラフ"], defaults, configEnv);
+
+    expect(options.openHtml).toBe(true);
+    expect(options.htmlOutputExplicit).toBe(false);
+    const baseName = options.artifactPath.replace(/\.d2$/u, "");
+    expect(options.htmlOutputPath).toBe(`${baseName}.html`);
+  });
+
+  it("--output-html は --open-html と同時に指定する必要がある", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    expect(() => parseArgs(["--output-html", "diagram.html", "図"], defaults, configEnv)).toThrow(
+      "Error: --output-html を使うには --open-html を同時に指定してください",
+    );
+  });
+
+  it("--output-html で HTML 出力パスを明示できる", () => {
+    const defaults = createDefaults();
+    const configEnv = createConfigEnv();
+
+    const options = parseArgs(
+      ["--open-html", "--output-html", "custom.html", "図"],
+      defaults,
+      configEnv,
+    );
+
+    expect(options.openHtml).toBe(true);
+    expect(options.htmlOutputExplicit).toBe(true);
+    expect(options.htmlOutputPath).toBe("custom.html");
   });
 });
 
@@ -254,11 +307,49 @@ describe("d2 web search integration", () => {
 
 describe("ensureD2Context", () => {
   it("正規化済みオプションを返す", () => {
-    // Step3 で実装
+    const input = createOptions({
+      artifactPath: "./diagram.d2",
+      responseOutputPath: "./diagram.d2",
+      htmlOutputPath: "./diagram.html",
+      htmlOutputExplicit: true,
+      openHtml: true,
+    });
+    const snapshot = { ...input };
+
+    const result = ensureD2Context(input);
+
+    expect(result.normalizedOptions).not.toBe(input);
+    expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
+    expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
+    expect(result.normalizedOptions.htmlOutputPath).toBe("diagram.html");
+    expect(result.normalizedOptions.openHtml).toBe(true);
+    expect(result.normalizedOptions.htmlOutputExplicit).toBe(true);
+    expect(input).toEqual(snapshot);
   });
 
   it("ファイル検証結果を context に含める", () => {
-    // Step3 で実装
+    const result = ensureD2Context(
+      createOptions({ artifactPath: "./diagram.d2", htmlOutputPath: "./diagram.html" }),
+    );
+
+    expect(result.context.relativePath).toBe("diagram.d2");
+    expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
+    expect(result.context.exists).toBe(false);
+    expect(result.normalizedOptions.htmlOutputPath).toBe("diagram.html");
+  });
+
+  it("履歴から復元した成果物に合わせて HTML 出力パスを再計算する", () => {
+    const options = createOptions({
+      artifactPath: "history/diagram.d2",
+      responseOutputPath: "history/diagram.d2",
+      htmlOutputPath: "output/d2/original.html",
+      htmlOutputExplicit: false,
+    });
+
+    const result = ensureD2Context(options);
+
+    expect(result.normalizedOptions.artifactPath).toBe("history/diagram.d2");
+    expect(result.normalizedOptions.htmlOutputPath).toBe("history/diagram.html");
   });
 });
 
@@ -270,28 +361,4 @@ describe("d2 main", () => {
       /console\.error\(\s*"\[gpt-5-cli-d2] info: 指定したイテレーション上限に達したため途中結果を出力して処理を終了します",?\s*\);/,
     );
   });
-});
-it("正規化済みオプションを返す", () => {
-  const input = createOptions({
-    artifactPath: "./diagram.d2",
-    responseOutputPath: "./diagram.d2",
-  });
-  const snapshot = { ...input };
-
-  const result = ensureD2Context(input);
-
-  expect(result.normalizedOptions).not.toBe(input);
-  expect(result.normalizedOptions.artifactPath).toBe("diagram.d2");
-  expect(result.normalizedOptions.responseOutputPath).toBe("diagram.d2");
-  expect(input).toEqual(snapshot);
-});
-
-it("ファイル検証結果を context に含める", () => {
-  const input = createOptions({ artifactPath: "./diagram.d2" });
-
-  const result = ensureD2Context(input);
-
-  expect(result.context.relativePath).toBe("diagram.d2");
-  expect(result.context.absolutePath).toBe(path.resolve(process.cwd(), "diagram.d2"));
-  expect(result.context.exists).toBe(false);
 });

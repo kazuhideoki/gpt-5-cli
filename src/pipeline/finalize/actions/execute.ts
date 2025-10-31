@@ -1,8 +1,9 @@
 /**
  * @file finalize アクションを実行する共通ランタイム。
  */
+import { spawn } from "node:child_process";
 import { deliverOutput } from "../io.js";
-import type { FinalizeAction } from "../types.js";
+import type { FinalizeAction, FinalizeClipboardAction, FinalizeD2HtmlAction } from "../types.js";
 import type { ConfigEnvironment } from "../../../types.js";
 
 export const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
@@ -32,22 +33,43 @@ export async function executeFinalizeAction(
   action: FinalizeAction,
   context: ExecuteFinalizeActionContext,
 ): Promise<ExecuteFinalizeActionResult> {
-  console.error(`${FINALIZE_ACTION_LOG_LABEL} action start: --copy (priority=${action.priority})`);
+  const label = buildActionLabel(action);
+  console.error(
+    `${FINALIZE_ACTION_LOG_LABEL} action start: ${label} (priority=${action.priority})`,
+  );
 
+  let copied = false;
   try {
-    await runClipboardAction(action, context);
+    if (action.kind === "clipboard") {
+      await runClipboardAction(action, context);
+      copied = true;
+    } else if (action.kind === "d2-html") {
+      await runD2HtmlAction(action);
+    } else {
+      assertNever(action);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`${FINALIZE_ACTION_LOG_LABEL} action failure: --copy - ${message}`);
+    console.error(`${FINALIZE_ACTION_LOG_LABEL} action failure: ${label} - ${message}`);
     throw error;
   }
 
-  console.error(`${FINALIZE_ACTION_LOG_LABEL} action success: --copy`);
-  return { copied: true };
+  console.error(`${FINALIZE_ACTION_LOG_LABEL} action success: ${label}`);
+  return { copied };
+}
+
+function buildActionLabel(action: FinalizeAction): string {
+  if (action.kind === "clipboard") {
+    return action.flag;
+  }
+  if (action.kind === "d2-html") {
+    return "--open-html";
+  }
+  return assertNever(action);
 }
 
 async function runClipboardAction(
-  action: FinalizeAction,
+  action: FinalizeClipboardAction,
   context: ExecuteFinalizeActionContext,
 ): Promise<void> {
   await deliverOutput({
@@ -58,4 +80,48 @@ async function runClipboardAction(
     copySource: action.source,
     configEnv: context.configEnv,
   });
+}
+
+async function runD2HtmlAction(action: FinalizeD2HtmlAction): Promise<void> {
+  await runChildProcess("d2", ["--layout=elk", action.sourcePath, action.htmlOutputPath], {
+    cwd: action.workingDirectory,
+  });
+  if (action.openHtml) {
+    const opener = resolveHtmlOpener(action.htmlOutputPath);
+    await runChildProcess(opener.command, opener.args, { cwd: action.workingDirectory });
+  }
+}
+
+function resolveHtmlOpener(htmlPath: string): { command: string; args: string[] } {
+  if (process.platform === "darwin") {
+    return { command: "open", args: [htmlPath] };
+  }
+  if (process.platform === "win32") {
+    return { command: "cmd", args: ["/c", "start", "", htmlPath] };
+  }
+  return { command: "xdg-open", args: [htmlPath] };
+}
+
+async function runChildProcess(
+  command: string,
+  args: string[],
+  options: { cwd: string },
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { cwd: options.cwd, stdio: "inherit" });
+    child.on("error", (error) => {
+      reject(error);
+    });
+    child.on("close", (code) => {
+      if ((code ?? 1) === 0) {
+        resolve();
+      } else {
+        reject(new Error(`command exited with non-zero code (${code ?? -1})`));
+      }
+    });
+  });
+}
+
+function assertNever(_value: never): never {
+  throw new Error("Unsupported finalize action");
 }

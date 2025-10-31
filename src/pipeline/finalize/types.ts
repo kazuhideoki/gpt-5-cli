@@ -20,9 +20,26 @@ export interface FinalizeClipboardAction {
 }
 
 /**
+ * D2 成果物を HTML へ変換する finalize アクション。
+ */
+export interface FinalizeD2HtmlAction {
+  kind: "d2-html";
+  /** 変換元となる D2 ファイルの相対パス。 */
+  sourcePath: string;
+  /** 生成した HTML を保存する相対パス。 */
+  htmlOutputPath: string;
+  /** コマンド実行時の作業ディレクトリ。 */
+  workingDirectory: string;
+  /** 生成完了後に HTML をブラウザで開く場合に true。 */
+  openHtml: boolean;
+  /** 実行順序を決める優先順位。小さい値から順に実行する。 */
+  priority: number;
+}
+
+/**
  * finalize 層で利用する後続アクションの判別共用体。
  */
-export type FinalizeAction = FinalizeClipboardAction;
+export type FinalizeAction = FinalizeClipboardAction | FinalizeD2HtmlAction;
 
 /**
  * finalize 層が受け取る後続アクションの配列。
