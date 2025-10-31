@@ -1,13 +1,94 @@
 // create-cli-logger.ts: CLI 向け Winston ロガー生成ヘルパー。
-import { createLogger } from "winston";
+import type { TransformableInfo } from "logform";
+import { createLogger, format, transports } from "winston";
 import type { CliLogger, CliLoggerParams } from "./types.js";
+
+const MESSAGE_SYMBOL = Symbol.for("message");
 
 /**
  * CLI 専用ロガーを生成する。
+ *
+ * @param params CLI モード・表示ラベル・ログレベル設定。
+ * @returns Winston Logger インスタンス。
  */
 export function createCliLogger(params: CliLoggerParams): CliLogger {
+  const level = params.debug ? "debug" : "info";
+
+  const consoleFormat = format.combine(
+    format.errors({ stack: true }),
+    format.splat(),
+    format.label({ label: params.label }),
+    format.timestamp(),
+    format.printf((entry) => formatConsoleLine(entry)),
+  );
+
   return createLogger({
-    level: "info",
+    level,
     defaultMeta: { task: params.task },
+    format: consoleFormat,
+    transports: [
+      new transports.Console({
+        level,
+      }),
+    ],
   });
+}
+
+function formatConsoleLine(
+  info: TransformableInfo & { label?: string; timestamp?: string },
+): string {
+  if (info.label === undefined) {
+    throw new Error("Logger format requires label metadata.");
+  }
+
+  if (info.timestamp === undefined) {
+    throw new Error("Logger format requires timestamp metadata.");
+  }
+
+  const line = `${info.timestamp} [${info.label}] ${info.level}: ${coerceMessage(info)}`;
+  const metadata = extractMetadata(info);
+  return metadata === undefined ? line : `${line} ${metadata}`;
+}
+
+function coerceMessage(info: TransformableInfo): string {
+  const message = info[MESSAGE_SYMBOL];
+  if (typeof message === "string") {
+    return message;
+  }
+
+  if (typeof info.message === "string") {
+    return info.message;
+  }
+
+  return JSON.stringify(info.message);
+}
+
+function extractMetadata(info: TransformableInfo): string | undefined {
+  const residual = { ...info } as Record<string | symbol, unknown>;
+  delete residual.message;
+  delete residual.level;
+  delete residual.timestamp;
+  delete residual.label;
+  delete residual[MESSAGE_SYMBOL];
+
+  const keys = Object.keys(residual);
+  const symbolKeys = Object.getOwnPropertySymbols(residual);
+
+  if (keys.length === 0 && symbolKeys.length === 0) {
+    return undefined;
+  }
+
+  const metadata: Record<string, unknown> = {};
+  for (const key of keys) {
+    metadata[key] = residual[key];
+  }
+  for (const symbolKey of symbolKeys) {
+    if (symbolKey === MESSAGE_SYMBOL) {
+      continue;
+    }
+
+    metadata[String(symbolKey)] = residual[symbolKey];
+  }
+
+  return JSON.stringify(metadata);
 }
