@@ -240,8 +240,19 @@ describe("handleResult", () => {
     });
 
     const infoMessages = loggerStub.info.mock.calls.map((call) => call?.[0]);
-    expect(infoMessages.some((message) => typeof message === "string" && message.includes("output file: /workspace/out.txt"))).toBe(true);
-    expect(infoMessages.some((message) => typeof message === "string" && message.includes("copy: true"))).toBe(true);
-    expect(infoMessages.some((message) => typeof message === "string" && message.includes("actions summary: count=0"))).toBe(true);
+    expect(
+      infoMessages.some(
+        (message) =>
+          typeof message === "string" && message.includes("output file: /workspace/out.txt"),
+      ),
+    ).toBe(true);
+    expect(
+      infoMessages.some((message) => typeof message === "string" && message.includes("copy: true")),
+    ).toBe(true);
+    expect(
+      infoMessages.some(
+        (message) => typeof message === "string" && message.includes("actions summary: count=0"),
+      ),
+    ).toBe(true);
   });
 });

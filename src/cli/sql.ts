@@ -802,6 +802,7 @@ async function main(): Promise<void> {
 
     const finalizeOutcome = await finalizeResult<SqlCliHistoryStoreContext>({
       content,
+      logger,
       userText: determine.inputText,
       actions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,

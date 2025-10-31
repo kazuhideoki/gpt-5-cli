@@ -78,7 +78,7 @@ export interface FinalizeResultParams<TContext> {
 export async function finalizeResult<TContext>(
   params: FinalizeResultParams<TContext>,
 ): Promise<FinalizeOutcome> {
-  const { content, actions, stdout, textOutputPath, history, userText, configEnv } = params;
+  const { content, actions, stdout, textOutputPath, history, userText, configEnv, logger } = params;
 
   const finalizeOutputInstruction: FinalizeDeliveryInstruction | undefined = textOutputPath
     ? ({
@@ -122,6 +122,7 @@ export async function finalizeResult<TContext>(
     content,
     stdout,
     configEnv,
+    logger,
     output: finalizeOutputInstruction,
     actions,
     history: finalizeHistoryEffect,

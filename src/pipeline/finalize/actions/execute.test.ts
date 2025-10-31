@@ -132,22 +132,16 @@ describe("executeFinalizeAction", () => {
     });
   });
 
-  it("logger にアクション開始と成功を記録する", () => {
-    /* TODO: implement */
-  });
-
-  it("logger に失敗を記録し例外を伝播する", () => {
-    /* TODO: implement */
-  });
-
   it("logger にアクション開始と成功を記録する", async () => {
-    const spawnMock = mock((_command: string, _args: string[], _options: Record<string, unknown>) => {
-      const child = new EventEmitter();
-      queueMicrotask(() => {
-        child.emit("close", 0);
-      });
-      return child as unknown as any;
-    });
+    const spawnMock = mock(
+      (_command: string, _args: string[], _options: Record<string, unknown>) => {
+        const child = new EventEmitter();
+        queueMicrotask(() => {
+          child.emit("close", 0);
+        });
+        return child as unknown as any;
+      },
+    );
     mock.module("node:child_process", () => ({ spawn: spawnMock }));
 
     const loggerStub = createLoggerStub();
@@ -179,13 +173,15 @@ describe("executeFinalizeAction", () => {
   });
 
   it("logger に失敗を記録し例外を伝播する", async () => {
-    const spawnMock = mock((_command: string, _args: string[], _options: Record<string, unknown>) => {
-      const child = new EventEmitter();
-      queueMicrotask(() => {
-        child.emit("close", 1);
-      });
-      return child as unknown as any;
-    });
+    const spawnMock = mock(
+      (_command: string, _args: string[], _options: Record<string, unknown>) => {
+        const child = new EventEmitter();
+        queueMicrotask(() => {
+          child.emit("close", 1);
+        });
+        return child as unknown as any;
+      },
+    );
     mock.module("node:child_process", () => ({ spawn: spawnMock }));
 
     const loggerStub = createLoggerStub();

@@ -440,6 +440,7 @@ async function main(): Promise<void> {
 
     const finalizeOutcome = await finalizeResult<MermaidCliHistoryStoreContext>({
       content,
+      logger,
       userText: determine.inputText,
       actions,
       textOutputPath: outputResolution.textOutputPath ?? undefined,
