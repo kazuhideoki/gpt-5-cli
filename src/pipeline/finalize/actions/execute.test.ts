@@ -4,6 +4,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { EventEmitter } from "node:events";
 import type { ConfigEnvironment } from "../../../types.js";
+import type { CliLogger } from "../../../foundation/logger/types.js";
 import { executeFinalizeAction } from "./execute.js";
 
 function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
@@ -17,6 +18,24 @@ function createConfigEnv(values: Record<string, string | undefined> = {}): Confi
       return entries[Symbol.iterator]();
     },
   };
+}
+
+function createLoggerStub() {
+  const state: { logger: CliLogger } = { logger: undefined as unknown as CliLogger };
+  const info = mock((..._args: unknown[]) => state.logger);
+  const error = mock((..._args: unknown[]) => state.logger);
+  const warn = mock((..._args: unknown[]) => state.logger);
+  const debug = mock((..._args: unknown[]) => state.logger);
+  const logger = {
+    info,
+    error,
+    warn,
+    debug,
+    level: "info",
+    transports: [],
+  } as unknown as CliLogger;
+  state.logger = logger;
+  return { logger, info, error, warn, debug };
 }
 
 describe("executeFinalizeAction", () => {
@@ -47,6 +66,7 @@ describe("executeFinalizeAction", () => {
           priority: 30,
         },
         {
+          logger: createLoggerStub().logger,
           configEnv: createConfigEnv(),
           defaultContent: "fallback",
         },
@@ -88,6 +108,7 @@ describe("executeFinalizeAction", () => {
           priority: 10,
         },
         {
+          logger: createLoggerStub().logger,
           configEnv: createConfigEnv(),
           defaultContent: "fallback",
         },
@@ -117,5 +138,85 @@ describe("executeFinalizeAction", () => {
 
   it("logger に失敗を記録し例外を伝播する", () => {
     /* TODO: implement */
+  });
+
+  it("logger にアクション開始と成功を記録する", async () => {
+    const spawnMock = mock((_command: string, _args: string[], _options: Record<string, unknown>) => {
+      const child = new EventEmitter();
+      queueMicrotask(() => {
+        child.emit("close", 0);
+      });
+      return child as unknown as any;
+    });
+    mock.module("node:child_process", () => ({ spawn: spawnMock }));
+
+    const loggerStub = createLoggerStub();
+
+    try {
+      await executeFinalizeAction(
+        {
+          kind: "d2-html",
+          sourcePath: "diagram.d2",
+          htmlOutputPath: "diagram.html",
+          workingDirectory: "/workspace",
+          openHtml: false,
+          priority: 25,
+        },
+        {
+          logger: loggerStub.logger,
+          configEnv: createConfigEnv(),
+          defaultContent: "fallback",
+        },
+      );
+    } finally {
+      mock.restore();
+    }
+
+    expect(loggerStub.info).toHaveBeenCalled();
+    const messages = loggerStub.info.mock.calls.map((call) => call?.[0]);
+    expect(messages[0]).toContain("action start: --open-html (priority=25)");
+    expect(messages).toContain("[gpt-5-cli finalize] action success: --open-html");
+  });
+
+  it("logger に失敗を記録し例外を伝播する", async () => {
+    const spawnMock = mock((_command: string, _args: string[], _options: Record<string, unknown>) => {
+      const child = new EventEmitter();
+      queueMicrotask(() => {
+        child.emit("close", 1);
+      });
+      return child as unknown as any;
+    });
+    mock.module("node:child_process", () => ({ spawn: spawnMock }));
+
+    const loggerStub = createLoggerStub();
+
+    try {
+      await expect(
+        executeFinalizeAction(
+          {
+            kind: "d2-html",
+            sourcePath: "diagram.d2",
+            htmlOutputPath: "diagram.html",
+            workingDirectory: "/workspace",
+            openHtml: false,
+            priority: 50,
+          },
+          {
+            logger: loggerStub.logger,
+            configEnv: createConfigEnv(),
+            defaultContent: "fallback",
+          },
+        ),
+      ).rejects.toThrow("command exited with non-zero code");
+    } finally {
+      mock.restore();
+    }
+
+    expect(loggerStub.info).toHaveBeenCalled();
+    const startMessage = loggerStub.info.mock.calls[0]?.[0];
+    expect(startMessage).toContain("action start: --open-html (priority=50)");
+    expect(loggerStub.error).toHaveBeenCalled();
+    const errorMessage = loggerStub.error.mock.calls[0]?.[0];
+    expect(errorMessage).toContain("action failure: --open-html");
   });
 });
