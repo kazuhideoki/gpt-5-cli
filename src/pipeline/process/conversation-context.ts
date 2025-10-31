@@ -1,5 +1,6 @@
 // conversation-context.ts: 履歴ストアを元に CLI 用会話コンテキストを構築するユーティリティ。
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
 /**
@@ -108,6 +109,8 @@ export interface ComputeContextParams<TOptions extends CliOptions, THistoryTask 
   explicitPrevTitle?: string;
   /** CLI 固有の挙動調整が不要な場合もあるため任意。 */
   config?: ComputeContextConfig<TOptions, THistoryTask>;
+  /** CLI 層から注入されるロガー設定。 */
+  loggerConfig: CliLoggerConfig;
 }
 
 /**
@@ -123,8 +126,9 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
   explicitPrevId,
   explicitPrevTitle,
   config,
+  loggerConfig,
 }: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
-  const logLabel = config?.logLabel ?? "[gpt-5-cli]";
+  const logLabel = config?.logLabel ?? loggerConfig.logLabel;
   // TODO 横断的な logger を別途定義する
   const logWarning = (message: string): void => {
     console.error(`${logLabel} ${message}`);

@@ -650,7 +650,11 @@ async function main(): Promise<void> {
     setSqlEnvironment(undefined);
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, {
+        logger,
+        logLabel: LOG_LABEL,
+        debugEnabled: options.debug,
+      });
       return;
     }
 
@@ -695,6 +699,7 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: sqlContext, normalizedOptions } = ensureSqlContext(options);
@@ -722,7 +727,7 @@ async function main(): Promise<void> {
       debugEnabled: resolvedOptionsWithDsn.debug,
     };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine, sqruffBin });
-    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, loggerConfig, configEnv);
     const toolset = buildSqlConversationToolset({
       loggerConfig,
       engine: sqlEnv.engine,
@@ -734,7 +739,6 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
@@ -744,13 +748,14 @@ async function main(): Promise<void> {
         artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
       toolset,
+      loggerConfig,
     });
 
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptionsWithDsn,
-      logLabel: LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptionsWithDsn.maxIterations,
     });

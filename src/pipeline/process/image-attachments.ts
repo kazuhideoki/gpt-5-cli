@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 import type { ConfigEnvironment } from "../../types.js";
 
 function resolveHomeDirectory(configEnv: ConfigEnvironment): string {
@@ -64,11 +65,11 @@ function detectImageMime(filePath: string): string {
  * CLI から指定された画像パスを検証し、Responses API 用の Data URL を生成する。
  *
  * @param imagePath `-i` フラグで渡された画像パス。未指定なら添付なしとして `undefined` を返す。
- * @param logLabel ログ識別に利用する CLI ラベル。
+ * @param loggerConfig CLI 層から注入されるロガー設定。
  */
 export function prepareImageData(
   imagePath: string | undefined,
-  logLabel: string,
+  loggerConfig: CliLoggerConfig,
   configEnv: ConfigEnvironment,
 ): string | undefined {
   if (!imagePath) {
@@ -82,6 +83,7 @@ export function prepareImageData(
     throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
   }
   const dataUrl = `data:${mime};base64,${base64}`;
+  const { logLabel } = loggerConfig;
   console.log(`${logLabel} image_attached: ${resolved} (${mime})`);
   return dataUrl;
 }

@@ -10,6 +10,7 @@ import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
 import type { ConversationToolset } from "./tools/index.js";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -34,8 +35,8 @@ interface BuildRequestParams {
   imageDataUrl: string | undefined;
   /** 既定モデルや推論スケールのログ出力に使用する環境値。 */
   defaults: CliDefaults | undefined;
-  /** ログ出力に利用する CLI 固有ラベル。 */
-  logLabel: string;
+  /** CLI 層から注入されるロガー設定。 */
+  loggerConfig: CliLoggerConfig;
   /** カラー設定などログ整形に利用する環境スナップショット。 */
   configEnv: ConfigEnvironment;
   /** モード固有の追加システムメッセージ群。 */
@@ -64,11 +65,12 @@ export function buildRequest({
   systemPrompt,
   imageDataUrl,
   defaults,
-  logLabel,
   additionalSystemMessages,
   toolset,
   configEnv,
+  loggerConfig,
 }: BuildRequestParams): BuildRequestArtifacts {
+  const { logLabel } = loggerConfig;
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
@@ -192,8 +194,9 @@ export async function performCompact<THistoryTask = unknown>(
   defaults: CliDefaults,
   historyStore: HistoryStore<THistoryTask>,
   client: OpenAI,
-  logLabel: string,
+  loggerConfig: CliLoggerConfig,
 ): Promise<void> {
+  const { logLabel } = loggerConfig;
   // TODO(pipeline/finalize): 履歴の保存と標準出力書き込みは finalize 層へ移す。
   if (typeof options.compactIndex !== "number") {
     throw new Error("Error: --compact の履歴番号は正の整数で指定してください");

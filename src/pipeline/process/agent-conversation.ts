@@ -14,6 +14,7 @@ import type { AgentInputItem, ModelSettings } from "@openai/agents";
 import { OpenAIResponsesModel } from "@openai/agents-openai";
 import type OpenAI from "openai";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 import type { AgentConversationOutcome, CliOptions, OpenAIInputMessage } from "../../types.js";
 const RESPONSES_OUTPUT_PATCHED = Symbol("gpt-5-cli.responsesOutputPatched");
 setTraceProcessors([]);
@@ -32,8 +33,8 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
   request: ResponseCreateParamsNonStreaming;
   /** CLI で解析済みのオプション。 */
   options: TOptions;
-  /** ログ出力に使用する CLI 固有ラベル。 */
-  logLabel: string;
+  /** CLI 層から注入されるロガー設定。 */
+  loggerConfig: CliLoggerConfig;
   /** Agents SDK で利用するツール配列。 */
   agentTools: AgentsSdkTool[];
   /** エージェント実行の最大ターン数。 */
@@ -49,7 +50,8 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
 ): Promise<AgentConversationOutcome> {
-  const { client, request, options, logLabel, agentTools, maxTurns } = params;
+  const { client, request, options, loggerConfig, agentTools, maxTurns } = params;
+  const logLabel = loggerConfig.logLabel;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
   const userInputs = buildUserInputs(messages);

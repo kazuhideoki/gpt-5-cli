@@ -317,7 +317,11 @@ async function main(): Promise<void> {
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, MERMAID_LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, {
+        logger,
+        logLabel: MERMAID_LOG_LABEL,
+        debugEnabled: options.debug,
+      });
       return;
     }
 
@@ -363,6 +367,7 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: mermaidContext, normalizedOptions } = ensureMermaidContext(options);
@@ -374,7 +379,7 @@ async function main(): Promise<void> {
       debugEnabled: resolvedOptions.debug,
     };
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, MERMAID_LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, loggerConfig, configEnv);
     const toolset = buildMermaidConversationToolset({
       loggerConfig,
     });
@@ -385,16 +390,16 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: MERMAID_LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
       toolset,
+      loggerConfig,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
-      logLabel: MERMAID_LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });

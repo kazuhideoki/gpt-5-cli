@@ -224,7 +224,7 @@ async function main(): Promise<void> {
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, ASK_LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, loggerConfig);
       return;
     }
 
@@ -266,9 +266,10 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
-    const imageDataUrl = prepareImageData(options.imagePath, ASK_LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(options.imagePath, loggerConfig, configEnv);
     const toolset = buildAskConversationToolset({
       loggerConfig,
     });
@@ -280,16 +281,16 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: ASK_LOG_LABEL,
       configEnv,
       additionalSystemMessages: undefined,
       toolset,
+      loggerConfig,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options,
-      logLabel: ASK_LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: options.maxIterations,
     });

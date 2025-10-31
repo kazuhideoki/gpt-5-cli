@@ -408,7 +408,11 @@ async function main(): Promise<void> {
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, D2_LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, {
+        logger,
+        logLabel: D2_LOG_LABEL,
+        debugEnabled: options.debug,
+      });
       return;
     }
 
@@ -454,6 +458,7 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: d2Context, normalizedOptions } = ensureD2Context(options);
@@ -466,7 +471,7 @@ async function main(): Promise<void> {
       debugEnabled: resolvedOptions.debug,
     };
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, D2_LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, loggerConfig, configEnv);
     const toolset = buildD2ConversationToolset({
       loggerConfig,
     });
@@ -477,16 +482,16 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: D2_LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
       toolset,
+      loggerConfig,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
-      logLabel: D2_LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });
