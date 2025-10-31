@@ -250,7 +250,7 @@ describe("bootstrapCli", () => {
     // TODO: implement logger expectation
   });
 
-  it("system promptを読み込めなかった場合はlogger.errorで通知する", () => {
+  it("system promptを読み込めなかった場合はlogger.warnで通知する", () => {
     // TODO: implement logger expectation
   });
 });
