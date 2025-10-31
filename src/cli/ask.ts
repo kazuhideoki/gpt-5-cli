@@ -24,7 +24,7 @@ import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 import type { CliLoggerConfig } from "./common/types.js";
-import { createCliToolLoggerOptions } from "./common/logger.js";
+import { createCliToolLoggerOptions, updateCliLoggerLevel } from "./common/logger.js";
 import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 const ASK_TOOL_REGISTRATIONS = [READ_FILE_TOOL] as const;
@@ -214,7 +214,7 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
-    logger.level = options.debug ? "debug" : "info";
+    updateCliLoggerLevel(logger, options.debug ? "debug" : "info");
     const loggerConfig: CliLoggerConfig = {
       logger,
       logLabel: ASK_LOG_LABEL,

@@ -33,7 +33,7 @@ import { bootstrapCli } from "../pipeline/input/cli-bootstrap.js";
 import { createCliHistoryEntryFilter } from "../pipeline/input/history-filter.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 import type { CliLoggerConfig } from "./common/types.js";
-import { createCliToolLoggerOptions } from "./common/logger.js";
+import { createCliToolLoggerOptions, updateCliLoggerLevel } from "./common/logger.js";
 import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 /** d2モードの解析済みCLIオプションを表す型。 */
@@ -459,7 +459,7 @@ async function main(): Promise<void> {
     const { context: d2Context, normalizedOptions } = ensureD2Context(options);
 
     const resolvedOptions = normalizedOptions;
-    logger.level = resolvedOptions.debug ? "debug" : "info";
+    updateCliLoggerLevel(logger, resolvedOptions.debug ? "debug" : "info");
     const loggerConfig: CliLoggerConfig = {
       logger,
       logLabel: D2_LOG_LABEL,

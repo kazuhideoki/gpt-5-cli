@@ -40,7 +40,7 @@ import type { HistoryEntry } from "../pipeline/history/store.js";
 import { runAgentConversation } from "../pipeline/process/agent-conversation.js";
 import { buildCommonCommand, parseCommonOptions } from "./common/common-cli.js";
 import type { CliLoggerConfig } from "./common/types.js";
-import { createCliToolLoggerOptions } from "./common/logger.js";
+import { createCliToolLoggerOptions, updateCliLoggerLevel } from "./common/logger.js";
 import { createCliLogger } from "../foundation/logger/create-cli-logger.js";
 
 const LOG_LABEL = "[gpt-5-cli-sql]";
@@ -715,7 +715,7 @@ async function main(): Promise<void> {
       dsn: sqlEnv.dsn,
       engine: sqlEnv.engine,
     };
-    logger.level = resolvedOptionsWithDsn.debug ? "debug" : "info";
+    updateCliLoggerLevel(logger, resolvedOptionsWithDsn.debug ? "debug" : "info");
     const loggerConfig: CliLoggerConfig = {
       logger,
       logLabel: LOG_LABEL,
