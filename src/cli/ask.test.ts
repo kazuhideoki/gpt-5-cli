@@ -430,6 +430,7 @@ describe("resolveInputOrExecuteHistoryAction", () => {
     const options = createOptions();
     let helpCalled = false;
     const deps = {
+      ...noopDeps,
       printHelp: () => {
         helpCalled = true;
       },
