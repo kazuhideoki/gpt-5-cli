@@ -166,8 +166,8 @@ describe("executeFinalizeAction", () => {
       mock.restore();
     }
 
-    expect(loggerStub.info).toHaveBeenCalled();
-    const messages = loggerStub.info.mock.calls.map((call) => call?.[0]);
+    expect(loggerStub.debug).toHaveBeenCalled();
+    const messages = loggerStub.debug.mock.calls.map((call) => call?.[0]);
     expect(messages[0]).toContain("action start: --open-html (priority=25)");
     expect(messages).toContain("[gpt-5-cli finalize] action success: --open-html");
   });
@@ -208,8 +208,8 @@ describe("executeFinalizeAction", () => {
       mock.restore();
     }
 
-    expect(loggerStub.info).toHaveBeenCalled();
-    const startMessage = loggerStub.info.mock.calls[0]?.[0];
+    expect(loggerStub.debug).toHaveBeenCalled();
+    const startMessage = loggerStub.debug.mock.calls[0]?.[0];
     expect(startMessage).toContain("action start: --open-html (priority=50)");
     expect(loggerStub.error).toHaveBeenCalled();
     const errorMessage = loggerStub.error.mock.calls[0]?.[0];

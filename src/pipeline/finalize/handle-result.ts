@@ -20,7 +20,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
   let filePath: string | undefined;
   let bytesWritten: number | undefined;
   let copied: boolean | undefined;
-  args.logger.info(`${FINALIZE_LOG_LABEL} finalize start: actions=${args.actions.length}`);
+  args.logger.debug(`${FINALIZE_LOG_LABEL} finalize start: actions=${args.actions.length}`);
 
   if (args.output) {
     const { handler, params } = args.output;
@@ -43,7 +43,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
       `bytes: ${typeof bytesWritten === "number" ? bytesWritten : "n/a"}`,
       `copy: ${deliverResult.copied === true}`,
     ];
-    args.logger.info(outputLabelParts.join(" "));
+    args.logger.debug(outputLabelParts.join(" "));
   }
 
   if (args.actions.length > 0) {
@@ -58,7 +58,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
       })
       .map((entry) => entry.action);
 
-    args.logger.info(`${FINALIZE_LOG_LABEL} actions start: count=${sortedActions.length}`);
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions start: count=${sortedActions.length}`);
 
     for (const action of sortedActions) {
       const result = await executeFinalizeAction(action, {
@@ -70,9 +70,9 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
         copied = true;
       }
     }
-    args.logger.info(`${FINALIZE_LOG_LABEL} actions summary: count=${sortedActions.length}`);
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions summary: count=${sortedActions.length}`);
   } else {
-    args.logger.info(`${FINALIZE_LOG_LABEL} actions summary: count=0`);
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions summary: count=0`);
   }
 
   if (args.history) {

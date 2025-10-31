@@ -37,7 +37,7 @@ export async function executeFinalizeAction(
   context: ExecuteFinalizeActionContext,
 ): Promise<ExecuteFinalizeActionResult> {
   const label = buildActionLabel(action);
-  context.logger.info(
+  context.logger.debug(
     `${FINALIZE_ACTION_LOG_LABEL} action start: ${label} (priority=${action.priority})`,
   );
 
@@ -57,7 +57,7 @@ export async function executeFinalizeAction(
     throw error;
   }
 
-  context.logger.info(`${FINALIZE_ACTION_LOG_LABEL} action success: ${label}`);
+  context.logger.debug(`${FINALIZE_ACTION_LOG_LABEL} action success: ${label}`);
   return { copied };
 }
 

@@ -239,18 +239,20 @@ describe("handleResult", () => {
       logger: loggerStub.logger,
     });
 
-    const infoMessages = loggerStub.info.mock.calls.map((call) => call?.[0]);
+    const debugMessages = loggerStub.debug.mock.calls.map((call) => call?.[0]);
     expect(
-      infoMessages.some(
+      debugMessages.some(
         (message) =>
           typeof message === "string" && message.includes("output file: /workspace/out.txt"),
       ),
     ).toBe(true);
     expect(
-      infoMessages.some((message) => typeof message === "string" && message.includes("copy: true")),
+      debugMessages.some(
+        (message) => typeof message === "string" && message.includes("copy: true"),
+      ),
     ).toBe(true);
     expect(
-      infoMessages.some(
+      debugMessages.some(
         (message) => typeof message === "string" && message.includes("actions summary: count=0"),
       ),
     ).toBe(true);
