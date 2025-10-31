@@ -1,7 +1,9 @@
 // create-cli-logger.test.ts: createCliLogger の仕様テスト。
 import { describe, expect, it } from "bun:test";
-import type { TransformableInfo } from "logform";
+import { Writable } from "node:stream";
+import { transports } from "winston";
 import { createCliLogger } from "./create-cli-logger.js";
+import type { CliLoggerParams, CliLogger } from "./types.js";
 
 const LABEL = "ask";
 
@@ -17,62 +19,60 @@ describe("createCliLogger", () => {
   });
 
   it("ラベル付きフォーマットでログを出力する", () => {
-    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
-    const info: TransformableInfo = {
-      level: "info",
-      message: "hello",
+    const { logger, messages, dispose } = createStreamLogger({
+      task: "ask",
       label: LABEL,
-      timestamp: "2025-03-01T10:00:00.000Z",
-    };
-    const formatted = logger.format.transform(info, logger.format.options ?? {});
-    expect(formatted).toBeDefined();
-    expect(formatted?.[Symbol.for("message")]).toContain(`[${LABEL}]`);
-    expect(formatted?.[Symbol.for("message")]).toContain("hello");
+      debug: false,
+    });
+    try {
+      logger.info("hello");
+    } finally {
+      dispose();
+    }
+    expect(messages[0]).toContain(`[${LABEL}] info: hello`);
   });
 
   it("追加メタデータを JSON として末尾に付与する", () => {
-    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
-    const info: TransformableInfo = {
-      level: "info",
-      message: "hello",
+    const { logger, messages, dispose } = createStreamLogger({
+      task: "ask",
       label: LABEL,
-      timestamp: "2025-03-01T10:00:00.000Z",
-      extra: "value",
-    };
-    const formatted = logger.format.transform(info, logger.format.options ?? {});
-    expect(formatted?.[Symbol.for("message")]).toContain(
-      '{"extra":"value"}',
-    );
+      debug: false,
+    });
+    try {
+      logger.info("hello", { extra: "value" });
+    } finally {
+      dispose();
+    }
+    expect(messages[0]).toContain('"extra":"value"');
   });
 
   it("BigInt を含むメタデータも安全にシリアライズする", () => {
-    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
-    const info: TransformableInfo = {
-      level: "info",
-      message: "hello",
+    const { logger, messages, dispose } = createStreamLogger({
+      task: "ask",
       label: LABEL,
-      timestamp: "2025-03-01T10:00:00.000Z",
-      bigintValue: BigInt(42),
-    };
-    const formatted = logger.format.transform(info, logger.format.options ?? {});
-    expect(formatted?.[Symbol.for("message")]).toContain(
-      '{"bigintValue":"42"}',
-    );
+      debug: false,
+    });
+    try {
+      logger.info("hello", { bigintValue: BigInt(42) });
+    } finally {
+      dispose();
+    }
+    expect(messages[0]).toContain('"bigintValue":"42"');
   });
 
   it("format.splat の追加引数を splat メタデータとして残す", () => {
-    const logger = createCliLogger({ task: "ask", label: LABEL, debug: false });
-    const info: TransformableInfo = {
-      level: "info",
-      message: "hello world",
+    const { logger, messages, dispose } = createStreamLogger({
+      task: "ask",
       label: LABEL,
-      timestamp: "2025-03-01T10:00:00.000Z",
-      [Symbol.for("splat")]: ["world", { foo: 1 }],
-    };
-    const formatted = logger.format.transform(info, logger.format.options ?? {});
-    expect(formatted?.[Symbol.for("message")]).toContain(
-      '{"splat":["world",{"foo":1}]}',
-    );
+      debug: false,
+    });
+    try {
+      logger.info("hello %s", "world", { foo: 1 });
+    } finally {
+      dispose();
+    }
+    expect(messages[0]).toContain('"splat":["world"]');
+    expect(messages[0]).toContain('"foo":1');
   });
 
   it("モード情報をメタデータとして保持する", () => {
@@ -80,3 +80,32 @@ describe("createCliLogger", () => {
     expect(logger.defaultMeta).toEqual({ task: "mermaid" });
   });
 });
+
+function createStreamLogger(params: CliLoggerParams): {
+  logger: CliLogger;
+  messages: string[];
+  dispose: () => void;
+} {
+  const logger = createCliLogger(params);
+  const messages: string[] = [];
+  const sink = new Writable({
+    write(chunk, _encoding, callback) {
+      messages.push(chunk.toString().trim());
+      callback();
+    },
+  });
+  const streamTransport = new transports.Stream({
+    stream: sink,
+    level: logger.level,
+  });
+  logger.clear();
+  logger.add(streamTransport);
+  return {
+    logger,
+    messages,
+    dispose: () => {
+      logger.remove(streamTransport);
+      sink.end();
+    },
+  };
+}

@@ -92,7 +92,13 @@ function extractMetadata(info: TransformableInfo): string | undefined {
   }
 
   const metadata: Record<string, unknown> = {};
+  const shouldSkipKey = (key: string) =>
+    Array.isArray(splat) && /^[0-9]+$/.test(key) && Number.parseInt(key, 10) < splat.length;
+
   for (const key of keys) {
+    if (shouldSkipKey(key)) {
+      continue;
+    }
     metadata[key] = residual[key];
   }
   for (const symbolKey of symbolKeys) {
