@@ -4,6 +4,8 @@ import { createLogger, format, transports } from "winston";
 import type { CliLogger, CliLoggerParams } from "./types.js";
 
 const MESSAGE_SYMBOL = Symbol.for("message");
+const LEVEL_SYMBOL = Symbol.for("level");
+const SPLAT_SYMBOL = Symbol.for("splat");
 
 /**
  * CLI 専用ロガーを生成する。
@@ -70,6 +72,8 @@ function extractMetadata(info: TransformableInfo): string | undefined {
   delete residual.timestamp;
   delete residual.label;
   delete residual[MESSAGE_SYMBOL];
+  delete residual[LEVEL_SYMBOL];
+  delete residual[SPLAT_SYMBOL];
 
   const keys = Object.keys(residual);
   const symbolKeys = Object.getOwnPropertySymbols(residual);
@@ -83,7 +87,7 @@ function extractMetadata(info: TransformableInfo): string | undefined {
     metadata[key] = residual[key];
   }
   for (const symbolKey of symbolKeys) {
-    if (symbolKey === MESSAGE_SYMBOL) {
+    if (symbolKey === MESSAGE_SYMBOL || symbolKey === LEVEL_SYMBOL || symbolKey === SPLAT_SYMBOL) {
       continue;
     }
 
