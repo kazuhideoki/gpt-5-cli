@@ -110,4 +110,12 @@ describe("executeFinalizeAction", () => {
       args: openerArgs,
     });
   });
+
+  it("logger にアクション開始と成功を記録する", () => {
+    /* TODO: implement */
+  });
+
+  it("logger に失敗を記録し例外を伝播する", () => {
+    /* TODO: implement */
+  });
 });

@@ -150,4 +150,8 @@ describe("finalizeResult", () => {
 
     expect(upsertConversation).not.toHaveBeenCalled();
   });
+
+  it("handleResult へロガーを引き渡す", () => {
+    /* TODO: implement */
+  });
 });

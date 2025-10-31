@@ -184,4 +184,8 @@ describe("handleResult", () => {
     expect(copied).toEqual(["first", "second"]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
+
+  it("logger へ成果物出力とアクション情報を記録する", () => {
+    /* TODO: implement */
+  });
 });
