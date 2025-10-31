@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
 import type { ResolveInputOrExecuteHistoryActionDependencies } from "./cli-input.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 
 const promptAnswers: string[] = [];
 const promptQuestions: string[] = [];
@@ -33,6 +34,42 @@ const defaults: CliDefaults = {
 };
 
 type HistoryStoreMethods = Pick<HistoryStore<unknown>, "deleteByNumber" | "selectByNumber">;
+
+interface StubLogger extends CliLogger {
+  infoMessages: unknown[][];
+  warnMessages: unknown[][];
+  errorMessages: unknown[][];
+}
+
+function createStubLogger(): StubLogger {
+  const transports = [] as CliLogger["transports"];
+  const stub: Partial<StubLogger> = {
+    level: "info",
+    transports,
+    infoMessages: [],
+    warnMessages: [],
+    errorMessages: [],
+    info(...args: unknown[]) {
+      this.infoMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    debug(..._args: unknown[]) {
+      return this as unknown as CliLogger;
+    },
+    warn(...args: unknown[]) {
+      this.warnMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    error(...args: unknown[]) {
+      this.errorMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    child() {
+      return this as unknown as CliLogger;
+    },
+  };
+  return stub as StubLogger;
+}
 
 function createOptions(overrides: Partial<CliOptions> = {}): CliOptions {
   return {
@@ -80,12 +117,14 @@ function createHistoryStore(overrides: Partial<HistoryStoreMethods> = {}): Histo
 function createDeps(
   overrides: Partial<ResolveInputOrExecuteHistoryActionDependencies<CliOptions, unknown>> = {},
 ): ResolveInputOrExecuteHistoryActionDependencies<CliOptions, unknown> {
+  const logger = overrides.logger ?? createStubLogger();
   return {
     printHelp:
       overrides.printHelp ??
       (() => {
         throw new Error("printHelp should not be called");
       }),
+    logger,
     printHistoryList: overrides.printHistoryList,
     printHistoryDetail: overrides.printHistoryDetail,
   };
@@ -115,7 +154,7 @@ afterEach(() => {
 });
 
 describe("resolveInputOrExecuteHistoryAction", () => {
-  it("deleteIndexが指定されたとき履歴を削除して終了する", async () => {
+  it("deleteIndexが指定されたとき履歴を削除しloggerで通知して終了する", async () => {
     const logs: string[] = [];
     const originalLog = console.log;
     console.log = (...args: unknown[]) => {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { bootstrapCli } from "./cli-bootstrap.js";
 import { z } from "zod";
 import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 
 interface TempResources {
   historyPath: string;
@@ -58,10 +59,47 @@ function createOptions(defaults: CliDefaults, overrides: Partial<CliOptions> = {
   };
 }
 
+interface StubLogger extends CliLogger {
+  infoMessages: unknown[][];
+  errorMessages: unknown[][];
+  warnMessages: unknown[][];
+}
+
+function createStubLogger(): StubLogger {
+  const transports = [] as CliLogger["transports"];
+  const stub: Partial<StubLogger> = {
+    level: "info",
+    transports,
+    infoMessages: [],
+    errorMessages: [],
+    warnMessages: [],
+    info(...args: unknown[]) {
+      this.infoMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    debug(..._args: unknown[]) {
+      return this as unknown as CliLogger;
+    },
+    warn(...args: unknown[]) {
+      this.warnMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    error(...args: unknown[]) {
+      this.errorMessages?.push(args);
+      return this as unknown as CliLogger;
+    },
+    child() {
+      return this as unknown as CliLogger;
+    },
+  };
+  return stub as StubLogger;
+}
+
 let originalHistoryEnv: string | undefined;
 let originalPromptsEnv: string | undefined;
 let resources: TempResources;
 let additionalCleanupDirs: string[];
+let logger: StubLogger;
 
 beforeEach(() => {
   originalHistoryEnv = process.env.GPT_5_CLI_HISTORY_INDEX_FILE;
@@ -76,6 +114,7 @@ beforeEach(() => {
 
   resources = { historyPath, historyCleanup: cleanup, promptsDir };
   additionalCleanupDirs = [];
+  logger = createStubLogger();
 });
 
 afterEach(() => {
@@ -114,6 +153,7 @@ describe("bootstrapCli", () => {
 
     const result = await bootstrapCli({
       argv: ["質問"],
+      logger,
       logLabel: "[test-cli]",
       parseArgs,
       historyContextSchema: z.object({}),
@@ -143,6 +183,7 @@ describe("bootstrapCli", () => {
 
     const result = await bootstrapCli({
       argv: ["--help"],
+      logger,
       logLabel: "[test-cli]",
       parseArgs,
       historyContextSchema: z.object({}),
@@ -187,6 +228,7 @@ describe("bootstrapCli", () => {
 
     const result = await bootstrapCli({
       argv: ["--mode"],
+      logger,
       logLabel: "[test-cli]",
       parseArgs,
       historyContextSchema: z.object({}),
@@ -202,5 +244,13 @@ describe("bootstrapCli", () => {
     expect(result.defaults.promptsDir).toBe(path.resolve(promptsDir));
     expect(result.configEnv.get("GPT_5_CLI_PROMPTS_DIR")).toBe(promptsDir);
     expect(result.options.args).toEqual(["--mode"]);
+  });
+
+  it("loggerへhistory_indexをinfoレベルで出力する", () => {
+    // TODO: implement logger expectation
+  });
+
+  it("system promptを読み込めなかった場合はlogger.errorで通知する", () => {
+    // TODO: implement logger expectation
   });
 });
