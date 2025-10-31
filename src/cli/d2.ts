@@ -310,6 +310,8 @@ export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
+  // 履歴再開時は artifactPath が更新されるケースがあるため、明示指定が無ければ同じ
+  // ディレクトリ／ファイル名で HTML を再計算して同期を保つ。
   const htmlAbsolutePath = options.htmlOutputExplicit
     ? path.resolve(cwd, options.htmlOutputPath)
     : path.join(path.dirname(absolutePath), `${path.parse(absolutePath).name}.html`);
