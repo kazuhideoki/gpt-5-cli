@@ -72,7 +72,7 @@ export async function resolveInputOrExecuteHistoryAction<
 
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
-    console.log(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
+    deps.logger.info(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
     return { kind: "exit", code: 0 };
   }
 

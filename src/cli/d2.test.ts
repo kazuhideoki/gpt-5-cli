@@ -18,8 +18,6 @@ import type { CliLogger } from "../foundation/logger/types.js";
 type HistoryStoreLike = HistoryStore<D2CliHistoryContext>;
 type D2HistoryEntry = HistoryEntry<D2CliHistoryContext>;
 
-const noopDeps = { printHelp: () => {} };
-
 function createLoggerConfig(debugEnabled = false): CliLoggerConfig {
   const logger = {
     level: "info",
@@ -34,6 +32,9 @@ function createLoggerConfig(debugEnabled = false): CliLoggerConfig {
     debugEnabled,
   };
 }
+
+const noopLogger = createLoggerConfig(false).logger;
+const noopDeps = { printHelp: () => {}, logger: noopLogger };
 
 function createDefaults(): CliDefaults {
   return {
@@ -266,6 +267,7 @@ describe("d2 resolveInputOrExecuteHistoryAction", () => {
       printHelp: () => {
         helpCalled = true;
       },
+      logger: createLoggerConfig(false).logger,
     };
     const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(

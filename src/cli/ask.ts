@@ -202,6 +202,7 @@ async function main(): Promise<void> {
 
     const bootstrap = await bootstrapCli<CliOptions, AskCliHistoryStoreContext>({
       argv,
+      logger,
       logLabel: ASK_LOG_LABEL,
       parseArgs,
       historyContextSchema: askCliHistoryContextSchema,
@@ -234,6 +235,7 @@ async function main(): Promise<void> {
       defaults,
       {
         printHelp: outputHelp,
+        logger,
       },
       configEnv,
     );

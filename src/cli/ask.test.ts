@@ -17,8 +17,6 @@ import type { CliLogger } from "../foundation/logger/types.js";
 type TestHistoryEntry = HistoryEntry<AskCliHistoryContext>;
 type HistoryStoreLike = HistoryStore<AskCliHistoryContext>;
 
-const noopDeps = { printHelp: () => {} };
-
 function createDefaults(): CliDefaults {
   return {
     modelMain: "gpt-5-main",
@@ -120,6 +118,9 @@ function createLoggerConfig(debugEnabled = false): CliLoggerConfig {
     debugEnabled,
   };
 }
+
+const noopLogger = createLoggerConfig(false).logger;
+const noopDeps = { printHelp: () => {}, logger: noopLogger };
 
 describe("parseArgs", () => {
   it("短縮フラグを束ねた記法を解釈できる", () => {

@@ -94,16 +94,18 @@ export async function bootstrapCli<TOptions extends CliOptions, THistoryContext 
     ...params.configEnvOptions,
   });
   const defaults = loadDefaults(configEnv);
-  console.log(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
+  params.logger.info(`${params.logLabel} history_index: ${defaults.historyIndexPath}`);
 
   const options = params.parseArgs(params.argv, defaults, configEnv);
   const promptPath = resolvePromptPath(options.taskMode, defaults.promptsDir);
   const systemPrompt = loadPrompt(options.taskMode, defaults.promptsDir);
   if (systemPrompt) {
     const bytes = Buffer.byteLength(systemPrompt, "utf8");
-    console.log(`${params.logLabel} system_prompt: loaded (${bytes} bytes) path=${promptPath}`);
+    params.logger.info(
+      `${params.logLabel} system_prompt: loaded (${bytes} bytes) path=${promptPath}`,
+    );
   } else {
-    console.error(`${params.logLabel} system_prompt: not found or empty path=${promptPath}`);
+    params.logger.warn(`${params.logLabel} system_prompt: not found or empty path=${promptPath}`);
   }
 
   if (options.helpRequested) {
