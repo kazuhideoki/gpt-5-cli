@@ -42,6 +42,8 @@ export interface CliLoggerConfig {
   logger: CliLogger;
   /** 既存メッセージと互換性を保つためのラベル。 */
   logLabel: string;
+  /** デバッグ出力を有効化するか。 */
+  debugEnabled: boolean;
 }
 
 /**

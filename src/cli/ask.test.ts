@@ -259,7 +259,7 @@ describe("buildRequest", () => {
       inputText: "最初の質問",
       systemPrompt: "system message",
       defaults,
-      logLabel: "[test-cli]",
+    logLabel: "[test-cli]",
       configEnv,
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
