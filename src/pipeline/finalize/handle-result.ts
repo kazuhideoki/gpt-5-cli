@@ -37,6 +37,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     if (deliverResult.copied) {
       copied = true;
     }
+    // ログをパースしやすいように、成果物に関するメトリクスを単一行へまとめる。
     const outputLabelParts: string[] = [
       `${FINALIZE_LOG_LABEL} output file: ${filePath ?? "none"}`,
       `bytes: ${typeof bytesWritten === "number" ? bytesWritten : "n/a"}`,
