@@ -7,6 +7,41 @@ import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
+type LoggerMessages = Record<"info" | "warn" | "error" | "debug", string[]>;
+
+function createTestLoggerConfig(
+  overrides: { logLabel?: string; debugEnabled?: boolean } = {},
+): { config: CliLoggerConfig; messages: LoggerMessages } {
+  const messages: LoggerMessages = {
+    info: [],
+    warn: [],
+    error: [],
+    debug: [],
+  };
+
+  const loggerRecord: Record<string, any> = {
+    level: "info",
+    transports: [],
+    log: () => undefined,
+  };
+
+  for (const level of ["info", "warn", "error", "debug"] as const) {
+    loggerRecord[level] = (message: unknown, ..._meta: unknown[]) => {
+      messages[level].push(String(message ?? ""));
+      return loggerRecord;
+    };
+  }
+
+  return {
+    config: {
+      logger: loggerRecord as CliLogger,
+      logLabel: overrides.logLabel ?? "[agent-test]",
+      debugEnabled: overrides.debugEnabled ?? false,
+    },
+    messages,
+  };
+}
+
 class FakeResponsesClient {
   public readonly createCalls: any[] = [];
 
@@ -58,32 +93,15 @@ const BASE_REQUEST: ResponseCreateParamsNonStreaming = {
   ],
 };
 
-function createLoggerConfig(overrides: Partial<CliLoggerConfig> = {}): CliLoggerConfig {
-  const logger = {
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    debug: () => undefined,
-    level: "info",
-    transports: [],
-    log: () => undefined,
-  } as unknown as CliLogger;
-  return {
-    logger,
-    logLabel: "[agent-test]",
-    debugEnabled: false,
-    ...overrides,
-  };
-}
-
 describe("runAgentConversation", () => {
   it("Responses API 互換レスポンスから最終出力と responseId を取得する", async () => {
     const client = new FakeOpenAI();
+    const { config: loggerConfig } = createTestLoggerConfig();
     const result = await runAgentConversation({
       client: client as unknown as OpenAI,
       request: BASE_REQUEST,
       options: BASE_OPTIONS,
-      loggerConfig: createLoggerConfig(),
+      loggerConfig,
       agentTools: [] as AgentsSdkTool[],
       maxTurns: 2,
     });
@@ -101,11 +119,12 @@ describe("runAgentConversation", () => {
 
   it("maxTurns を undefined にしても実行できる", async () => {
     const client = new FakeOpenAI();
+    const { config: loggerConfig } = createTestLoggerConfig();
     const result = await runAgentConversation({
       client: client as unknown as OpenAI,
       request: BASE_REQUEST,
       options: BASE_OPTIONS,
-      loggerConfig: createLoggerConfig(),
+      loggerConfig,
       agentTools: [] as AgentsSdkTool[],
       maxTurns: undefined,
     });
@@ -132,7 +151,7 @@ describe("runAgentConversation", () => {
         client: client as unknown as OpenAI,
         request,
         options: BASE_OPTIONS,
-        loggerConfig: createLoggerConfig(),
+        loggerConfig: createTestLoggerConfig().config,
         agentTools: [] as AgentsSdkTool[],
         maxTurns: undefined,
       }),
@@ -156,11 +175,12 @@ describe("runAgentConversation", () => {
     };
 
     try {
+      const { config: loggerConfig } = createTestLoggerConfig();
       const result = await runAgentConversation({
         client: client as unknown as OpenAI,
         request: BASE_REQUEST,
         options: { ...BASE_OPTIONS, debug: false },
-        loggerConfig: createLoggerConfig(),
+        loggerConfig,
         agentTools: [] as AgentsSdkTool[],
         maxTurns: 1,
       });
@@ -173,5 +193,19 @@ describe("runAgentConversation", () => {
     }
   });
 
-  it("loggerConfig.debugEnabled が true のときにデバッグログを記録する");
+  it("loggerConfig.debugEnabled が true のときにデバッグログを記録する", async () => {
+    const client = new FakeOpenAI();
+    const { config: loggerConfig, messages } = createTestLoggerConfig({ debugEnabled: true });
+
+    await runAgentConversation({
+      client: client as unknown as OpenAI,
+      request: BASE_REQUEST,
+      options: { ...BASE_OPTIONS, debug: true },
+      loggerConfig,
+      agentTools: [] as AgentsSdkTool[],
+      maxTurns: undefined,
+    });
+
+    expect(messages.debug.some((message) => message.includes("agent_max_turns"))).toBe(true);
+  });
 });

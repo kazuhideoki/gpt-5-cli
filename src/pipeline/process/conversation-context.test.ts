@@ -2,28 +2,44 @@ import { describe, expect, it } from "bun:test";
 import type { CliOptions } from "../../types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { computeContext } from "./conversation-context.js";
-import type { CliLoggerConfig } from "../../foundation/logger/types.js";
-import type { CliLogger } from "../../foundation/logger/types.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
 interface TestHistoryTask {
   note?: string;
 }
 
-function createLoggerConfig(partial?: Partial<CliLoggerConfig>): CliLoggerConfig {
-  const baseLogger = {
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-    debug: () => undefined,
+type LoggerMessages = Record<"info" | "warn" | "error" | "debug", string[]>;
+
+function createTestLoggerConfig(
+  overrides: { logLabel?: string; debugEnabled?: boolean } = {},
+): { config: CliLoggerConfig; messages: LoggerMessages } {
+  const messages: LoggerMessages = {
+    info: [],
+    warn: [],
+    error: [],
+    debug: [],
+  };
+
+  const loggerRecord: Record<string, any> = {
     level: "info",
     transports: [],
     log: () => undefined,
-  } as unknown as CliLogger;
+  };
+
+  for (const level of ["info", "warn", "error", "debug"] as const) {
+    loggerRecord[level] = (message: unknown, ..._meta: unknown[]) => {
+      messages[level].push(String(message ?? ""));
+      return loggerRecord;
+    };
+  }
+
   return {
-    logger: baseLogger,
-    logLabel: "[test-cli]",
-    debugEnabled: false,
-    ...partial,
+    config: {
+      logger: loggerRecord as CliLogger,
+      logLabel: overrides.logLabel ?? "[test-cli]",
+      debugEnabled: overrides.debugEnabled ?? false,
+    },
+    messages,
   };
 }
 
@@ -67,7 +83,7 @@ describe("computeContext", () => {
     const historyStore = {
       findLatest: () => undefined,
     } as unknown as HistoryStore<TestHistoryTask>;
-    const loggerConfig = createLoggerConfig();
+    const { config: loggerConfig } = createTestLoggerConfig();
 
     const context = computeContext({
       options,
@@ -110,7 +126,7 @@ describe("computeContext", () => {
     const historyStore = {
       findLatest: () => latestEntry,
     } as unknown as HistoryStore<TestHistoryTask>;
-    const loggerConfig = createLoggerConfig();
+    const { config: loggerConfig } = createTestLoggerConfig();
 
     const context = computeContext({
       options,
@@ -140,5 +156,25 @@ describe("computeContext", () => {
     expect(synchronized).toBe(true);
   });
 
-  it("CLI 層から注入した loggerConfig の logLabel を警告ログに利用する");
+  it("loggerConfig 経由で warn ログを出力する", () => {
+    const options = createOptions({
+      continueConversation: true,
+      hasExplicitHistory: false,
+    });
+    const historyStore = {
+      findLatest: () => undefined,
+    } as unknown as HistoryStore<TestHistoryTask>;
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
+
+    computeContext({
+      options,
+      historyStore,
+      inputText: "次の質問",
+      loggerConfig,
+    });
+
+    expect(
+      messages.warn.some((message) => message.includes("継続できる履歴が見つかりません")),
+    ).toBe(true);
+  });
 });
