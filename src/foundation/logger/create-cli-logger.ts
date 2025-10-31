@@ -92,6 +92,7 @@ function extractMetadata(info: TransformableInfo): string | undefined {
   }
 
   const metadata: Record<string, unknown> = {};
+  // format.splat() が配列展開した要素に付ける numeric キーは後で metadata.splat に集約する。
   const shouldSkipKey = (key: string) =>
     Array.isArray(splat) && /^[0-9]+$/.test(key) && Number.parseInt(key, 10) < splat.length;
 
