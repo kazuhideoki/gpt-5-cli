@@ -31,7 +31,7 @@ describe("createCliLogger", () => {
   });
 
   it("モード情報をメタデータとして保持する", () => {
-    const logger = createCliLogger({ task: "mermaid", label: "mermaid", debug: false });
+    const logger = createCliLogger({ task: "mermaid", label: "mermaid-cli", debug: false });
     expect(logger.defaultMeta).toEqual({ task: "mermaid" });
   });
 });
