@@ -155,38 +155,31 @@ afterEach(() => {
 
 describe("resolveInputOrExecuteHistoryAction", () => {
   it("deleteIndexが指定されたとき履歴を削除しloggerで通知して終了する", async () => {
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(String(args[0]));
-    };
     const deleteByNumber = mock((index: number) => {
       expect(index).toBe(2);
       return { removedTitle: "古い会話", removedId: "res-1" };
     });
     const historyStore = createHistoryStore({ deleteByNumber });
+    const logger = createStubLogger();
     const deps = createDeps({
       printHelp: mock((defaultsArg: CliDefaults, optionsArg: CliOptions) => {
         throw new Error(
           `printHelp should not be called: ${defaultsArg.modelMain} ${optionsArg.model}`,
         );
       }),
+      logger,
     });
 
-    try {
-      const result = await resolveInputOrExecuteHistoryAction(
-        createOptions({ deleteIndex: 2 }),
-        historyStore,
-        defaults,
-        deps,
-        createConfigEnv(),
-      );
-      expect(result).toEqual({ kind: "exit", code: 0 });
-      expect(deleteByNumber).toHaveBeenCalledTimes(1);
-      expect(logs).toEqual(["削除しました: 2) 古い会話"]);
-    } finally {
-      console.log = originalLog;
-    }
+    const result = await resolveInputOrExecuteHistoryAction(
+      createOptions({ deleteIndex: 2 }),
+      historyStore,
+      defaults,
+      deps,
+      createConfigEnv(),
+    );
+    expect(result).toEqual({ kind: "exit", code: 0 });
+    expect(deleteByNumber).toHaveBeenCalledTimes(1);
+    expect(logger.infoMessages).toContainEqual(["削除しました: 2) 古い会話"]);
   });
 
   it("showIndexが指定されたとき履歴を表示して終了する", async () => {

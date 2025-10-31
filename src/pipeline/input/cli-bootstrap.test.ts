@@ -246,11 +246,59 @@ describe("bootstrapCli", () => {
     expect(result.options.args).toEqual(["--mode"]);
   });
 
-  it("loggerへhistory_indexをinfoレベルで出力する", () => {
-    // TODO: implement logger expectation
+  it("loggerへhistory_indexをinfoレベルで出力する", async () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
+    process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
+
+    const parseArgs = (
+      argv: string[],
+      defaults: CliDefaults,
+      _configEnv: ConfigEnvironment,
+    ): CliOptions => {
+      expect(argv).toEqual(["--ready"]);
+      return createOptions(defaults, { args: ["--ready"] });
+    };
+
+    await bootstrapCli({
+      argv: ["--ready"],
+      logger,
+      logLabel: "[test-cli]",
+      parseArgs,
+      historyContextSchema: z.object({}),
+    });
+
+    const expectedHistoryPath = path.resolve(resources.historyPath);
+    expect(logger.infoMessages).toContainEqual([
+      `[test-cli] history_index: ${expectedHistoryPath}`,
+    ]);
   });
 
-  it("system promptを読み込めなかった場合はlogger.warnで通知する", () => {
-    // TODO: implement logger expectation
+  it("system promptを読み込めなかった場合はlogger.warnで通知する", async () => {
+    process.env.GPT_5_CLI_HISTORY_INDEX_FILE = resources.historyPath;
+    process.env.GPT_5_CLI_PROMPTS_DIR = resources.promptsDir;
+    fs.rmSync(path.join(resources.promptsDir, "ask.md"), { force: true });
+
+    const parseArgs = (
+      argv: string[],
+      defaults: CliDefaults,
+      _configEnv: ConfigEnvironment,
+    ): CliOptions => {
+      expect(argv).toEqual(["--warn"]);
+      return createOptions(defaults, { args: ["--warn"] });
+    };
+
+    await bootstrapCli({
+      argv: ["--warn"],
+      logger,
+      logLabel: "[test-cli]",
+      parseArgs,
+      historyContextSchema: z.object({}),
+    });
+
+    const expectedPromptPath = path.resolve(resources.promptsDir, "ask.md");
+    expect(logger.warnMessages).toContainEqual([
+      `[test-cli] system_prompt: not found or empty path=${expectedPromptPath}`,
+    ]);
+    expect(logger.errorMessages).toEqual([]);
   });
 });
