@@ -310,7 +310,9 @@ export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
     throw new Error(`Error: 指定した d2 ファイルパスはディレクトリです: ${rawPath}`);
   }
   const relativePath = path.relative(normalizedRoot, absolutePath) || path.basename(absolutePath);
-  const htmlAbsolutePath = path.resolve(cwd, options.htmlOutputPath);
+  const htmlAbsolutePath = options.htmlOutputExplicit
+    ? path.resolve(cwd, options.htmlOutputPath)
+    : path.join(path.dirname(absolutePath), `${path.parse(absolutePath).name}.html`);
   const htmlRelative = path.relative(normalizedRoot, htmlAbsolutePath);
   const isHtmlInside =
     htmlRelative === "" || (!htmlRelative.startsWith("..") && !path.isAbsolute(htmlRelative));
@@ -322,8 +324,7 @@ export function ensureD2Context(options: D2CliOptions): D2ContextResolution {
   if (fs.existsSync(htmlAbsolutePath) && fs.statSync(htmlAbsolutePath).isDirectory()) {
     throw new Error(`Error: 指定した HTML 出力パスはディレクトリです: ${options.htmlOutputPath}`);
   }
-  const htmlRelativePath =
-    path.relative(normalizedRoot, htmlAbsolutePath) || path.basename(htmlAbsolutePath);
+  const htmlRelativePath = htmlRelative === "" ? path.basename(htmlAbsolutePath) : htmlRelative;
   const normalizedOptions: D2CliOptions = {
     ...options,
     artifactPath: relativePath,

@@ -337,6 +337,20 @@ describe("ensureD2Context", () => {
     expect(result.context.exists).toBe(false);
     expect(result.normalizedOptions.htmlOutputPath).toBe("diagram.html");
   });
+
+  it("履歴から復元した成果物に合わせて HTML 出力パスを再計算する", () => {
+    const options = createOptions({
+      artifactPath: "history/diagram.d2",
+      responseOutputPath: "history/diagram.d2",
+      htmlOutputPath: "output/d2/original.html",
+      htmlOutputExplicit: false,
+    });
+
+    const result = ensureD2Context(options);
+
+    expect(result.normalizedOptions.artifactPath).toBe("history/diagram.d2");
+    expect(result.normalizedOptions.htmlOutputPath).toBe("history/diagram.html");
+  });
 });
 
 describe("d2 main", () => {
