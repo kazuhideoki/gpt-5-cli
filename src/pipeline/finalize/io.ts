@@ -20,7 +20,7 @@ export type CopySource =
       filePath: string;
     };
 
-export interface DefaultOutputPathParams {
+interface DefaultOutputPathParams {
   /** CLI モード名（例: "d2"、"mermaid"、"sql"）。 */
   mode: string;
   /** 生成するファイル名の拡張子。ドットを含めない。 */
@@ -37,7 +37,7 @@ export interface DefaultOutputPathParams {
   configEnv: ConfigEnvironment;
 }
 
-export interface DefaultOutputPathResult {
+interface DefaultOutputPathResult {
   /** ワークスペース基準の相対パス。 */
   relativePath: string;
   /** 絶対パス。 */

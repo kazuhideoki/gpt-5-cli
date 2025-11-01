@@ -69,8 +69,6 @@ const baseHistoryEntrySchema = z.object({
   context: z.unknown().optional(),
 });
 
-export type HistoryTurn = CoreHistoryTurn;
-
 export type HistoryEntry<TContext = unknown> = CoreHistoryEntry<TContext>;
 
 /**

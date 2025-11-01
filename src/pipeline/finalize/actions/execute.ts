@@ -12,7 +12,7 @@ export const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
 /**
  * finalize アクション実行時に渡されるコンテキスト。
  */
-export interface ExecuteFinalizeActionContext {
+interface ExecuteFinalizeActionContext {
   /** finalize 層で使用する CLI ロガー。 */
   logger: CliLogger;
   /** finalize 層が参照する環境スナップショット。 */
@@ -24,7 +24,7 @@ export interface ExecuteFinalizeActionContext {
 /**
  * finalize アクションの実行結果。
  */
-export interface ExecuteFinalizeActionResult {
+interface ExecuteFinalizeActionResult {
   /** クリップボードコピーが発生した場合に true。 */
   copied: boolean;
 }

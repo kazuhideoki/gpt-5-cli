@@ -13,7 +13,7 @@ import { runCommand } from "./command.js";
 
 type SqlEngineKind = "postgresql" | "mysql";
 
-export interface SqlEnvironment {
+interface SqlEnvironment {
   dsn: string;
   engine: SqlEngineKind;
   /** sqruff バイナリへの解決結果。 */

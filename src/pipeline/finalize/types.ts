@@ -69,8 +69,6 @@ export interface ResultOutputResolution {
   artifactReferencePath: string;
 }
 
-export type FinalizeExitCode = 0 | 1;
-
 export type FinalizeCopySource = CopySource;
 
 export interface FinalizeDeliveryInstruction {
@@ -81,10 +79,8 @@ export interface FinalizeDeliveryInstruction {
   /**
    * 出力先を差し替えたい場合に利用する任意のハンドラー。
    */
-  handler: FinalizeDeliveryHandler | undefined;
+  handler: ((params: DeliverOutputParams) => Promise<DeliverOutputResult>) | undefined;
 }
-
-export type FinalizeDeliveryHandler = (params: DeliverOutputParams) => Promise<DeliverOutputResult>;
 
 export interface FinalizeHistoryEffect {
   /**
@@ -125,11 +121,11 @@ export interface FinalizeRequest {
   /**
    * finalize が返す終了コード。未指定時は 0。
    */
-  exitCode: FinalizeExitCode | undefined;
+  exitCode: 0 | 1 | undefined;
 }
 
 export interface FinalizeOutcome {
-  exitCode: FinalizeExitCode;
+  exitCode: 0 | 1;
   stdout: string;
   output:
     | {

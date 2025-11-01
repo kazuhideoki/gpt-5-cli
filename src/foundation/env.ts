@@ -11,8 +11,8 @@ import type { EffortLevel, VerbosityLevel } from "../types.js";
 const effortValues: readonly EffortLevel[] = ["low", "medium", "high"];
 const verbosityValues: readonly VerbosityLevel[] = ["low", "medium", "high"];
 
-export type EffortLevelValue = EffortLevel;
-export type VerbosityLevelValue = VerbosityLevel;
+type EffortLevelValue = EffortLevel;
+type VerbosityLevelValue = VerbosityLevel;
 
 const effortMessage = 'OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or "high".';
 const verbosityMessage = 'OPENAI_DEFAULT_VERBOSITY must be one of "low", "medium", or "high".';
