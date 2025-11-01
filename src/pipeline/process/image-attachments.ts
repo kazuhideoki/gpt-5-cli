@@ -83,7 +83,7 @@ export function prepareImageData(
     throw new Error(`Error: 画像ファイルの base64 エンコードに失敗しました: ${resolved}`);
   }
   const dataUrl = `data:${mime};base64,${base64}`;
-  const { logLabel } = loggerConfig;
-  console.log(`${logLabel} image_attached: ${resolved} (${mime})`);
+  const { logger } = loggerConfig;
+  logger.info(`image_attached: ${resolved} (${mime})`);
   return dataUrl;
 }

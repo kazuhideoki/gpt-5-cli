@@ -6,7 +6,6 @@
 import type { Command } from "commander";
 import type { CliDefaults, CommonCliOptions, TaskMode } from "../../types.js";
 import type { EffortLevel, VerbosityLevel } from "../../types.js";
-import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 export type { CliLoggerConfig } from "../../foundation/logger/types.js";
 
 /**

@@ -79,9 +79,10 @@ const originalStdoutWrite = process.stdout.write;
 
 type LoggerMessages = Record<"info" | "warn" | "error" | "debug", string[]>;
 
-function createTestLoggerConfig(
-  overrides: { logLabel?: string; debugEnabled?: boolean } = {},
-): { config: CliLoggerConfig; messages: LoggerMessages } {
+function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: boolean } = {}): {
+  config: CliLoggerConfig;
+  messages: LoggerMessages;
+} {
   const messages: LoggerMessages = {
     info: [],
     warn: [],

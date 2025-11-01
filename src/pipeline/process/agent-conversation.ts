@@ -50,7 +50,7 @@ interface RunAgentConversationParams<TOptions extends CliOptions> {
 export async function runAgentConversation<TOptions extends CliOptions>(
   params: RunAgentConversationParams<TOptions>,
 ): Promise<AgentConversationOutcome> {
-  const { client, request, options, loggerConfig, agentTools, maxTurns } = params;
+  const { client, request, loggerConfig, agentTools, maxTurns } = params;
   const logLabel = loggerConfig.logLabel;
   const messages = normalizeMessages(request.input);
   const instructions = buildInstructions(messages);
@@ -76,9 +76,9 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     outputType: "text",
   });
 
-  if (options.debug) {
-    console.error(
-      `${logLabel} debug: agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
+  if (loggerConfig.debugEnabled) {
+    loggerConfig.logger.debug(
+      `agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
     );
   }
   const runner = new Runner({ tracingDisabled: true });

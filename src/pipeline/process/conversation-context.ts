@@ -128,10 +128,9 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
   config,
   loggerConfig,
 }: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
-  const logLabel = config?.logLabel ?? loggerConfig.logLabel;
-  // TODO 横断的な logger を別途定義する
+  const { logger } = loggerConfig;
   const logWarning = (message: string): void => {
-    console.error(`${logLabel} ${message}`);
+    logger.warn(message);
   };
 
   let activeEntry = initialActiveEntry;
@@ -145,7 +144,7 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      logWarning("warn: 継続できる履歴が見つかりません（新規開始）。");
+      logWarning("継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
