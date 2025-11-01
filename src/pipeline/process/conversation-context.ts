@@ -1,6 +1,6 @@
 // conversation-context.ts: 履歴ストアを元に CLI 用会話コンテキストを構築するユーティリティ。
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
-import type { CliLoggerConfig } from "../../foundation/logger/types.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
 /**
@@ -77,8 +77,8 @@ interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = u
   options: TOptions;
   /** 選択中の履歴エントリ。 */
   activeEntry: HistoryEntry<THistoryTask>;
-  /** 警告ログを出力する関数。 */
-  logWarning: (message: string) => void;
+  /** 警告や情報ログを書き出すロガー。 */
+  logger: CliLogger;
 }
 
 /**
@@ -155,9 +155,7 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
     config?.synchronizeWithHistory?.({
       options,
       activeEntry,
-      logWarning: (message) => {
-        logger.warn(message);
-      },
+      logger,
     });
 
     const {
