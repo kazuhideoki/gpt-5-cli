@@ -646,12 +646,18 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: LOG_LABEL,
+      debugEnabled: options.debug,
+    };
+    updateCliLoggerLevel(logger, options.debug ? "debug" : "info");
     const client = createOpenAIClient({ configEnv });
 
     setSqlEnvironment(undefined);
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, loggerConfig);
       return;
     }
 
@@ -697,6 +703,7 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: sqlContext, normalizedOptions } = ensureSqlContext(options);
@@ -717,14 +724,14 @@ async function main(): Promise<void> {
       dsn: sqlEnv.dsn,
       engine: sqlEnv.engine,
     };
+    loggerConfig.debugEnabled = resolvedOptionsWithDsn.debug;
     updateCliLoggerLevel(logger, resolvedOptionsWithDsn.debug ? "debug" : "info");
-    const loggerConfig: CliLoggerConfig = {
-      logger,
-      logLabel: LOG_LABEL,
-      debugEnabled: resolvedOptionsWithDsn.debug,
-    };
     setSqlEnvironment({ dsn: sqlEnv.dsn, engine: sqlEnv.engine, sqruffBin });
-    const imageDataUrl = prepareImageData(resolvedOptionsWithDsn.imagePath, LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(
+      resolvedOptionsWithDsn.imagePath,
+      loggerConfig,
+      configEnv,
+    );
     const toolset = buildSqlConversationToolset({
       loggerConfig,
       engine: sqlEnv.engine,
@@ -736,7 +743,6 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildSqlInstructionMessages({
         connection: sqlEnv.connection,
@@ -746,13 +752,14 @@ async function main(): Promise<void> {
         artifactPath: resolvedOptionsWithDsn.artifactPath,
       }),
       toolset,
+      loggerConfig,
     });
 
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptionsWithDsn,
-      logLabel: LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptionsWithDsn.maxIterations,
     });

@@ -1,5 +1,6 @@
 // conversation-context.ts: 履歴ストアを元に CLI 用会話コンテキストを構築するユーティリティ。
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 import type { CliOptions, ConversationContext, OpenAIInputMessage } from "../../types.js";
 
 /**
@@ -76,8 +77,8 @@ interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = u
   options: TOptions;
   /** 選択中の履歴エントリ。 */
   activeEntry: HistoryEntry<THistoryTask>;
-  /** 警告ログを出力する関数。 */
-  logWarning: (message: string) => void;
+  /** 警告や情報ログを書き出すロガー。 */
+  logger: CliLogger;
 }
 
 /**
@@ -108,6 +109,8 @@ export interface ComputeContextParams<TOptions extends CliOptions, THistoryTask 
   explicitPrevTitle?: string;
   /** CLI 固有の挙動調整が不要な場合もあるため任意。 */
   config?: ComputeContextConfig<TOptions, THistoryTask>;
+  /** CLI 層から注入されるロガー設定。 */
+  loggerConfig: CliLoggerConfig;
 }
 
 /**
@@ -123,12 +126,9 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
   explicitPrevId,
   explicitPrevTitle,
   config,
+  loggerConfig,
 }: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
-  const logLabel = config?.logLabel ?? "[gpt-5-cli]";
-  // TODO 横断的な logger を別途定義する
-  const logWarning = (message: string): void => {
-    console.error(`${logLabel} ${message}`);
-  };
+  const { logger } = loggerConfig;
 
   let activeEntry = initialActiveEntry;
   let previousResponseId = explicitPrevId;
@@ -141,7 +141,7 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      logWarning("warn: 継続できる履歴が見つかりません（新規開始）。");
+      logger.warn("継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
@@ -155,7 +155,7 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
     config?.synchronizeWithHistory?.({
       options,
       activeEntry,
-      logWarning,
+      logger,
     });
 
     const {

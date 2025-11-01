@@ -10,6 +10,7 @@ import { formatModelValue, formatScaleValue } from "./log-format.js";
 import { formatTurnsForSummary } from "./history-summary.js";
 import type { HistoryStore } from "../history/store.js";
 import type { ConversationToolset } from "./tools/index.js";
+import type { CliLoggerConfig } from "../../foundation/logger/types.js";
 import type {
   CliDefaults,
   CliOptions,
@@ -34,8 +35,8 @@ interface BuildRequestParams {
   imageDataUrl: string | undefined;
   /** 既定モデルや推論スケールのログ出力に使用する環境値。 */
   defaults: CliDefaults | undefined;
-  /** ログ出力に利用する CLI 固有ラベル。 */
-  logLabel: string;
+  /** CLI 層から注入されるロガー設定。 */
+  loggerConfig: CliLoggerConfig;
   /** カラー設定などログ整形に利用する環境スナップショット。 */
   configEnv: ConfigEnvironment;
   /** モード固有の追加システムメッセージ群。 */
@@ -64,11 +65,12 @@ export function buildRequest({
   systemPrompt,
   imageDataUrl,
   defaults,
-  logLabel,
   additionalSystemMessages,
   toolset,
   configEnv,
+  loggerConfig,
 }: BuildRequestParams): BuildRequestArtifacts {
+  const { logger } = loggerConfig;
   const modelLog = formatModelValue(
     options.model,
     defaults?.modelMain ?? "",
@@ -79,11 +81,11 @@ export function buildRequest({
   const effortLog = formatScaleValue(options.effort, configEnv);
   const verbosityLog = formatScaleValue(options.verbosity, configEnv);
 
-  console.log(
-    `${logLabel} model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
+  logger.info(
+    `model=${modelLog}, effort=${effortLog}, verbosity=${verbosityLog}, continue=${options.continueConversation}`,
   );
-  console.log(
-    `${logLabel} resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
+  logger.info(
+    `resume_index=${options.resumeIndex ?? ""}, resume_list_only=${options.resumeListOnly}, delete_index=${
       options.deleteIndex ?? ""
     }`,
   );
@@ -136,9 +138,7 @@ export function buildRequest({
     !context.previousResponseId &&
     !context.resumeSummaryText
   ) {
-    console.error(
-      `${logLabel} warn: 直前の response.id が見つからないため、新規会話として開始します`,
-    );
+    logger.warn("直前の response.id が見つからないため、新規会話として開始します");
   }
 
   return {
@@ -192,8 +192,9 @@ export async function performCompact<THistoryTask = unknown>(
   defaults: CliDefaults,
   historyStore: HistoryStore<THistoryTask>,
   client: OpenAI,
-  logLabel: string,
+  loggerConfig: CliLoggerConfig,
 ): Promise<void> {
+  const { logger } = loggerConfig;
   // TODO(pipeline/finalize): 履歴の保存と標準出力書き込みは finalize 層へ移す。
   if (typeof options.compactIndex !== "number") {
     throw new Error("Error: --compact の履歴番号は正の整数で指定してください");
@@ -266,6 +267,6 @@ export async function performCompact<THistoryTask = unknown>(
     return item;
   });
   historyStore.saveEntries(nextEntries);
-  console.log(`${logLabel} compact: history=${options.compactIndex}, summarized=${turns.length}`);
+  logger.info(`compact: history=${options.compactIndex}, summarized=${turns.length}`);
   process.stdout.write(`${summaryText}\n`);
 }

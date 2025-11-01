@@ -4,23 +4,61 @@ import os from "node:os";
 import path from "node:path";
 import { prepareImageData } from "./image-attachments.js";
 import type { ConfigEnvironment } from "../../types.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
+
+type LoggerMessages = Record<"info" | "warn" | "error" | "debug", string[]>;
+
+function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: boolean } = {}): {
+  config: CliLoggerConfig;
+  messages: LoggerMessages;
+} {
+  const messages: LoggerMessages = {
+    info: [],
+    warn: [],
+    error: [],
+    debug: [],
+  };
+
+  const debugEnabled = overrides.debugEnabled ?? false;
+  const loggerRecord: Record<string, any> = {
+    level: debugEnabled ? "debug" : "info",
+    transports: [],
+    log: () => undefined,
+  };
+
+  for (const level of ["info", "warn", "error", "debug"] as const) {
+    loggerRecord[level] = (message: unknown, ..._meta: unknown[]) => {
+      if (level === "debug" && !debugEnabled) {
+        return loggerRecord;
+      }
+      messages[level].push(String(message ?? ""));
+      return loggerRecord;
+    };
+  }
+
+  return {
+    config: {
+      logger: loggerRecord as CliLogger,
+      logLabel: overrides.logLabel ?? "[test-cli]",
+      debugEnabled,
+    },
+    messages,
+  };
+}
 
 const SCREENSHOT_NAME = "スクリーンショット 2025-01-01.png";
 
 let originalHome: string | undefined;
 let tempHomeDir: string | undefined;
-let originalConsoleLog: typeof console.log;
 
 beforeEach(() => {
   originalHome = process.env.HOME;
   tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpt5-cli-home-"));
   process.env.HOME = tempHomeDir;
   fs.mkdirSync(path.join(tempHomeDir, "Desktop"), { recursive: true });
-  originalConsoleLog = console.log;
 });
 
 afterEach(() => {
-  console.log = originalConsoleLog;
   if (tempHomeDir && fs.existsSync(tempHomeDir)) {
     fs.rmSync(tempHomeDir, { recursive: true, force: true });
   }
@@ -35,17 +73,13 @@ describe("prepareImageData", () => {
     const imagePath = path.join(process.env.HOME, "sample.png");
     fs.writeFileSync(imagePath, Buffer.from("fake-png-data"));
 
-    const logs: string[] = [];
-    console.log = (message?: unknown) => {
-      logs.push(String(message ?? ""));
-    };
-
     const configEnv = createConfigEnv({ HOME: process.env.HOME });
-    const result = prepareImageData(imagePath, "[test-cli]", configEnv);
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
+    const result = prepareImageData(imagePath, loggerConfig, configEnv);
 
     expect(result).toBeDefined();
     expect(result?.startsWith("data:image/png;base64,")).toBe(true);
-    expect(logs.some((line) => line.includes("image_attached"))).toBe(true);
+    expect(messages.info.some((line) => line.includes("image_attached"))).toBe(true);
   });
 
   it("デスクトップ上のスクリーンショット名を解決できる", () => {
@@ -56,7 +90,8 @@ describe("prepareImageData", () => {
     fs.writeFileSync(screenshotPath, Buffer.from("fake-screenshot"));
 
     const configEnv = createConfigEnv({ HOME: process.env.HOME });
-    const result = prepareImageData(SCREENSHOT_NAME, "[test-cli]", configEnv);
+    const { config: loggerConfig } = createTestLoggerConfig();
+    const result = prepareImageData(SCREENSHOT_NAME, loggerConfig, configEnv);
 
     expect(result).toBeDefined();
     expect(result?.startsWith("data:image/png;base64,")).toBe(true);
@@ -68,7 +103,8 @@ describe("prepareImageData", () => {
     }
     const outsidePath = path.join(tempHomeDir, "..", "outside.png");
     const configEnv = createConfigEnv({ HOME: tempHomeDir });
-    expect(() => prepareImageData(outsidePath, "[test-cli]", configEnv)).toThrow(
+    const { config: loggerConfig } = createTestLoggerConfig();
+    expect(() => prepareImageData(outsidePath, loggerConfig, configEnv)).toThrow(
       "Error: -i で指定できるフルパスは",
     );
   });
@@ -85,12 +121,26 @@ describe("prepareImageData", () => {
     process.env.HOME = tempHomeDir;
 
     try {
-      const result = prepareImageData(imagePath, "[test-cli]", configEnv);
+      const { config: loggerConfig } = createTestLoggerConfig();
+      const result = prepareImageData(imagePath, loggerConfig, configEnv);
       expect(result).toBeDefined();
       expect(result?.startsWith("data:image/png;base64,")).toBe(true);
     } finally {
       fs.rmSync(configHome, { recursive: true, force: true });
     }
+  });
+
+  it("画像パス未指定ならログを出力しない", () => {
+    if (!process.env.HOME) {
+      throw new Error("HOME must be set for test");
+    }
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
+    const configEnv = createConfigEnv({ HOME: process.env.HOME });
+
+    const result = prepareImageData(undefined, loggerConfig, configEnv);
+
+    expect(result).toBeUndefined();
+    expect(messages.info).toHaveLength(0);
   });
 });
 

@@ -201,7 +201,7 @@ describe("sql CLI integration", () => {
 
     const summary = await runSqlCli(["--compact", "1"], env);
     expect(summary.exitCode).toBe(0);
-    expect(summary.stdout).toContain("[gpt-5-cli-sql] compact: history=1");
+    expect(summary.stdout).toMatch(/\[gpt-5-cli-sql].*compact: history=1/);
     expect(extractUserLines(summary.stdout).at(-1)).toBe("SQL Summary");
 
     const historyAfterSummary = JSON.parse(fs.readFileSync(historyPath, "utf8")) as Array<any>;

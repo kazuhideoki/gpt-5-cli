@@ -11,6 +11,7 @@ import type {
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import type { Response } from "openai/resources/responses/responses";
 import { buildRequest, extractResponseText, performCompact } from "./responses.js";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
 interface TestHistoryTask {
   label?: string;
@@ -75,18 +76,52 @@ const DEFAULTS: CliDefaults = {
 
 let restoredStdout = false;
 const originalStdoutWrite = process.stdout.write;
-let restoredConsoleLog = false;
-const originalConsoleLog = console.log;
+
+type LoggerMessages = Record<"info" | "warn" | "error" | "debug", string[]>;
+
+function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: boolean } = {}): {
+  config: CliLoggerConfig;
+  messages: LoggerMessages;
+} {
+  const messages: LoggerMessages = {
+    info: [],
+    warn: [],
+    error: [],
+    debug: [],
+  };
+
+  const debugEnabled = overrides.debugEnabled ?? false;
+  const loggerRecord: Record<string, any> = {
+    level: debugEnabled ? "debug" : "info",
+    transports: [],
+    log: () => undefined,
+  };
+
+  for (const level of ["info", "warn", "error", "debug"] as const) {
+    loggerRecord[level] = (message: unknown, ..._meta: unknown[]) => {
+      if (level === "debug" && !debugEnabled) {
+        return loggerRecord;
+      }
+      messages[level].push(String(message ?? ""));
+      return loggerRecord;
+    };
+  }
+
+  return {
+    config: {
+      logger: loggerRecord as CliLogger,
+      logLabel: overrides.logLabel ?? "[test-cli]",
+      debugEnabled,
+    },
+    messages,
+  };
+}
 
 afterEach(() => {
-  // 念のため stdout / console を元に戻す
+  // 念のため stdout を元に戻す
   if (restoredStdout) {
     process.stdout.write = originalStdoutWrite;
     restoredStdout = false;
-  }
-  if (restoredConsoleLog) {
-    console.log = originalConsoleLog;
-    restoredConsoleLog = false;
   }
 });
 
@@ -110,13 +145,15 @@ describe("buildRequest", () => {
       agents: [],
     };
 
+    const { config: loggerConfig } = createTestLoggerConfig();
+
     const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: "質問内容",
       systemPrompt: "system message",
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig,
       configEnv: createConfigEnv(),
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
@@ -145,13 +182,15 @@ describe("buildRequest", () => {
       agents: [],
     };
 
+    const { config: loggerConfig } = createTestLoggerConfig();
+
     const { request } = buildRequest({
       options,
       context,
       inputText: "質問内容",
       systemPrompt: undefined,
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig,
       configEnv: createConfigEnv(),
       imageDataUrl: undefined,
       additionalSystemMessages: undefined,
@@ -193,13 +232,15 @@ describe("buildRequest", () => {
       agents: [agentTool],
     };
 
+    const { config: loggerConfig } = createTestLoggerConfig();
+
     const { request, agentTools } = buildRequest({
       options,
       context,
       inputText: "続きの質問",
       systemPrompt: "system message",
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig,
       additionalSystemMessages: additional,
       imageDataUrl: "data:image/png;base64,AAA",
       configEnv: createConfigEnv(),
@@ -239,6 +280,8 @@ describe("buildRequest", () => {
       agents: [agentTool],
     };
 
+    const { config: loggerConfig } = createTestLoggerConfig();
+
     const { request, agentTools } = buildRequest({
       options,
       context,
@@ -246,7 +289,7 @@ describe("buildRequest", () => {
       systemPrompt: undefined,
       imageDataUrl: undefined,
       defaults: DEFAULTS,
-      logLabel: "[test-cli]",
+      loggerConfig,
       configEnv: createConfigEnv(),
       additionalSystemMessages: undefined,
       toolset,
@@ -254,6 +297,54 @@ describe("buildRequest", () => {
 
     expect(request.tools).toBe(toolset.response);
     expect(agentTools).toBe(toolset.agents);
+  });
+
+  it("loggerConfig を使ってモデル情報を info ログに記録する", () => {
+    const options = createOptions();
+    const context = createContext();
+    const toolset = { response: [], agents: [] };
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
+
+    buildRequest({
+      options,
+      context,
+      inputText: "ログ確認",
+      systemPrompt: undefined,
+      defaults: DEFAULTS,
+      loggerConfig,
+      configEnv: createConfigEnv(),
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
+      toolset,
+    });
+
+    expect(messages.info.some((message) => message.includes("model="))).toBe(true);
+  });
+
+  it("previous_response_id が無い継続会話では warn ログを記録する", () => {
+    const options = createOptions({ continueConversation: true });
+    const context = createContext({
+      isNewConversation: false,
+      previousResponseId: undefined,
+      resumeSummaryText: undefined,
+    });
+    const toolset = { response: [], agents: [] };
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
+
+    buildRequest({
+      options,
+      context,
+      inputText: "warn 確認",
+      systemPrompt: undefined,
+      defaults: DEFAULTS,
+      loggerConfig,
+      configEnv: createConfigEnv(),
+      imageDataUrl: undefined,
+      additionalSystemMessages: undefined,
+      toolset,
+    });
+
+    expect(messages.warn.some((message) => message.includes("新規会話として開始"))).toBe(true);
   });
 });
 
@@ -312,11 +403,7 @@ describe("performCompact", () => {
       return true;
     }) as typeof process.stdout.write;
     restoredStdout = true;
-    const logs: string[] = [];
-    console.log = (message?: unknown) => {
-      logs.push(String(message ?? ""));
-    };
-    restoredConsoleLog = true;
+    const { config: loggerConfig, messages } = createTestLoggerConfig();
 
     const client = {
       responses: {
@@ -326,7 +413,7 @@ describe("performCompact", () => {
       },
     } as unknown as OpenAI;
 
-    await performCompact(options, DEFAULTS, historyStore, client, "[test-cli]");
+    await performCompact(options, DEFAULTS, historyStore, client, loggerConfig);
 
     expect(savedEntries).not.toBeNull();
     const updated = savedEntries?.find((entry) => entry.last_response_id === "resp_target");
@@ -336,7 +423,7 @@ describe("performCompact", () => {
     expect(summaryTurn?.text).toBe("要約結果");
     expect(typeof summaryTurn?.at).toBe("string");
     expect(stdoutText.trim()).toBe("要約結果");
-    expect(logs.some((line) => line.includes("compact"))).toBe(true);
+    expect(messages.info.some((line) => line.includes("compact"))).toBe(true);
   });
 });
 function createConfigEnv(values: Record<string, string | undefined> = {}): ConfigEnvironment {
