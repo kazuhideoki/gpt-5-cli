@@ -201,5 +201,4 @@ describe("handleResult", () => {
     expect(copied).toEqual(["first", "second"]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
-
 });

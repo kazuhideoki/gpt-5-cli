@@ -7,7 +7,9 @@ import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
 import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
 
-function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: boolean } = {}): CliLoggerConfig {
+function createTestLoggerConfig(
+  overrides: { logLabel?: string; debugEnabled?: boolean } = {},
+): CliLoggerConfig {
   const debugEnabled = overrides.debugEnabled ?? false;
   const loggerRecord: Record<string, any> = {
     level: debugEnabled ? "debug" : "info",

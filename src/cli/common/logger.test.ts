@@ -34,7 +34,6 @@ describe("createCliToolLoggerOptions", () => {
     executionContext.log("tool runs");
     expect(stub.infoCalls).toEqual(["tool runs"]);
   });
-
 });
 
 describe("updateCliLoggerLevel", () => {
