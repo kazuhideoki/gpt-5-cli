@@ -10,7 +10,6 @@ import type {
   ConfigEnvironment,
   EffortLevel,
   HistoryEntry as CoreHistoryEntry,
-  HistoryTurn as CoreHistoryTurn,
   VerbosityLevel,
 } from "../../types.js";
 
@@ -68,8 +67,6 @@ const baseHistoryEntrySchema = z.object({
   turns: z.array(historyTurnSchema).optional(),
   context: z.unknown().optional(),
 });
-
-export type HistoryTurn = CoreHistoryTurn;
 
 export type HistoryEntry<TContext = unknown> = CoreHistoryEntry<TContext>;
 

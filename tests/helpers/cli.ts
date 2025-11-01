@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export type CliResult = {
+type CliResult = {
   stdout: string;
   stderr: string;
   exitCode: number;

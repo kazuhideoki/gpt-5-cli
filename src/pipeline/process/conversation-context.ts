@@ -84,7 +84,7 @@ interface SynchronizeHistoryParams<TOptions extends CliOptions, THistoryTask = u
 /**
  * computeContext の挙動を調整する追加設定。
  */
-export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
+interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask = unknown> {
   /** ログ出力に利用する CLI 固有ラベル。 */
   logLabel: string;
   /** 履歴オプションを更新するときに呼び出す同期ハンドラ。CLI によっては不要なため任意。 */
@@ -94,7 +94,7 @@ export interface ComputeContextConfig<TOptions extends CliOptions, THistoryTask 
 /**
  * computeContext へ渡す引数群。
  */
-export interface ComputeContextParams<TOptions extends CliOptions, THistoryTask = unknown> {
+interface ComputeContextParams<TOptions extends CliOptions, THistoryTask = unknown> {
   /** CLI オプション（履歴継承フラグを含む）。 */
   options: TOptions;
   /** 履歴の検索・選択に使用するストア。 */

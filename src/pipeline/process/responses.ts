@@ -48,7 +48,7 @@ interface BuildRequestParams {
 /**
  * buildRequest が組み立てたリクエストと、エージェント実行時に必要なツール配列。
  */
-export interface BuildRequestArtifacts {
+interface BuildRequestArtifacts {
   /** Responses API へ送信する完成済みペイロード。 */
   request: ResponseCreateParamsNonStreaming;
   /** Agents SDK 実行に利用するツール配列。 */

@@ -160,7 +160,7 @@ export function buildAgentsToolList(
   });
 }
 
-export interface BuildCliToolListConfig {
+interface BuildCliToolListConfig {
   appendWebSearchPreview: boolean;
 }
 
@@ -190,7 +190,7 @@ export function buildCliToolList(
   return functionTools;
 }
 
-export interface BuildConversationToolsetOptions {
+interface BuildConversationToolsetOptions {
   cli: BuildCliToolListConfig;
   agents: BuildAgentsToolListOptions;
   additionalAgentTools: AgentsSdkTool[];

@@ -34,7 +34,7 @@ interface FinalizeResultMetadata {
  * finalizeResult が履歴更新を行うためのオプション。
  * 省略可能な値は `undefined` を用いて表現する。
  */
-export interface FinalizeResultHistoryOptions<TContext> {
+interface FinalizeResultHistoryOptions<TContext> {
   /** 更新対象となるレスポンス ID。 */
   responseId: string | undefined;
   /** 履歴エントリを操作するストア。 */
@@ -53,7 +53,7 @@ export interface FinalizeResultHistoryOptions<TContext> {
  * finalizeResult へ渡す CLI 固有の終了処理パラメータ。
  * 任意入力は `undefined` を指定して不使用を示す。
  */
-export interface FinalizeResultParams<TContext> {
+interface FinalizeResultParams<TContext> {
   /** 応答テキスト本体。 */
   content: string;
   /** finalize 層で利用する CLI ロガー。 */

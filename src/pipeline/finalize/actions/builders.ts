@@ -11,7 +11,7 @@ import type {
 /**
  * クリップボードアクション生成時に必要な入力。
  */
-export interface ClipboardActionParams {
+interface ClipboardActionParams {
   /** コピー対象を表す情報。 */
   source: FinalizeCopySource;
   /** アクションを実行する作業ディレクトリ。 */
@@ -36,7 +36,7 @@ export function createClipboardAction(params: ClipboardActionParams): FinalizeCl
 /**
  * D2 HTML 変換アクション生成時に必要な入力。
  */
-export interface D2HtmlActionParams {
+interface D2HtmlActionParams {
   /** 変換対象となる D2 ファイルの相対パス。 */
   sourcePath: string;
   /** 生成した HTML を出力する相対パス。 */

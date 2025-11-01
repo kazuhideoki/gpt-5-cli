@@ -59,17 +59,6 @@ export interface HistoryTurn {
   kind?: string;
 }
 
-export interface HistorySummary {
-  text?: string;
-  created_at?: string;
-}
-
-export interface HistoryResume {
-  mode?: string;
-  previous_response_id?: string;
-  summary?: HistorySummary;
-}
-
 export interface HistoryEntry<TContext = unknown> {
   title?: string;
   model?: string;
@@ -80,7 +69,14 @@ export interface HistoryEntry<TContext = unknown> {
   first_response_id?: string;
   last_response_id?: string;
   request_count?: number;
-  resume?: HistoryResume;
+  resume?: {
+    mode?: string;
+    previous_response_id?: string;
+    summary?: {
+      text?: string;
+      created_at?: string;
+    };
+  };
   turns?: HistoryTurn[];
   context?: TContext;
 }
