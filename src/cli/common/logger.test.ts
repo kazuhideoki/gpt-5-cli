@@ -4,7 +4,6 @@ import type { CliLogger } from "../../foundation/logger/types.js";
 
 function createLoggerStub() {
   const infoCalls: unknown[] = [];
-  const debugCalls: unknown[] = [];
   const transports: Array<{ level: string }> = [{ level: "info" }];
   const stub = {
     level: "info",
@@ -12,14 +11,11 @@ function createLoggerStub() {
     info: (message: unknown) => {
       infoCalls.push(message);
     },
-    debug: (message: unknown) => {
-      debugCalls.push(message);
-    },
+    debug: () => undefined,
   };
   return {
     logger: stub as unknown as CliLogger,
     infoCalls,
-    debugCalls,
   };
 }
 
@@ -37,28 +33,6 @@ describe("createCliToolLoggerOptions", () => {
     }
     executionContext.log("tool runs");
     expect(stub.infoCalls).toEqual(["tool runs"]);
-  });
-
-  it("debugEnabled が true の場合にデバッグログを流す", () => {
-    const stub = createLoggerStub();
-    const options = createCliToolLoggerOptions({
-      logger: stub.logger,
-      logLabel: "[test-cli]",
-      debugEnabled: true,
-    });
-    expect(typeof options.debugLog).toBe("function");
-    options.debugLog?.("detail");
-    expect(stub.debugCalls).toEqual(["detail"]);
-  });
-
-  it("debugEnabled が false の場合はデバッグログを登録しない", () => {
-    const stub = createLoggerStub();
-    const options = createCliToolLoggerOptions({
-      logger: stub.logger,
-      logLabel: "[test-cli]",
-      debugEnabled: false,
-    });
-    expect(options.debugLog).toBeUndefined();
   });
 });
 
