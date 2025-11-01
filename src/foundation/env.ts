@@ -18,7 +18,7 @@ const effortMessage = 'OPENAI_DEFAULT_EFFORT must be one of "low", "medium", or 
 const verbosityMessage = 'OPENAI_DEFAULT_VERBOSITY must be one of "low", "medium", or "high".';
 
 /** effort レベルを検証・正規化するスキーマ。 */
-export const effortLevelSchema = z
+const effortLevelSchema = z
   .string()
   .transform((value) => value.trim().toLowerCase())
   .superRefine((value, ctx) => {
@@ -29,7 +29,7 @@ export const effortLevelSchema = z
   .transform((value) => value as EffortLevelValue);
 
 /** verbosity レベルを検証・正規化するスキーマ。 */
-export const verbosityLevelSchema = z
+const verbosityLevelSchema = z
   .string()
   .transform((value) => value.trim().toLowerCase())
   .superRefine((value, ctx) => {

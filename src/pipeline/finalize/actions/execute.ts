@@ -7,7 +7,7 @@ import type { FinalizeAction, FinalizeClipboardAction, FinalizeD2HtmlAction } fr
 import type { ConfigEnvironment } from "../../../types.js";
 import type { CliLogger } from "../../../foundation/logger/types.js";
 
-export const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
+const FINALIZE_ACTION_LOG_LABEL = "[gpt-5-cli finalize]";
 
 /**
  * finalize アクション実行時に渡されるコンテキスト。

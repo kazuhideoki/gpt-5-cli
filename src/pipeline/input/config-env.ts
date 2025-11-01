@@ -60,7 +60,7 @@ const CONFIG_ENV_KEY_SET = new Set<string>(CONFIG_ENV_KNOWN_KEYS);
 /**
  * 文字列が ConfigEnv で認識されるキーかどうかを判定する。
  */
-export function isConfigEnvKey(key: string): key is ConfigEnvKey {
+function isConfigEnvKey(key: string): key is ConfigEnvKey {
   return CONFIG_ENV_KEY_SET.has(key);
 }
 
