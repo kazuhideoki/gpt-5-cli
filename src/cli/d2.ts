@@ -406,10 +406,16 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: D2_LOG_LABEL,
+      debugEnabled: options.debug,
+    };
+    updateCliLoggerLevel(logger, options.debug ? "debug" : "info");
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, D2_LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, loggerConfig);
       return;
     }
 
@@ -456,19 +462,16 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: d2Context, normalizedOptions } = ensureD2Context(options);
 
     const resolvedOptions = normalizedOptions;
+    loggerConfig.debugEnabled = resolvedOptions.debug;
     updateCliLoggerLevel(logger, resolvedOptions.debug ? "debug" : "info");
-    const loggerConfig: CliLoggerConfig = {
-      logger,
-      logLabel: D2_LOG_LABEL,
-      debugEnabled: resolvedOptions.debug,
-    };
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, D2_LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, loggerConfig, configEnv);
     const toolset = buildD2ConversationToolset({
       loggerConfig,
     });
@@ -479,16 +482,16 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: D2_LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildD2InstructionMessages(d2Context),
       toolset,
+      loggerConfig,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
-      logLabel: D2_LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });

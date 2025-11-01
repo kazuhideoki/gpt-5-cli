@@ -5,7 +5,7 @@
  */
 import type { Command } from "commander";
 import type { CliDefaults, CommonCliOptions, TaskMode } from "../../types.js";
-import type { CliLogger } from "../../foundation/logger/types.js";
+export type { CliLoggerConfig } from "../../foundation/logger/types.js";
 
 /**
  * 共通フラグ定義付き Command インスタンスを生成するための設定。
@@ -19,19 +19,6 @@ export interface CommonCommandBuildOptions {
     description: string;
   };
   extraOptionRegistrars: Array<(program: Command) => void>;
-}
-
-/**
- * CLI 実装で共有するロガー依存性を表す。
- * Winston 依存を直接晒さず、依存注入する契約を固定する。
- */
-export interface CliLoggerConfig {
-  /** CLI で利用する Winston ベースのロガー。 */
-  logger: CliLogger;
-  /** 既存メッセージと互換性を保つためのラベル。 */
-  logLabel: string;
-  /** デバッグ出力を有効化するか。 */
-  debugEnabled: boolean;
 }
 
 /**

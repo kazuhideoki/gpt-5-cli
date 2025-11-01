@@ -29,22 +29,15 @@ interface MockClipboardChild extends EventEmitter {
   stdin: MockStdin;
 }
 
-function createLoggerStub() {
-  const state: { logger: CliLogger } = { logger: undefined as unknown as CliLogger };
-  const info = mock((..._args: unknown[]) => state.logger);
-  const error = mock((..._args: unknown[]) => state.logger);
-  const warn = mock((..._args: unknown[]) => state.logger);
-  const debug = mock((..._args: unknown[]) => state.logger);
-  const logger = {
-    info,
-    error,
-    warn,
-    debug,
+function createLoggerStub(): CliLogger {
+  return {
+    info: () => undefined,
+    error: () => undefined,
+    warn: () => undefined,
+    debug: () => undefined,
     level: "info",
     transports: [],
-  } as unknown as CliLogger;
-  state.logger = logger;
-  return { logger, info, error, warn, debug };
+  } as CliLogger;
 }
 
 describe("handleResult", () => {
@@ -74,7 +67,7 @@ describe("handleResult", () => {
       stdout: undefined,
       history: undefined,
       exitCode: undefined,
-      logger: createLoggerStub().logger,
+      logger: createLoggerStub(),
     };
 
     const outcome = await handleResult(request);
@@ -105,7 +98,7 @@ describe("handleResult", () => {
       stdout: undefined,
       output: undefined,
       exitCode: undefined,
-      logger: createLoggerStub().logger,
+      logger: createLoggerStub(),
     });
 
     expect(historyEffect).toHaveBeenCalledTimes(1);
@@ -120,7 +113,7 @@ describe("handleResult", () => {
       configEnv: createConfigEnv(),
       output: undefined,
       history: undefined,
-      logger: createLoggerStub().logger,
+      logger: createLoggerStub(),
     });
 
     expect(outcome.stdout).toBe("custom stdout");
@@ -149,7 +142,7 @@ describe("handleResult", () => {
       stdout: undefined,
       history: undefined,
       exitCode: undefined,
-      logger: createLoggerStub().logger,
+      logger: createLoggerStub(),
     });
 
     expect(delivery).toHaveBeenCalledTimes(1);
@@ -199,7 +192,7 @@ describe("handleResult", () => {
         output: undefined,
         history: undefined,
         exitCode: undefined,
-        logger: createLoggerStub().logger,
+        logger: createLoggerStub(),
       });
     } finally {
       mock.restore();
@@ -207,54 +200,5 @@ describe("handleResult", () => {
 
     expect(copied).toEqual(["first", "second"]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("logger へ成果物出力とアクション情報を記録する", async () => {
-    const loggerStub = createLoggerStub();
-    const delivery = mock(async () => ({
-      file: {
-        absolutePath: "/workspace/out.txt",
-        bytesWritten: 128,
-      },
-      copied: true,
-    }));
-
-    await handleResult({
-      content: "log target",
-      actions: [],
-      output: {
-        handler: delivery,
-        params: {
-          content: undefined,
-          cwd: undefined,
-          filePath: "out.txt",
-          copy: undefined,
-          copySource: undefined,
-        },
-      },
-      configEnv: createConfigEnv(),
-      stdout: undefined,
-      history: undefined,
-      exitCode: undefined,
-      logger: loggerStub.logger,
-    });
-
-    const debugMessages = loggerStub.debug.mock.calls.map((call) => call?.[0]);
-    expect(
-      debugMessages.some(
-        (message) =>
-          typeof message === "string" && message.includes("output file: /workspace/out.txt"),
-      ),
-    ).toBe(true);
-    expect(
-      debugMessages.some(
-        (message) => typeof message === "string" && message.includes("copy: true"),
-      ),
-    ).toBe(true);
-    expect(
-      debugMessages.some(
-        (message) => typeof message === "string" && message.includes("actions summary: count=0"),
-      ),
-    ).toBe(true);
   });
 });

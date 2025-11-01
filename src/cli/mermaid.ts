@@ -315,10 +315,16 @@ async function main(): Promise<void> {
     }
 
     const { defaults, options, historyStore, systemPrompt, configEnv } = bootstrap;
+    const loggerConfig: CliLoggerConfig = {
+      logger,
+      logLabel: MERMAID_LOG_LABEL,
+      debugEnabled: options.debug,
+    };
+    updateCliLoggerLevel(logger, options.debug ? "debug" : "info");
     const client = createOpenAIClient({ configEnv });
 
     if (options.operation === "compact") {
-      await performCompact(options, defaults, historyStore, client, MERMAID_LOG_LABEL);
+      await performCompact(options, defaults, historyStore, client, loggerConfig);
       return;
     }
 
@@ -365,18 +371,15 @@ async function main(): Promise<void> {
           }
         },
       },
+      loggerConfig,
     });
 
     const { context: mermaidContext, normalizedOptions } = ensureMermaidContext(options);
     const resolvedOptions = normalizedOptions;
+    loggerConfig.debugEnabled = resolvedOptions.debug;
     updateCliLoggerLevel(logger, resolvedOptions.debug ? "debug" : "info");
-    const loggerConfig: CliLoggerConfig = {
-      logger,
-      logLabel: MERMAID_LOG_LABEL,
-      debugEnabled: resolvedOptions.debug,
-    };
 
-    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, MERMAID_LOG_LABEL, configEnv);
+    const imageDataUrl = prepareImageData(resolvedOptions.imagePath, loggerConfig, configEnv);
     const toolset = buildMermaidConversationToolset({
       loggerConfig,
     });
@@ -387,16 +390,16 @@ async function main(): Promise<void> {
       systemPrompt,
       imageDataUrl,
       defaults,
-      logLabel: MERMAID_LOG_LABEL,
       configEnv,
       additionalSystemMessages: buildMermaidInstructionMessages(mermaidContext),
       toolset,
+      loggerConfig,
     });
     const agentResult = await runAgentConversation({
       client,
       request,
       options: resolvedOptions,
-      logLabel: MERMAID_LOG_LABEL,
+      loggerConfig,
       agentTools,
       maxTurns: resolvedOptions.maxIterations,
     });

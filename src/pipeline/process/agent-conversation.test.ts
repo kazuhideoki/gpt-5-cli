@@ -5,6 +5,28 @@ import type OpenAI from "openai";
 import type { CliOptions } from "../../types.js";
 import { runAgentConversation } from "./agent-conversation.js";
 import type { ResponseCreateParamsNonStreaming } from "openai/resources/responses/responses";
+import type { CliLogger, CliLoggerConfig } from "../../foundation/logger/types.js";
+
+function createTestLoggerConfig(
+  overrides: { logLabel?: string; debugEnabled?: boolean } = {},
+): CliLoggerConfig {
+  const debugEnabled = overrides.debugEnabled ?? false;
+  const loggerRecord: Record<string, any> = {
+    level: debugEnabled ? "debug" : "info",
+    transports: [],
+    log: () => undefined,
+  };
+
+  for (const level of ["info", "warn", "error", "debug"] as const) {
+    loggerRecord[level] = () => loggerRecord;
+  }
+
+  return {
+    logger: loggerRecord as CliLogger,
+    logLabel: overrides.logLabel ?? "[agent-test]",
+    debugEnabled,
+  };
+}
 
 class FakeResponsesClient {
   public readonly createCalls: any[] = [];
@@ -60,11 +82,12 @@ const BASE_REQUEST: ResponseCreateParamsNonStreaming = {
 describe("runAgentConversation", () => {
   it("Responses API 互換レスポンスから最終出力と responseId を取得する", async () => {
     const client = new FakeOpenAI();
+    const loggerConfig = createTestLoggerConfig();
     const result = await runAgentConversation({
       client: client as unknown as OpenAI,
       request: BASE_REQUEST,
       options: BASE_OPTIONS,
-      logLabel: "[agent-test]",
+      loggerConfig,
       agentTools: [] as AgentsSdkTool[],
       maxTurns: 2,
     });
@@ -82,11 +105,12 @@ describe("runAgentConversation", () => {
 
   it("maxTurns を undefined にしても実行できる", async () => {
     const client = new FakeOpenAI();
+    const loggerConfig = createTestLoggerConfig();
     const result = await runAgentConversation({
       client: client as unknown as OpenAI,
       request: BASE_REQUEST,
       options: BASE_OPTIONS,
-      logLabel: "[agent-test]",
+      loggerConfig,
       agentTools: [] as AgentsSdkTool[],
       maxTurns: undefined,
     });
@@ -113,7 +137,7 @@ describe("runAgentConversation", () => {
         client: client as unknown as OpenAI,
         request,
         options: BASE_OPTIONS,
-        logLabel: "[agent-test]",
+        loggerConfig: createTestLoggerConfig(),
         agentTools: [] as AgentsSdkTool[],
         maxTurns: undefined,
       }),
@@ -137,11 +161,12 @@ describe("runAgentConversation", () => {
     };
 
     try {
+      const loggerConfig = createTestLoggerConfig();
       const result = await runAgentConversation({
         client: client as unknown as OpenAI,
         request: BASE_REQUEST,
         options: { ...BASE_OPTIONS, debug: false },
-        logLabel: "[agent-test]",
+        loggerConfig,
         agentTools: [] as AgentsSdkTool[],
         maxTurns: 1,
       });
