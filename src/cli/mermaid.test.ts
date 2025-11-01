@@ -6,11 +6,23 @@ import type { CliDefaults, ConfigEnvironment } from "../types.js";
 import type { MermaidCliOptions } from "./mermaid.js";
 import type { HistoryEntry, HistoryStore } from "../pipeline/history/store.js";
 import type { MermaidCliHistoryContext } from "./mermaid.js";
+import type { CliLogger } from "../foundation/logger/types.js";
 
 type HistoryStoreLike = HistoryStore<MermaidCliHistoryContext>;
 type MermaidHistoryEntry = HistoryEntry<MermaidCliHistoryContext>;
 
-const noopDeps = { printHelp: () => {} };
+function createStubLogger(): CliLogger {
+  const logger = {
+    level: "info",
+    info: () => logger,
+    debug: () => logger,
+    warn: () => logger,
+    error: () => logger,
+  } as unknown as CliLogger;
+  return logger;
+}
+
+const noopDeps = { printHelp: () => {}, logger: createStubLogger() };
 
 function createDefaults(): CliDefaults {
   return {
@@ -192,6 +204,7 @@ describe("mermaid resolveInputOrExecuteHistoryAction", () => {
       printHelp: () => {
         helpCalled = true;
       },
+      logger: createStubLogger(),
     };
     const configEnv = createConfigEnv();
     const result = await resolveInputOrExecuteHistoryAction(

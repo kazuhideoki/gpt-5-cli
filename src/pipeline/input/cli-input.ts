@@ -3,6 +3,7 @@
 import { stdin as input, stdout as output } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { CliDefaults, CliOptions, ConfigEnvironment } from "../../types.js";
+import type { CliLogger } from "../../foundation/logger/types.js";
 import type { HistoryEntry, HistoryStore } from "../history/store.js";
 import { printHistoryDetail, printHistoryList } from "../history/output.js";
 
@@ -28,6 +29,8 @@ export interface ResolveInputOrExecuteHistoryActionDependencies<
   THistoryTask = unknown,
 > {
   printHelp: (defaults: CliDefaults, options: TOptions) => void;
+  /** CLI 共通ロガー。標準出力・標準エラーの整形を統一する。*/
+  logger: CliLogger;
   printHistoryList?: (store: HistoryStore<THistoryTask>) => void;
   printHistoryDetail?: (store: HistoryStore<THistoryTask>, index: number, noColor: boolean) => void;
 }
@@ -69,7 +72,7 @@ export async function resolveInputOrExecuteHistoryAction<
 
   if (typeof options.deleteIndex === "number") {
     const { removedTitle } = historyStore.deleteByNumber(options.deleteIndex);
-    console.log(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
+    deps.logger.info(`削除しました: ${options.deleteIndex}) ${removedTitle}`);
     return { kind: "exit", code: 0 };
   }
 

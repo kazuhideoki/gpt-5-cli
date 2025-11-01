@@ -7,6 +7,7 @@ import { deliverOutput } from "./io.js";
 import type { FinalizeOutcome, FinalizeRequest } from "./types.js";
 
 const DEFAULT_EXIT_CODE = 0;
+const FINALIZE_LOG_LABEL = "[gpt-5-cli finalize]";
 
 /**
  * CLI の結果をファイル出力・履歴更新・標準出力へ反映する。
@@ -19,6 +20,7 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
   let filePath: string | undefined;
   let bytesWritten: number | undefined;
   let copied: boolean | undefined;
+  args.logger.debug(`${FINALIZE_LOG_LABEL} finalize start: actions=${args.actions.length}`);
 
   if (args.output) {
     const { handler, params } = args.output;
@@ -35,6 +37,13 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
     if (deliverResult.copied) {
       copied = true;
     }
+    // ログをパースしやすいように、成果物に関するメトリクスを単一行へまとめる。
+    const outputLabelParts: string[] = [
+      `${FINALIZE_LOG_LABEL} output file: ${filePath ?? "none"}`,
+      `bytes: ${typeof bytesWritten === "number" ? bytesWritten : "n/a"}`,
+      `copy: ${deliverResult.copied === true}`,
+    ];
+    args.logger.debug(outputLabelParts.join(" "));
   }
 
   if (args.actions.length > 0) {
@@ -49,15 +58,21 @@ export async function handleResult(args: FinalizeRequest): Promise<FinalizeOutco
       })
       .map((entry) => entry.action);
 
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions start: count=${sortedActions.length}`);
+
     for (const action of sortedActions) {
       const result = await executeFinalizeAction(action, {
         configEnv: args.configEnv,
         defaultContent: args.content,
+        logger: args.logger,
       });
       if (result.copied) {
         copied = true;
       }
     }
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions summary: count=${sortedActions.length}`);
+  } else {
+    args.logger.debug(`${FINALIZE_LOG_LABEL} actions summary: count=0`);
   }
 
   if (args.history) {
