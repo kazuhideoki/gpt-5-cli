@@ -129,9 +129,6 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
   loggerConfig,
 }: ComputeContextParams<TOptions, THistoryTask>): ConversationContext {
   const { logger } = loggerConfig;
-  const logWarning = (message: string): void => {
-    logger.warn(message);
-  };
 
   let activeEntry = initialActiveEntry;
   let previousResponseId = explicitPrevId;
@@ -144,7 +141,7 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
       previousResponseId = latest.last_response_id ?? previousResponseId;
       previousTitle = latest.title ?? previousTitle;
     } else {
-      logWarning("継続できる履歴が見つかりません（新規開始）。");
+      logger.warn("継続できる履歴が見つかりません（新規開始）。");
     }
   }
 
@@ -158,7 +155,9 @@ export function computeContext<TOptions extends CliOptions, THistoryTask = unkno
     config?.synchronizeWithHistory?.({
       options,
       activeEntry,
-      logWarning,
+      logWarning: (message) => {
+        logger.warn(message);
+      },
     });
 
     const {

@@ -20,14 +20,18 @@ function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: b
     debug: [],
   };
 
+  const debugEnabled = overrides.debugEnabled ?? false;
   const loggerRecord: Record<string, any> = {
-    level: "info",
+    level: debugEnabled ? "debug" : "info",
     transports: [],
     log: () => undefined,
   };
 
   for (const level of ["info", "warn", "error", "debug"] as const) {
     loggerRecord[level] = (message: unknown, ..._meta: unknown[]) => {
+      if (level === "debug" && !debugEnabled) {
+        return loggerRecord;
+      }
       messages[level].push(String(message ?? ""));
       return loggerRecord;
     };
@@ -37,7 +41,7 @@ function createTestLoggerConfig(overrides: { logLabel?: string; debugEnabled?: b
     config: {
       logger: loggerRecord as CliLogger,
       logLabel: overrides.logLabel ?? "[agent-test]",
-      debugEnabled: overrides.debugEnabled ?? false,
+      debugEnabled,
     },
     messages,
   };

@@ -76,11 +76,9 @@ export async function runAgentConversation<TOptions extends CliOptions>(
     outputType: "text",
   });
 
-  if (loggerConfig.debugEnabled) {
-    loggerConfig.logger.debug(
-      `agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
-    );
-  }
+  loggerConfig.logger.debug(
+    `agent_max_turns=${maxTurns ?? "auto"} instructions_len=${instructions.length}`,
+  );
   const runner = new Runner({ tracingDisabled: true });
   let reachedMaxIterations = false;
   let result: AnyRunResult;
