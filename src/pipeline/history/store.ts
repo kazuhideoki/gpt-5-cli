@@ -10,7 +10,6 @@ import type {
   ConfigEnvironment,
   EffortLevel,
   HistoryEntry as CoreHistoryEntry,
-  HistoryTurn as CoreHistoryTurn,
   VerbosityLevel,
 } from "../../types.js";
 

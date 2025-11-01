@@ -27,7 +27,7 @@
     "format:check": "bunx @biomejs/biome format .",
     "lint": "bunx @biomejs/biome lint .",
     "lint:fix": "bunx @biomejs/biome lint --write .",
-    "knip:exports": "bunx knip --exports",
+    "knip:exports": "bunx knip --exports --include-entry-exports",
     "knip:fix-exports": "bunx knip --fix --fix-type exports",
     "ci": "bun run knip:exports && bun run lint && bun run format:check && bun run build && bun run test"
   },
